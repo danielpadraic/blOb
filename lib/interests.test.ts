@@ -9,6 +9,10 @@ import {
   roomDef,
 } from '@/lib/interestsCatalog';
 import {
+  activityProgressFilled,
+  activityWizardBack,
+  activityWizardContinue,
+  activityWizardPagerIndex,
   allRoomsComplete,
   continueBlocked,
   interestsWeeklyNudgeDue,
@@ -125,6 +129,50 @@ describe('interests stance', () => {
         otherText: '',
       }),
     ).toBeNull();
+  });
+});
+
+describe('activity card two-page wizard', () => {
+  it('maps chipIndex + page 1|2 to a flat pager index', () => {
+    expect(activityWizardPagerIndex(0, 1)).toBe(0);
+    expect(activityWizardPagerIndex(0, 2)).toBe(1);
+    expect(activityWizardPagerIndex(1, 1)).toBe(2);
+    expect(activityWizardPagerIndex(1, 2)).toBe(3);
+  });
+
+  it('fills one progress segment per interest only after that chip’s page 2 is submitted', () => {
+    expect(activityProgressFilled(0, 1)).toBe(0);
+    expect(activityProgressFilled(0, 2)).toBe(0);
+    expect(activityProgressFilled(1, 1)).toBe(1);
+    expect(activityProgressFilled(1, 2)).toBe(1);
+  });
+
+  it('advances page 1 → page 2, then next chip page 1, then done', () => {
+    expect(activityWizardContinue({ chipIndex: 0, page: 1 }, 2)).toEqual({
+      kind: 'page',
+      chipIndex: 0,
+      page: 2,
+    });
+    expect(activityWizardContinue({ chipIndex: 0, page: 2 }, 2)).toEqual({
+      kind: 'page',
+      chipIndex: 1,
+      page: 1,
+    });
+    expect(activityWizardContinue({ chipIndex: 1, page: 2 }, 2)).toEqual({ kind: 'done' });
+  });
+
+  it('backs page 2 → page 1 of this chip, then previous chip page 2, then picker', () => {
+    expect(activityWizardBack({ chipIndex: 1, page: 1 })).toEqual({
+      kind: 'page',
+      chipIndex: 0,
+      page: 2,
+    });
+    expect(activityWizardBack({ chipIndex: 0, page: 2 })).toEqual({
+      kind: 'page',
+      chipIndex: 0,
+      page: 1,
+    });
+    expect(activityWizardBack({ chipIndex: 0, page: 1 })).toEqual({ kind: 'picker' });
   });
 });
 

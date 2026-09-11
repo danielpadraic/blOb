@@ -5,7 +5,7 @@ import { StanceSlider } from '@/components/interests/StanceSlider';
 import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
 import type { InterestChipDef, InterestRoomSlug } from '@/lib/interestsCatalog';
-import { clampStanceScore } from '@/lib/interests';
+import { clampStanceScore, type ActivityCardPage } from '@/lib/interests';
 import type { ChipFollowUp } from '@/lib/interestsFollowup';
 import { copy } from '@/lib/copy';
 import { THEME, themeShadow } from '@/lib/theme';
@@ -24,6 +24,9 @@ type ActivityCardProps = {
   error: string | null;
   index: number;
   total: number;
+  page: ActivityCardPage;
+  /** Interest chips whose page 2 is already submitted. */
+  filledCount: number;
 };
 
 export function ActivityCard({
@@ -40,6 +43,8 @@ export function ActivityCard({
   error,
   index,
   total,
+  page,
+  filledCount,
 }: ActivityCardProps) {
   return (
     <ScrollView
@@ -79,35 +84,47 @@ export function ActivityCard({
                 flex: 1,
                 height: 3,
                 borderRadius: 999,
-                backgroundColor: i <= index ? THEME.accent : THEME.border,
+                backgroundColor: i < filledCount ? THEME.accent : THEME.border,
               }}
             />
           ))}
         </View>
-        <StanceSlider
-          value={followUp.stanceScore}
-          onChange={(next) => onChange({ ...followUp, stanceScore: clampStanceScore(next) })}
-        />
-        <ChipFollowUpCard chip={chip} room={room} followUp={followUp} onChange={onChange} />
-        {chip.isWork ? (
-          <View style={{ gap: 8 }}>
-            <Input
-              label={copy('interests.occupation')}
-              value={occupation}
-              onChangeText={onOccupation}
-              autoCapitalize="words"
+        {page === 1 ? (
+          <>
+            <AppText
+              className="text-[17px] font-extrabold"
+              style={{ color: THEME.textPrimary, lineHeight: 22 }}>
+              {copy('interests.rateSkill')}
+            </AppText>
+            <StanceSlider
+              value={followUp.stanceScore}
+              onChange={(next) => onChange({ ...followUp, stanceScore: clampStanceScore(next) })}
             />
-            <Input
-              label={copy('interests.employer')}
-              value={employer}
-              onChangeText={onEmployer}
-              autoCapitalize="words"
-            />
-          </View>
-        ) : null}
-        {chip.isOther ? (
-          <Input label={copy('interests.other')} value={otherText} onChangeText={onOtherText} grow />
-        ) : null}
+          </>
+        ) : (
+          <>
+            <ChipFollowUpCard chip={chip} room={room} followUp={followUp} onChange={onChange} />
+            {chip.isWork ? (
+              <View style={{ gap: 8 }}>
+                <Input
+                  label={copy('interests.occupation')}
+                  value={occupation}
+                  onChangeText={onOccupation}
+                  autoCapitalize="words"
+                />
+                <Input
+                  label={copy('interests.employer')}
+                  value={employer}
+                  onChangeText={onEmployer}
+                  autoCapitalize="words"
+                />
+              </View>
+            ) : null}
+            {chip.isOther ? (
+              <Input label={copy('interests.other')} value={otherText} onChangeText={onOtherText} grow />
+            ) : null}
+          </>
+        )}
         {error ? (
           <AppText className="text-[13px] font-semibold" style={{ color: THEME.danger }}>
             {error}

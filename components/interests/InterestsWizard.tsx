@@ -17,10 +17,15 @@ import { useKeyboardOverlap } from '@/components/ui/KeyboardFormShell';
 import { useMyProfile, useUpdateProfile } from '@/hooks/useProfile';
 import { useDismissStartThis, useInterestCatalog, useMyInterests, useSaveInterestRoom } from '@/hooks/useInterests';
 import {
+  activityProgressFilled,
+  activityWizardBack,
+  activityWizardContinue,
+  activityWizardPagerIndex,
   roomContinueBlocked,
   stanceFromMarks,
   stanceMarks,
   toggleRoomPickerChip,
+  type ActivityCardPage,
   type ChipStance,
 } from '@/lib/interests';
 import {
@@ -76,6 +81,7 @@ export function InterestsWizard({
   const prompted = Boolean(profile?.interests_prompted_at);
   const [step, setStep] = useState<WizardStep>(prompted ? INTEREST_ROOM_SLUGS[0] : 'prompt');
   const [cardIndex, setCardIndex] = useState<number | null>(null);
+  const [cardPage, setCardPage] = useState<ActivityCardPage>(1);
   const [stances, setStances] = useState<Record<string, ChipStance>>({});
   const [noneOfThese, setNoneOfThese] = useState(false);
   const [followUps, setFollowUps] = useState<Record<string, ChipFollowUp>>({});
@@ -160,6 +166,7 @@ export function InterestsWizard({
     setEmployer(mine.data.work?.employer ?? '');
     setHydratedRoom(step);
     setCardIndex(null);
+    setCardPage(1);
     setFormError(null);
   }, [hydratedRoom, mine.data, step]);
 
@@ -203,6 +210,7 @@ export function InterestsWizard({
   async function goNext(from: InterestRoomSlug) {
     const next = nextRoomSlug(from);
     setCardIndex(null);
+    setCardPage(1);
     if (next) {
       setRoomDir(1);
       flashBobCheck();
@@ -246,6 +254,7 @@ export function InterestsWizard({
       });
       await markPrompted();
       setCardIndex(0);
+      setCardPage(1);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : copy('error.preferenceSave', tone));
     }
@@ -267,7 +276,12 @@ export function InterestsWizard({
   }
 
   async function onCardNext() {
-    if (step === 'prompt' || !cardChip || sliding) {
+    if (step === 'prompt' || !cardChip || sliding || cardIndex == null) {
+      return;
+    }
+    if (cardPage === 1) {
+      setFormError(null);
+      setCardPage(2);
       return;
     }
     const followUp = followUps[cardChip.slug] ?? emptyFollowUp(defaultQtyPeriod(cardChip));
@@ -284,7 +298,8 @@ export function InterestsWizard({
       return;
     }
     setFormError(null);
-    const last = cardIndex === selectedChips.length - 1;
+    const nextPos = activityWizardContinue({ chipIndex: cardIndex, page: 2 }, selectedChips.length);
+    const last = nextPos.kind === 'done';
     const existingRoom = (mine.data?.rooms ?? []).find((row) => row.room_slug === step);
     const wasAlreadyFilled = existingRoom?.state === 'complete_filled';
     try {
@@ -329,6 +344,7 @@ export function InterestsWizard({
         setHydratedRoom(null);
         const next = nextRoomSlug(step);
         setCardIndex(null);
+        setCardPage(1);
         if (next) {
           setStep(next);
           setSliding(false);
@@ -338,7 +354,8 @@ export function InterestsWizard({
         leave();
         return;
       }
-      setCardIndex((current) => (current == null ? 0 : current + 1));
+      setCardIndex(nextPos.chipIndex);
+      setCardPage(nextPos.page);
     } catch (error) {
       setSliding(false);
       setFormError(error instanceof Error ? error.message : copy('error.preferenceSave', tone));
@@ -349,15 +366,18 @@ export function InterestsWizard({
     if (sliding || cardIndex == null) {
       return;
     }
-    if (cardIndex > 0) {
-      setFormError(null);
-      setCardIndex(cardIndex - 1);
+    const next = activityWizardBack({ chipIndex: cardIndex, page: cardPage });
+    setFormError(null);
+    if (next.kind === 'page') {
+      setCardIndex(next.chipIndex);
+      setCardPage(next.page);
       return;
     }
     setSliding(true);
     await pagerRef.current?.exit('right');
     setSliding(false);
     setCardIndex(null);
+    setCardPage(1);
   }
 
   async function finishStartThis(goCreate: boolean) {
@@ -408,29 +428,36 @@ export function InterestsWizard({
                   </AppText>
                 </Pressable>
               </View>
-              <ActivityCardPager ref={pagerRef} index={cardIndex ?? 0} reduceMotion={reduceMotion}>
-                {selectedChips.map((chip, index) => (
-                  <ActivityCard
-                    key={chip.slug}
-                    chip={chip}
-                    room={step}
-                    followUp={followUps[chip.slug] ?? emptyFollowUp(defaultQtyPeriod(chip))}
-                    onChange={(next) => {
-                      setFollowUps((current) => ({ ...current, [chip.slug]: next }));
-                      setStances((current) => ({ ...current, [chip.slug]: stanceMarks(next.stanceScore) }));
-                      setFormError(null);
-                    }}
-                    occupation={occupation}
-                    employer={employer}
-                    otherText={otherText}
-                    onOccupation={setOccupation}
-                    onEmployer={setEmployer}
-                    onOtherText={setOtherText}
-                    error={index === cardIndex ? formError : null}
-                    index={index}
-                    total={selectedChips.length}
-                  />
-                ))}
+              <ActivityCardPager
+                ref={pagerRef}
+                index={activityWizardPagerIndex(cardIndex ?? 0, cardPage)}
+                reduceMotion={reduceMotion}>
+                {selectedChips.flatMap((chip, index) =>
+                  ([1, 2] as const).map((page) => (
+                    <ActivityCard
+                      key={`${chip.slug}-${page}`}
+                      chip={chip}
+                      room={step}
+                      followUp={followUps[chip.slug] ?? emptyFollowUp(defaultQtyPeriod(chip))}
+                      onChange={(next) => {
+                        setFollowUps((current) => ({ ...current, [chip.slug]: next }));
+                        setStances((current) => ({ ...current, [chip.slug]: stanceMarks(next.stanceScore) }));
+                        setFormError(null);
+                      }}
+                      occupation={occupation}
+                      employer={employer}
+                      otherText={otherText}
+                      onOccupation={setOccupation}
+                      onEmployer={setEmployer}
+                      onOtherText={setOtherText}
+                      error={index === cardIndex && page === cardPage ? formError : null}
+                      index={index}
+                      total={selectedChips.length}
+                      page={page}
+                      filledCount={activityProgressFilled(cardIndex ?? 0, cardPage)}
+                    />
+                  )),
+                )}
               </ActivityCardPager>
             </View>
           ) : (
@@ -542,11 +569,16 @@ export function InterestsWizard({
             <>
               <View style={{ flex: 1 }}>
                 <Button
-                  title={
-                    cardIndex === selectedChips.length - 1
-                      ? copy('interests.done', tone)
-                      : copy('interests.next', tone)
-                  }
+                  title="Back"
+                  variant="outline"
+                  size="sm"
+                  style={FOOTER_BTN}
+                  onPress={() => void onCardBack()}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button
+                  title={copy('interests.continue', tone)}
                   size="sm"
                   style={FOOTER_BTN}
                   onPress={() => void onCardNext()}

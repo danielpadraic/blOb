@@ -71,7 +71,7 @@ export function StanceSlider({ value, onChange }: StanceSliderProps) {
               setTrackW(next);
             }}
             accessibilityRole="adjustable"
-            accessibilityLabel="Level Up to Excel">
+            accessibilityLabel="Level Up to Pro">
             <View
               style={{
                 height: TRACK_H,
@@ -108,7 +108,7 @@ export function StanceSlider({ value, onChange }: StanceSliderProps) {
           className="text-[12px] font-bold"
           numberOfLines={1}
           style={{ color: THEME.textPrimary, flexShrink: 0 }}>
-          {copy('interests.excel')}
+          {copy('interests.pro')}
         </AppText>
       </View>
     </View>

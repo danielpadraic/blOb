@@ -96,6 +96,57 @@ export function stanceFromTrackTop(t: number): number {
 
 export const CARD_SLIDE_MS = 300;
 
+export type ActivityCardPage = 1 | 2;
+
+/** Flat pager index: two pages per selected chip. */
+export function activityWizardPagerIndex(chipIndex: number, page: ActivityCardPage): number {
+  return Math.max(chipIndex, 0) * 2 + (page === 2 ? 1 : 0);
+}
+
+/**
+ * One progress segment per selected interest.
+ * Segment i fills only after that chip’s page 2 is submitted (Continue off page 2).
+ * Viewing chip i on page 1 or 2 does not fill segment i.
+ */
+export function activityProgressFilled(chipIndex: number, _page: ActivityCardPage): number {
+  return Math.max(chipIndex, 0);
+}
+
+export type ActivityWizardPos = {
+  chipIndex: number;
+  page: ActivityCardPage;
+};
+
+export type ActivityWizardContinue =
+  | { kind: 'page'; chipIndex: number; page: ActivityCardPage }
+  | { kind: 'done' };
+
+export type ActivityWizardBack =
+  | { kind: 'page'; chipIndex: number; page: ActivityCardPage }
+  | { kind: 'picker' };
+
+/** Continue: page 1 → page 2 of this chip; page 2 → next chip page 1, or finish the room. */
+export function activityWizardContinue(pos: ActivityWizardPos, chipCount: number): ActivityWizardContinue {
+  if (pos.page === 1) {
+    return { kind: 'page', chipIndex: pos.chipIndex, page: 2 };
+  }
+  if (pos.chipIndex < chipCount - 1) {
+    return { kind: 'page', chipIndex: pos.chipIndex + 1, page: 1 };
+  }
+  return { kind: 'done' };
+}
+
+/** Back: page 2 → page 1 of this chip; page 1 → previous chip page 2, or the room picker. */
+export function activityWizardBack(pos: ActivityWizardPos): ActivityWizardBack {
+  if (pos.page === 2) {
+    return { kind: 'page', chipIndex: pos.chipIndex, page: 1 };
+  }
+  if (pos.chipIndex > 0) {
+    return { kind: 'page', chipIndex: pos.chipIndex - 1, page: 2 };
+  }
+  return { kind: 'picker' };
+}
+
 /** 1–20 level_up, 21–30 both, 31–50 excel. */
 export function stanceMarks(score: number): ChipStance {
   const clamped = clampStanceScore(score);
