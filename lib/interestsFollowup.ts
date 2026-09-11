@@ -74,9 +74,20 @@ export const DIET_STYLES = [
   'low_fat',
   'high_fat',
   'caloric_deficit',
+  'caloric_surplus',
   'other',
 ] as const;
 export type DietStyle = (typeof DIET_STYLES)[number];
+
+export const WHY_FOCUSES = ['health', 'weight_loss', 'discipline', 'faith', 'other'] as const;
+export type WhyFocus = (typeof WHY_FOCUSES)[number];
+export const WHY_FOCUS_LABELS: Record<WhyFocus, string> = {
+  health: 'Health',
+  weight_loss: 'Weight loss',
+  discipline: 'Discipline',
+  faith: 'Faith',
+  other: 'Other',
+};
 
 export type QtyBand = {
   kind: QtyKind;
@@ -179,6 +190,8 @@ export type ChipFollowUp = {
   dietStyles: DietStyle[];
   otherGoalText: string;
   otherDietText: string;
+  whyFocuses: WhyFocus[];
+  otherWhyText: string;
 };
 
 export function emptyFollowUp(period: QtyPeriod = 'week'): ChipFollowUp {
@@ -205,6 +218,8 @@ export function emptyFollowUp(period: QtyPeriod = 'week'): ChipFollowUp {
     dietStyles: [],
     otherGoalText: '',
     otherDietText: '',
+    whyFocuses: [],
+    otherWhyText: '',
   };
 }
 
@@ -237,6 +252,10 @@ export function isDietGoal(value: string | null | undefined): value is DietGoal 
 
 export function isDietStyle(value: string | null | undefined): value is DietStyle {
   return Boolean(value && (DIET_STYLES as readonly string[]).includes(value));
+}
+
+export function isWhyFocus(value: string | null | undefined): value is WhyFocus {
+  return Boolean(value && (WHY_FOCUSES as readonly string[]).includes(value));
 }
 
 export function allProofsSelected(proofs: PreferredProof[]): boolean {
@@ -282,6 +301,17 @@ export function toggleDietStyle(current: ChipFollowUp, value: DietStyle): ChipFo
   };
 }
 
+export function toggleWhyFocus(current: ChipFollowUp, value: WhyFocus): ChipFollowUp {
+  const currentWhy = current.whyFocuses ?? [];
+  const has = currentWhy.includes(value);
+  const whyFocuses = has ? currentWhy.filter((item) => item !== value) : [...currentWhy, value];
+  return {
+    ...current,
+    whyFocuses,
+    otherWhyText: whyFocuses.includes('other') ? current.otherWhyText : '',
+  };
+}
+
 export function qtyUnitLabel(
   kind: QtyKind,
   chipSlug: string,
@@ -297,9 +327,24 @@ export function qtyUnitLabel(
     return 'steps';
   }
   if (kind === 'miles_outing') {
-    return units === 'metric' ? 'km' : 'mi';
+    return units === 'metric' ? 'km' : 'miles';
   }
   return QTY_BANDS[kind].unitLabel;
+}
+
+/** Visible unit under the number. Never a bare number. Never “mi”. */
+export function qtyUnitOnCard(kind: QtyKind, chipSlug: string, units: 'imperial' | 'metric'): string {
+  const unit = qtyUnitLabel(kind, chipSlug, units);
+  if (unit === 'sessions') {
+    return 'Sessions';
+  }
+  if (unit === 'laps') {
+    return 'Laps';
+  }
+  if (unit === 'pages') {
+    return 'Pages';
+  }
+  return unit;
 }
 
 const VOLUME_CURRENT: Record<string, string> = {
@@ -406,6 +451,12 @@ export function activityCardBlocked(input: {
     if (!followUp.qtyUnknown && (followUp.currentQty == null || followUp.goalQty == null)) {
       return 'Add hours, or Unknown.';
     }
+    if ((followUp.whyFocuses ?? []).length === 0) {
+      return 'Add why you fast.';
+    }
+    if ((followUp.whyFocuses ?? []).includes('other') && !followUp.otherWhyText.trim()) {
+      return 'Add a short note for Other.';
+    }
   }
   const ratingKind = isRatingKind(chip.ratingKind) ? chip.ratingKind : null;
   if (ratingKind && !followUp.ratingUnknown) {
@@ -432,6 +483,14 @@ export function activityCardBlocked(input: {
   }
   if (room && showsHighestLevel(room) && !followUp.highestLevel) {
     return 'Add the highest level you’ve played.';
+  }
+  if (chip.slug === 'meditation') {
+    if ((followUp.whyFocuses ?? []).length === 0) {
+      return 'Add why you meditate.';
+    }
+    if ((followUp.whyFocuses ?? []).includes('other') && !followUp.otherWhyText.trim()) {
+      return 'Add a short note for Other.';
+    }
   }
   return null;
 }
@@ -544,6 +603,8 @@ export type FollowUpExtras = {
   diet?: DietStyle[];
   other_goal_text?: string;
   other_diet_text?: string;
+  why_focuses?: WhyFocus[];
+  other_why_text?: string;
 };
 
 export function extrasFromFollowUp(input: {
@@ -578,6 +639,12 @@ export function extrasFromFollowUp(input: {
     }
     if (qtyKind === 'fasting_hours' && followUp.qtyUnknown) {
       extras.fasting_hours_unknown = true;
+    }
+  }
+  if (slug === 'fasting' || slug === 'meditation') {
+    extras.why_focuses = followUp.whyFocuses ?? [];
+    if ((followUp.whyFocuses ?? []).includes('other') && followUp.otherWhyText.trim()) {
+      extras.other_why_text = followUp.otherWhyText.trim();
     }
   }
   if (room && showsHighestLevel(room) && followUp.highestLevel) {
@@ -676,6 +743,8 @@ export function followUpFromRow(row: {
     dietStyles,
     otherGoalText: String(extras.other_goal_text ?? ''),
     otherDietText: String(extras.other_diet_text ?? ''),
+    whyFocuses: Array.isArray(extras.why_focuses) ? extras.why_focuses.filter(isWhyFocus) : [],
+    otherWhyText: String(extras.other_why_text ?? ''),
   };
 }
 
@@ -810,5 +879,6 @@ export const DIET_STYLE_LABELS: Record<DietStyle, string> = {
   low_fat: 'Low fat',
   high_fat: 'High fat',
   caloric_deficit: 'Caloric deficit',
+  caloric_surplus: 'Caloric surplus',
   other: 'Other',
 };

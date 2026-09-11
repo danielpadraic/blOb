@@ -56,6 +56,7 @@ import {
   shouldOfferStartThis,
   startThisHref,
 } from '@/lib/interestsMatch';
+import { preferredUnitSystem } from '@/lib/bodyMetrics';
 import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
 
 type WizardStep = 'prompt' | InterestRoomSlug;
@@ -73,6 +74,7 @@ export function InterestsWizard({
   const insets = useSafeAreaInsets();
   const keyboardOpen = useKeyboardOverlap() > 0;
   const { profile } = useMyProfile();
+  const units = preferredUnitSystem(profile);
   const catalog = useInterestCatalog();
   const { mine } = useMyInterests();
   const saveRoom = useSaveInterestRoom();
@@ -455,6 +457,7 @@ export function InterestsWizard({
                       total={selectedChips.length}
                       page={page}
                       filledCount={activityProgressFilled(cardIndex ?? 0, cardPage)}
+                      units={units}
                     />
                   )),
                 )}

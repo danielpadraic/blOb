@@ -27,10 +27,13 @@ import {
   RATING_LABELS,
   SPORTS_LEVELS,
   SPORTS_LEVEL_LABELS,
+  WHY_FOCUSES,
+  WHY_FOCUS_LABELS,
   currentVolumeLabel,
   goalVolumeLabel,
   isQtyKind,
   isRatingKind,
+  qtyUnitOnCard,
   setGoalQtyPeriod,
   setQtyPeriod,
   setQtyUnknown,
@@ -39,6 +42,7 @@ import {
   setRatingValue,
   toggleDietGoal,
   toggleDietStyle,
+  toggleWhyFocus,
   type ChipFollowUp,
 } from '@/lib/interestsFollowup';
 import { copy } from '@/lib/copy';
@@ -48,13 +52,49 @@ type ChipFollowUpCardProps = {
   followUp: ChipFollowUp;
   onChange: (next: ChipFollowUp) => void;
   room: InterestRoomSlug;
+  units?: 'imperial' | 'metric';
 };
+
+function WhyFocusBlock({
+  followUp,
+  onChange,
+}: {
+  followUp: ChipFollowUp;
+  onChange: (next: ChipFollowUp) => void;
+}) {
+  return (
+    <>
+      <View className="gap-1">
+        <AppText className="text-[13px] font-semibold text-charcoal">{copy('interests.focus')}</AppText>
+        <ChipRow>
+          {WHY_FOCUSES.map((value) => (
+            <Chip
+              key={value}
+              label={WHY_FOCUS_LABELS[value]}
+              selected={(followUp.whyFocuses ?? []).includes(value)}
+              onPress={() => onChange(toggleWhyFocus(followUp, value))}
+              minHeight={44}
+            />
+          ))}
+        </ChipRow>
+      </View>
+      {(followUp.whyFocuses ?? []).includes('other') ? (
+        <Input
+          label={copy('interests.other')}
+          value={followUp.otherWhyText}
+          onChangeText={(otherWhyText) => onChange({ ...followUp, otherWhyText })}
+        />
+      ) : null}
+    </>
+  );
+}
 
 export function ChipFollowUpCard({
   chip,
   followUp,
   onChange,
   room,
+  units = 'imperial',
 }: ChipFollowUpCardProps) {
   const ratingKind = isRatingKind(chip.ratingKind) ? chip.ratingKind : null;
   const qtyKind = isQtyKind(chip.qtyKind) ? chip.qtyKind : null;
@@ -133,10 +173,12 @@ export function ChipFollowUpCard({
           onGoalPeriod={(next) => onChange(setGoalQtyPeriod(followUp, qtyKind === 'steps_day' ? 'day' : next))}
           onCurrent={(next) => onChange(setQtyValue(followUp, qtyKind, 'currentQty', next))}
           onGoal={(next) => onChange(setQtyValue(followUp, qtyKind, 'goalQty', next))}
-          unitLabel={qtyKind === 'steps_day' ? 'steps' : undefined}
+          unitLabel={qtyUnitOnCard(qtyKind, chip.slug, units)}
           periods={qtyPeriodsForChip(chip)}
         />
       ) : null}
+
+      {chip.slug === 'meditation' ? <WhyFocusBlock followUp={followUp} onChange={onChange} /> : null}
 
       {showPlay && qtyKind ? (
         <View style={{ gap: 8 }}>
@@ -145,6 +187,7 @@ export function ChipFollowUpCard({
             kind={qtyKind}
             value={followUp.currentQty}
             onChange={(next) => onChange(setQtyValue(followUp, qtyKind, 'currentQty', next))}
+            unitLabel="Sessions"
           />
           <PeriodRow
             period={followUp.qtyPeriod}
@@ -292,6 +335,7 @@ export function ChipFollowUpCard({
             </ChipRow>
           </View>
           <AppText className="text-[12px] text-muted">{copy('interests.fastingNote')}</AppText>
+          <WhyFocusBlock followUp={followUp} onChange={onChange} />
           {followUp.qtyUnknown ? null : (
             <View style={{ gap: 8 }}>
               <QtySlider
@@ -299,6 +343,7 @@ export function ChipFollowUpCard({
                 kind={qtyKind}
                 value={followUp.currentQty}
                 onChange={(next) => onChange(setQtyValue(followUp, qtyKind, 'currentQty', next))}
+                unitLabel="hours"
               />
               <QtySlider
                 label="Goal · hours"
@@ -307,6 +352,7 @@ export function ChipFollowUpCard({
                 onChange={(next) => onChange(setQtyValue(followUp, qtyKind, 'goalQty', next))}
                 previewValue={followUp.currentQty}
                 emptyOk
+                unitLabel="hours"
               />
             </View>
           )}

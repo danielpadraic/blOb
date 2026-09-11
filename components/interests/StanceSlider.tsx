@@ -108,7 +108,7 @@ export function StanceSlider({ value, onChange }: StanceSliderProps) {
           className="text-[12px] font-bold"
           numberOfLines={1}
           style={{ color: THEME.textPrimary, flexShrink: 0 }}>
-          {copy('interests.pro')}
+          {copy('interests.excel')}
         </AppText>
       </View>
     </View>

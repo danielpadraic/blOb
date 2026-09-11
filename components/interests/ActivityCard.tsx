@@ -27,6 +27,7 @@ type ActivityCardProps = {
   page: ActivityCardPage;
   /** Interest chips whose page 2 is already submitted. */
   filledCount: number;
+  units?: 'imperial' | 'metric';
 };
 
 export function ActivityCard({
@@ -45,6 +46,7 @@ export function ActivityCard({
   total,
   page,
   filledCount,
+  units = 'imperial',
 }: ActivityCardProps) {
   return (
     <ScrollView
@@ -103,7 +105,7 @@ export function ActivityCard({
           </>
         ) : (
           <>
-            <ChipFollowUpCard chip={chip} room={room} followUp={followUp} onChange={onChange} />
+            <ChipFollowUpCard chip={chip} room={room} followUp={followUp} onChange={onChange} units={units} />
             {chip.isWork ? (
               <View style={{ gap: 8 }}>
                 <Input

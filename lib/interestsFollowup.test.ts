@@ -15,6 +15,7 @@ import {
   goalVolumeLabel,
   pruneFollowUps,
   qtyUnitLabel,
+  qtyUnitOnCard,
   savePayload,
   setQtyPeriod,
   setQtyUnknown,
@@ -23,6 +24,7 @@ import {
   setRatingValue,
   toggleDietGoal,
   toggleDietStyle,
+  toggleWhyFocus,
 } from '@/lib/interestsFollowup';
 import { toggleChipStance } from '@/lib/interests';
 
@@ -69,8 +71,12 @@ describe('catalog copy pass', () => {
     expect(currentVolumeLabel(chipDef('health_fitness', 'running')!)).toBe('I currently run');
     expect(goalVolumeLabel(chipDef('health_fitness', 'running')!)).toBe('My goal is to run');
     expect(currentVolumeLabel(chipDef('health_fitness', 'lifting')!)).toBe('I currently lift');
-    expect(qtyUnitLabel('miles_outing', 'running', 'imperial')).toBe('mi');
+    expect(qtyUnitLabel('miles_outing', 'running', 'imperial')).toBe('miles');
     expect(qtyUnitLabel('miles_outing', 'running', 'metric')).toBe('km');
+    expect(qtyUnitOnCard('miles_outing', 'running', 'imperial')).toBe('miles');
+    expect(qtyUnitOnCard('laps', 'swimming', 'imperial')).toBe('Laps');
+    expect(qtyUnitOnCard('sessions_week', 'lifting', 'imperial')).toBe('Sessions');
+    expect(qtyUnitOnCard('pages_week', 'reading', 'imperial')).toBe('Pages');
     expect(qtyUnitLabel('laps', 'swimming', 'imperial')).toBe('laps');
     expect(qtyUnitLabel('sessions_week', 'lifting', 'imperial')).toBe('sessions');
     expect(qtyUnitLabel('sessions_week', 'rowing', 'imperial')).toBe('sessions');
@@ -205,6 +211,20 @@ describe('extras', () => {
       diet: ['high_protein'],
       other_goal_text: 'Cut for a meet',
     });
+    const fastingWhy = extrasFromFollowUp({
+      followUp: { ...emptyFollowUp(), whyFocuses: ['faith', 'other'], otherWhyText: 'Ramadan' },
+      slug: 'fasting',
+      ratingKind: null,
+      qtyKind: 'fasting_hours',
+    });
+    expect(fastingWhy.why_focuses).toEqual(['faith', 'other']);
+    expect(fastingWhy.other_why_text).toBe('Ramadan');
+    expect(
+      followUpFromRow({
+        extras: { why_focuses: ['health', 'other'], other_why_text: 'Lent' },
+      }).whyFocuses,
+    ).toEqual(['health', 'other']);
+    expect(followUpFromRow({ extras: { other_why_text: 'Lent' } }).otherWhyText).toBe('Lent');
   });
 
   it('never writes indoor from this UI', () => {
@@ -267,6 +287,48 @@ describe('activity card required fields', () => {
     expect(activityCardBlocked({ chip, followUp: one, room: 'health_fitness' })).toMatch(/current diet/i);
     const both = toggleDietStyle(one, 'balanced');
     expect(activityCardBlocked({ chip, followUp: both, room: 'health_fitness' })).toBeNull();
+    const surplus = toggleDietStyle(one, 'caloric_surplus');
+    expect(activityCardBlocked({ chip, followUp: surplus, room: 'health_fitness' })).toBeNull();
+  });
+
+  it('requires Fasting and Meditation Focus chips, and Other text when Other is on', () => {
+    const fasting = chipDef('personal_development', 'fasting')!;
+    const hours = {
+      ...emptyFollowUp(),
+      fastingPractice: 'time_restricted' as const,
+      currentQty: 16,
+      goalQty: 18,
+    };
+    expect(activityCardBlocked({ chip: fasting, followUp: hours, room: 'personal_development' })).toBe(
+      'Add why you fast.',
+    );
+    const withFocus = toggleWhyFocus(hours, 'health');
+    expect(activityCardBlocked({ chip: fasting, followUp: withFocus, room: 'personal_development' })).toBeNull();
+    const otherOn = toggleWhyFocus(hours, 'other');
+    expect(activityCardBlocked({ chip: fasting, followUp: otherOn, room: 'personal_development' })).toBe(
+      'Add a short note for Other.',
+    );
+    const otherFilled = { ...otherOn, otherWhyText: 'Lent' };
+    expect(activityCardBlocked({ chip: fasting, followUp: otherFilled, room: 'personal_development' })).toBeNull();
+
+    const meditation = chipDef('personal_development', 'meditation')!;
+    const sessions = {
+      ...emptyFollowUp(),
+      currentQty: 3,
+      qtyPeriod: 'week' as const,
+      goalQty: 5,
+      goalQtyPeriod: 'week' as const,
+    };
+    expect(activityCardBlocked({ chip: meditation, followUp: sessions, room: 'personal_development' })).toBe(
+      'Add why you meditate.',
+    );
+    expect(
+      activityCardBlocked({
+        chip: meditation,
+        followUp: toggleWhyFocus(sessions, 'discipline'),
+        room: 'personal_development',
+      }),
+    ).toBeNull();
   });
 
   it('keeps Work occupation and employer on the card', () => {
