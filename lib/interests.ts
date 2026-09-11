@@ -112,6 +112,28 @@ export function activityProgressFilled(chipIndex: number, _page: ActivityCardPag
   return Math.max(chipIndex, 0);
 }
 
+/**
+ * Pager N of M uses the chips they tapped on this room’s picker.
+ * Frozen slugs win while cards are open so a card save / hydrate cannot shrink M.
+ */
+export function selectedChipsForPager<T extends { slug: string }>(
+  chips: readonly T[],
+  stances: Record<string, unknown>,
+  frozenSlugs: readonly string[] | null,
+): T[] {
+  if (frozenSlugs && frozenSlugs.length > 0) {
+    const found: T[] = [];
+    for (const slug of frozenSlugs) {
+      const chip = chips.find((item) => item.slug === slug);
+      if (chip) {
+        found.push(chip);
+      }
+    }
+    return found;
+  }
+  return chips.filter((chip) => Boolean(stances[chip.slug]));
+}
+
 export type ActivityWizardPos = {
   chipIndex: number;
   page: ActivityCardPage;

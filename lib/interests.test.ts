@@ -11,6 +11,7 @@ import {
 import {
   activityProgressFilled,
   activityWizardBack,
+  selectedChipsForPager,
   activityWizardContinue,
   activityWizardPagerIndex,
   allRoomsComplete,
@@ -145,6 +146,17 @@ describe('activity card two-page wizard', () => {
     expect(activityProgressFilled(0, 2)).toBe(0);
     expect(activityProgressFilled(1, 1)).toBe(1);
     expect(activityProgressFilled(1, 2)).toBe(1);
+  });
+
+  it('keeps picker M while cards are open even if hydrate only has the saved chip', () => {
+    const chips = [{ slug: 'walking' }, { slug: 'running' }, { slug: 'lifting' }];
+    const frozen = ['walking', 'running'];
+    expect(selectedChipsForPager(chips, { walking: {} }, frozen).map((chip) => chip.slug)).toEqual([
+      'walking',
+      'running',
+    ]);
+    expect(selectedChipsForPager(chips, { walking: {}, running: {} }, null)).toHaveLength(2);
+    expect(selectedChipsForPager(chips, { walking: {} }, null)).toHaveLength(1);
   });
 
   it('advances page 1 → page 2, then next chip page 1, then done', () => {

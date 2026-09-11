@@ -76,13 +76,10 @@ export function QtySlider({ label, kind, value, onChange, previewValue, emptyOk,
 
   return (
     <View style={{ gap: 4 }}>
+      <AppText className="text-[13px] font-semibold text-charcoal" numberOfLines={2}>
+        {label}
+      </AppText>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <AppText
-          className="text-[13px] font-semibold text-charcoal"
-          numberOfLines={1}
-          style={{ flex: 1, minWidth: 0 }}>
-          {label}
-        </AppText>
         <TextInput
           accessibilityLabel={label}
           value={focused ? draft : value == null && emptyOk ? '' : formatQty(kind, numeric)}

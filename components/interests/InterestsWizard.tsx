@@ -21,6 +21,7 @@ import {
   activityWizardBack,
   activityWizardContinue,
   activityWizardPagerIndex,
+  selectedChipsForPager,
   roomContinueBlocked,
   stanceFromMarks,
   stanceMarks,
@@ -84,6 +85,7 @@ export function InterestsWizard({
   const [step, setStep] = useState<WizardStep>(prompted ? INTEREST_ROOM_SLUGS[0] : 'prompt');
   const [cardIndex, setCardIndex] = useState<number | null>(null);
   const [cardPage, setCardPage] = useState<ActivityCardPage>(1);
+  const [cardSlugs, setCardSlugs] = useState<string[] | null>(null);
   const [stances, setStances] = useState<Record<string, ChipStance>>({});
   const [noneOfThese, setNoneOfThese] = useState(false);
   const [followUps, setFollowUps] = useState<Record<string, ChipFollowUp>>({});
@@ -123,7 +125,7 @@ export function InterestsWizard({
         })
       : [...(room?.chips ?? [])];
 
-  const selectedChips = chips.filter((chip) => stances[chip.slug]);
+  const selectedChips = selectedChipsForPager(chips, stances, cardSlugs);
   const cardChip = cardIndex != null ? selectedChips[cardIndex] : null;
   const onCard = Boolean(cardChip && step !== 'prompt');
 
@@ -147,6 +149,10 @@ export function InterestsWizard({
     if (step === 'prompt' || !mine.data || hydratedRoom === step) {
       return;
     }
+    if (cardIndex != null) {
+      setHydratedRoom(step);
+      return;
+    }
     const next: Record<string, ChipStance> = {};
     const nextFollow: Record<string, ChipFollowUp> = {};
     for (const row of mine.data.chips) {
@@ -168,9 +174,10 @@ export function InterestsWizard({
     setEmployer(mine.data.work?.employer ?? '');
     setHydratedRoom(step);
     setCardIndex(null);
+    setCardSlugs(null);
     setCardPage(1);
     setFormError(null);
-  }, [hydratedRoom, mine.data, step]);
+  }, [cardIndex, hydratedRoom, mine.data, step]);
 
   function onChipPress(slug: string) {
     const next = toggleRoomPickerChip({ selected: stances, noneOfThese }, slug);
@@ -212,6 +219,7 @@ export function InterestsWizard({
   async function goNext(from: InterestRoomSlug) {
     const next = nextRoomSlug(from);
     setCardIndex(null);
+    setCardSlugs(null);
     setCardPage(1);
     if (next) {
       setRoomDir(1);
@@ -255,6 +263,7 @@ export function InterestsWizard({
         followUps: pruneFollowUps(followUps, stances),
       });
       await markPrompted();
+      setCardSlugs(chips.filter((chip) => stances[chip.slug]).map((chip) => chip.slug));
       setCardIndex(0);
       setCardPage(1);
     } catch (error) {
@@ -346,6 +355,7 @@ export function InterestsWizard({
         setHydratedRoom(null);
         const next = nextRoomSlug(step);
         setCardIndex(null);
+        setCardSlugs(null);
         setCardPage(1);
         if (next) {
           setStep(next);
@@ -379,6 +389,7 @@ export function InterestsWizard({
     await pagerRef.current?.exit('right');
     setSliding(false);
     setCardIndex(null);
+    setCardSlugs(null);
     setCardPage(1);
   }
 
