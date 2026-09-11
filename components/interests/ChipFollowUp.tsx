@@ -1,7 +1,8 @@
+import { type ReactNode } from 'react';
 import { View } from 'react-native';
 
 import { PeriodRow, QtyPairSlider, QtySlider } from '@/components/interests/QtyPairSlider';
-import { Chip, ChipRow } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
 import {
@@ -55,6 +56,17 @@ type ChipFollowUpCardProps = {
   units?: 'imperial' | 'metric';
 };
 
+const DENSE_CHIP = 32;
+const DENSE_FIELD = {
+  minHeight: 40,
+  paddingVertical: 8,
+  paddingHorizontal: 12,
+};
+
+function CompactChipRow({ children }: { children: ReactNode }) {
+  return <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>{children}</View>;
+}
+
 function WhyFocusBlock({
   followUp,
   onChange,
@@ -64,25 +76,26 @@ function WhyFocusBlock({
 }) {
   return (
     <>
-      <View className="gap-1">
+      <View style={{ gap: 4 }}>
         <AppText className="text-[13px] font-semibold text-charcoal">{copy('interests.focus')}</AppText>
-        <ChipRow>
+        <CompactChipRow>
           {WHY_FOCUSES.map((value) => (
             <Chip
               key={value}
               label={WHY_FOCUS_LABELS[value]}
               selected={(followUp.whyFocuses ?? []).includes(value)}
               onPress={() => onChange(toggleWhyFocus(followUp, value))}
-              minHeight={44}
+              minHeight={DENSE_CHIP}
             />
           ))}
-        </ChipRow>
+        </CompactChipRow>
       </View>
       {(followUp.whyFocuses ?? []).includes('other') ? (
         <Input
           label={copy('interests.other')}
           value={followUp.otherWhyText}
           onChangeText={(otherWhyText) => onChange({ ...followUp, otherWhyText })}
+          style={DENSE_FIELD}
         />
       ) : null}
     </>
@@ -110,9 +123,9 @@ export function ChipFollowUpCard({
   const qtyOptional = Boolean(chip.isOther);
 
   return (
-    <View style={{ gap: 8 }}>
+    <View style={{ gap: 6 }}>
       {showNumericRating && ratingKind ? (
-        <View style={{ gap: 8 }}>
+        <View style={{ gap: 6 }}>
           <Input
             label={RATING_LABELS[ratingKind]}
             value={followUp.ratingUnknown ? '' : followUp.ratingValue == null ? '' : String(followUp.ratingValue)}
@@ -129,7 +142,7 @@ export function ChipFollowUpCard({
       ) : null}
 
       {showRank ? (
-        <View style={{ gap: 8 }}>
+        <View style={{ gap: 6 }}>
           <Input
             label={copy('interests.rank')}
             value={followUp.ratingUnknown ? '' : followUp.mmrLabel}
@@ -145,7 +158,7 @@ export function ChipFollowUpCard({
       ) : null}
 
       {showGrade ? (
-        <View style={{ gap: 8 }}>
+        <View style={{ gap: 6 }}>
           <Input
             label={copy('interests.grade')}
             value={followUp.ratingUnknown ? '' : followUp.gradeLabel}
@@ -181,7 +194,7 @@ export function ChipFollowUpCard({
       {chip.slug === 'meditation' ? <WhyFocusBlock followUp={followUp} onChange={onChange} /> : null}
 
       {showPlay && qtyKind ? (
-        <View style={{ gap: 8 }}>
+        <View style={{ gap: 6 }}>
           <QtySlider
             label={copy('interests.currentlyPlay')}
             kind={qtyKind}
@@ -197,9 +210,9 @@ export function ChipFollowUpCard({
       ) : null}
 
       {showsHighestLevel(room) ? (
-        <View className="gap-1">
+        <View style={{ gap: 4 }}>
           <AppText className="text-[13px] font-semibold text-charcoal">{copy('interests.highestLevel')}</AppText>
-          <ChipRow>
+          <CompactChipRow>
             {SPORTS_LEVELS.map((value) => (
               <Chip
                 key={value}
@@ -211,52 +224,57 @@ export function ChipFollowUpCard({
                     highestLevel: followUp.highestLevel === value ? null : value,
                   })
                 }
+                minHeight={DENSE_CHIP}
               />
             ))}
-          </ChipRow>
+          </CompactChipRow>
         </View>
       ) : null}
 
       {showDiet ? (
         <>
-          <View className="gap-1">
+          <View style={{ gap: 4 }}>
             <AppText className="text-[13px] font-semibold text-charcoal">{copy('interests.nutritionGoals')}</AppText>
-            <ChipRow>
+            <CompactChipRow>
               {DIET_GOALS.map((value) => (
                 <Chip
                   key={value}
                   label={DIET_GOAL_LABELS[value]}
                   selected={followUp.dietGoals.includes(value)}
                   onPress={() => onChange(toggleDietGoal(followUp, value))}
+                  minHeight={DENSE_CHIP}
                 />
               ))}
-            </ChipRow>
+            </CompactChipRow>
           </View>
           {followUp.dietGoals.includes('other') ? (
             <Input
               label={copy('interests.other')}
               value={followUp.otherGoalText}
               onChangeText={(otherGoalText) => onChange({ ...followUp, otherGoalText })}
+              style={DENSE_FIELD}
             />
           ) : null}
-          <View className="gap-1">
+          <View style={{ gap: 4 }}>
             <AppText className="text-[13px] font-semibold text-charcoal">{copy('interests.currentDiet')}</AppText>
-            <ChipRow>
+            <CompactChipRow>
               {DIET_STYLES.map((value) => (
                 <Chip
                   key={value}
                   label={DIET_STYLE_LABELS[value]}
                   selected={followUp.dietStyles.includes(value)}
                   onPress={() => onChange(toggleDietStyle(followUp, value))}
+                  minHeight={DENSE_CHIP}
                 />
               ))}
-            </ChipRow>
+            </CompactChipRow>
           </View>
           {followUp.dietStyles.includes('other') ? (
             <Input
               label={copy('interests.other')}
               value={followUp.otherDietText}
               onChangeText={(otherDietText) => onChange({ ...followUp, otherDietText })}
+              style={DENSE_FIELD}
             />
           ) : null}
         </>
@@ -268,9 +286,9 @@ export function ChipFollowUpCard({
 
       {showAcademics ? (
         <>
-          <View className="gap-1">
+          <View style={{ gap: 4 }}>
             <AppText className="text-[13px] font-semibold text-charcoal">{copy('interests.level')}</AppText>
-            <ChipRow>
+            <CompactChipRow>
               {ACADEMICS_LEVELS.map((value) => (
                 <Chip
                   key={value}
@@ -282,13 +300,14 @@ export function ChipFollowUpCard({
                       academicsLevel: followUp.academicsLevel === value ? null : value,
                     })
                   }
+                  minHeight={DENSE_CHIP}
                 />
               ))}
-            </ChipRow>
+            </CompactChipRow>
           </View>
-          <View className="gap-1">
+          <View style={{ gap: 4 }}>
             <AppText className="text-[13px] font-semibold text-charcoal">{copy('interests.focus')}</AppText>
-            <ChipRow>
+            <CompactChipRow>
               {ACADEMICS_FOCUSES.map((value) => (
                 <Chip
                   key={value}
@@ -300,15 +319,17 @@ export function ChipFollowUpCard({
                       academicsFocus: followUp.academicsFocus === value ? null : value,
                     })
                   }
+                  minHeight={DENSE_CHIP}
                 />
               ))}
-            </ChipRow>
+            </CompactChipRow>
           </View>
           {followUp.academicsFocus === 'other' ? (
             <Input
               label={copy('interests.other')}
               value={followUp.academicsFocusOther}
               onChangeText={(academicsFocusOther) => onChange({ ...followUp, academicsFocusOther })}
+              style={DENSE_FIELD}
             />
           ) : null}
         </>
@@ -316,9 +337,9 @@ export function ChipFollowUpCard({
 
       {showFasting && qtyKind === 'fasting_hours' ? (
         <>
-          <View className="gap-1">
+          <View style={{ gap: 4 }}>
             <AppText className="text-[13px] font-semibold text-charcoal">{copy('interests.practice')}</AppText>
-            <ChipRow>
+            <CompactChipRow>
               {FASTING_PRACTICES.map((value) => (
                 <Chip
                   key={value}
@@ -330,14 +351,15 @@ export function ChipFollowUpCard({
                       fastingPractice: followUp.fastingPractice === value ? null : value,
                     })
                   }
+                  minHeight={DENSE_CHIP}
                 />
               ))}
-            </ChipRow>
+            </CompactChipRow>
           </View>
           <AppText className="text-[12px] text-muted">{copy('interests.fastingNote')}</AppText>
           <WhyFocusBlock followUp={followUp} onChange={onChange} />
           {followUp.qtyUnknown ? null : (
-            <View style={{ gap: 8 }}>
+            <View style={{ gap: 6 }}>
               <QtySlider
                 label="Current · hours"
                 kind={qtyKind}

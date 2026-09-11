@@ -55,7 +55,13 @@ export function BackdropSlot({ roomSlug, playing = true, children }: BackdropSlo
       <View
         pointerEvents="none"
         style={{ position: 'absolute', right: 12, bottom: 96, opacity: 0.22 }}>
-        <Image source={BOB} style={{ width: 120, height: 120 }} contentFit="contain" />
+        <Image
+          key="interest-bob"
+          source={BOB}
+          recyclingKey="interest-bob"
+          style={{ width: 120, height: 120 }}
+          contentFit="contain"
+        />
       </View>
       {children}
     </View>

@@ -1,4 +1,13 @@
-import { Children, forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from 'react';
+import {
+  Children,
+  forwardRef,
+  isValidElement,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { View } from 'react-native';
 import Animated, {
   Easing,
@@ -35,16 +44,31 @@ export const ActivityCardPager = forwardRef<ActivityCardPagerHandle, ActivityCar
     indexRef.current = index;
     reduceRef.current = reduceMotion;
 
+    // Snap when the box width actually changes — never replay the slide.
     useEffect(() => {
       if (boxW < 1 || exitingRef.current) {
         return;
       }
       widthRef.current = boxW;
-      x.value = withTiming(-index * boxW, {
-        duration: reduceMotion ? 0 : CARD_SLIDE_MS,
-        easing: EASE,
-      });
-    }, [boxW, index, reduceMotion, x]);
+      x.value = -indexRef.current * boxW;
+    }, [boxW, x]);
+
+    // Animate only when the pager index changes (page or chip). Reduce-motion snaps.
+    useEffect(() => {
+      if (exitingRef.current) {
+        return;
+      }
+      const w = widthRef.current;
+      if (w < 1) {
+        return;
+      }
+      const target = -index * w;
+      if (reduceMotion) {
+        x.value = target;
+        return;
+      }
+      x.value = withTiming(target, { duration: CARD_SLIDE_MS, easing: EASE });
+    }, [index, reduceMotion, x]);
 
     useImperativeHandle(ref, () => ({
       exit(direction) {
@@ -80,24 +104,28 @@ export const ActivityCardPager = forwardRef<ActivityCardPagerHandle, ActivityCar
             return;
           }
           widthRef.current = next;
-          setBoxW(next);
           if (!exitingRef.current) {
             x.value = -indexRef.current * next;
           }
+          setBoxW((prev) => (prev === next ? prev : next));
         }}>
         <Animated.View style={[{ flexDirection: 'row', height: '100%', width: pageW * Math.max(pages.length, 1) }, style]}>
-          {pages.map((child, page) => (
-            <View
-              key={page}
-              style={{
-                width: pageW,
-                flexGrow: 0,
-                flexShrink: 0,
-                height: '100%',
-              }}>
-              {child}
-            </View>
-          ))}
+          {pages.map((child, page) => {
+            const slotKey =
+              isValidElement(child) && child.key != null ? String(child.key) : String(page);
+            return (
+              <View
+                key={slotKey}
+                style={{
+                  width: pageW,
+                  flexGrow: 0,
+                  flexShrink: 0,
+                  height: '100%',
+                }}>
+                {child}
+              </View>
+            );
+          })}
         </Animated.View>
       </View>
     );

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -411,11 +411,15 @@ export function InterestsWizard({
       <View style={{ flex: 1, minHeight: 0 }}>
         <RoomSlide roomKey={String(step)} direction={roomDir} reduceMotion={reduceMotion}>
           {onCard && cardChip && step !== 'prompt' ? (
-            <View style={{ flex: 1, minHeight: 0 }}>
+            <KeyboardAvoidingView
+              style={{ flex: 1, minHeight: 0 }}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              enabled={keyboardOpen}>
               <View
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
+                  gap: 8,
                   paddingHorizontal: 16,
                   paddingTop: 4,
                   minHeight: 44,
@@ -429,6 +433,26 @@ export function InterestsWizard({
                     Back
                   </AppText>
                 </Pressable>
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 0 }}>
+                  {Array.from({ length: Math.max(selectedChips.length, 1) }, (_, i) => (
+                    <View
+                      key={selectedChips[i]?.slug ?? i}
+                      style={{
+                        flex: 1,
+                        height: 3,
+                        borderRadius: 999,
+                        backgroundColor:
+                          i < activityProgressFilled(cardIndex ?? 0, cardPage) ? THEME.accent : THEME.border,
+                      }}
+                    />
+                  ))}
+                </View>
+                <AppText
+                  className="text-[13px] font-semibold"
+                  numberOfLines={1}
+                  style={{ color: THEME.primaryForeground }}>
+                  {(cardIndex ?? 0) + 1} of {selectedChips.length}
+                </AppText>
               </View>
               <ActivityCardPager
                 ref={pagerRef}
@@ -436,33 +460,32 @@ export function InterestsWizard({
                 reduceMotion={reduceMotion}>
                 {selectedChips.flatMap((chip, index) =>
                   ([1, 2] as const).map((page) => (
-                    <ActivityCard
-                      key={`${chip.slug}-${page}`}
-                      chip={chip}
-                      room={step}
-                      followUp={followUps[chip.slug] ?? emptyFollowUp(defaultQtyPeriod(chip))}
-                      onChange={(next) => {
-                        setFollowUps((current) => ({ ...current, [chip.slug]: next }));
-                        setStances((current) => ({ ...current, [chip.slug]: stanceMarks(next.stanceScore) }));
-                        setFormError(null);
-                      }}
-                      occupation={occupation}
-                      employer={employer}
-                      otherText={otherText}
-                      onOccupation={setOccupation}
-                      onEmployer={setEmployer}
-                      onOtherText={setOtherText}
-                      error={index === cardIndex && page === cardPage ? formError : null}
-                      index={index}
-                      total={selectedChips.length}
-                      page={page}
-                      filledCount={activityProgressFilled(cardIndex ?? 0, cardPage)}
-                      units={units}
-                    />
+                    <View key={`${chip.slug}-${page}`} style={{ flex: 1, minHeight: 0 }}>
+                      <ActivityCard
+                        key={chip.slug}
+                        chip={chip}
+                        room={step}
+                        followUp={followUps[chip.slug] ?? emptyFollowUp(defaultQtyPeriod(chip))}
+                        onChange={(next) => {
+                          setFollowUps((current) => ({ ...current, [chip.slug]: next }));
+                          setStances((current) => ({ ...current, [chip.slug]: stanceMarks(next.stanceScore) }));
+                          setFormError(null);
+                        }}
+                        occupation={occupation}
+                        employer={employer}
+                        otherText={otherText}
+                        onOccupation={setOccupation}
+                        onEmployer={setEmployer}
+                        onOtherText={setOtherText}
+                        error={index === cardIndex && page === cardPage ? formError : null}
+                        page={page}
+                        units={units}
+                      />
+                    </View>
                   )),
                 )}
               </ActivityCardPager>
-            </View>
+            </KeyboardAvoidingView>
           ) : (
             <ScrollView
               contentContainerStyle={{
@@ -570,15 +593,6 @@ export function InterestsWizard({
             </>
           ) : onCard ? (
             <>
-              <View style={{ flex: 1 }}>
-                <Button
-                  title="Back"
-                  variant="outline"
-                  size="sm"
-                  style={FOOTER_BTN}
-                  onPress={() => void onCardBack()}
-                />
-              </View>
               <View style={{ flex: 1 }}>
                 <Button
                   title={copy('interests.continue', tone)}

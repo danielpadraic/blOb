@@ -68,7 +68,7 @@ export function StanceSlider({ value, onChange }: StanceSliderProps) {
             onLayout={(event) => {
               const next = Math.max(event.nativeEvent.layout.width, 1);
               width.value = next;
-              setTrackW(next);
+              setTrackW((prev) => (prev === next ? prev : next));
             }}
             accessibilityRole="adjustable"
             accessibilityLabel="Level Up to Pro">

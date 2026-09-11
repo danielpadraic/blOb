@@ -5,10 +5,22 @@ import { StanceSlider } from '@/components/interests/StanceSlider';
 import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
 import type { InterestChipDef, InterestRoomSlug } from '@/lib/interestsCatalog';
+import { isDietChip } from '@/lib/interestsCatalog';
 import { clampStanceScore, type ActivityCardPage } from '@/lib/interests';
 import type { ChipFollowUp } from '@/lib/interestsFollowup';
 import { copy } from '@/lib/copy';
 import { THEME, themeShadow } from '@/lib/theme';
+
+/** Diet / Academics / Fasting / Work only — volume and play cards never scroll. */
+function mayInnerScroll(chip: InterestChipDef): boolean {
+  return isDietChip(chip.slug) || chip.slug === 'academics' || chip.slug === 'fasting' || Boolean(chip.isWork);
+}
+
+const DENSE_FIELD = {
+  minHeight: 40,
+  paddingVertical: 8,
+  paddingHorizontal: 12,
+};
 
 type ActivityCardProps = {
   chip: InterestChipDef;
@@ -22,11 +34,7 @@ type ActivityCardProps = {
   onEmployer: (next: string) => void;
   onOtherText: (next: string) => void;
   error: string | null;
-  index: number;
-  total: number;
   page: ActivityCardPage;
-  /** Interest chips whose page 2 is already submitted. */
-  filledCount: number;
   units?: 'imperial' | 'metric';
 };
 
@@ -42,59 +50,68 @@ export function ActivityCard({
   onEmployer,
   onOtherText,
   error,
-  index,
-  total,
   page,
-  filledCount,
   units = 'imperial',
 }: ActivityCardProps) {
+  const page2 = (
+    <>
+      <ChipFollowUpCard chip={chip} room={room} followUp={followUp} onChange={onChange} units={units} />
+      {chip.isWork ? (
+        <View style={{ gap: 6 }}>
+          <Input
+            label={copy('interests.occupation')}
+            value={occupation}
+            onChangeText={onOccupation}
+            autoCapitalize="words"
+            style={DENSE_FIELD}
+          />
+          <Input
+            label={copy('interests.employer')}
+            value={employer}
+            onChangeText={onEmployer}
+            autoCapitalize="words"
+            style={DENSE_FIELD}
+          />
+        </View>
+      ) : null}
+      {chip.isOther ? (
+        <Input
+          label={copy('interests.other')}
+          value={otherText}
+          onChangeText={onOtherText}
+          grow
+          growMaxLines={2}
+          style={DENSE_FIELD}
+        />
+      ) : null}
+    </>
+  );
+
   return (
-    <ScrollView
-      contentContainerStyle={{
-        paddingHorizontal: 16,
-        paddingTop: 4,
-        paddingBottom: 12,
-      }}
-      keyboardShouldPersistTaps="handled">
+    <View style={{ flex: 1, minHeight: 0, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 }}>
       <View
-        className="w-full p-4"
         style={{
+          flex: 1,
+          minHeight: 0,
           backgroundColor: THEME.surface,
           borderRadius: THEME.radius,
-          gap: 8,
+          paddingHorizontal: 12,
+          paddingTop: 12,
+          paddingBottom: 10,
+          gap: 6,
           ...themeShadow(),
         }}>
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
-          <AppText
-            className="text-[22px] font-extrabold"
-            numberOfLines={1}
-            style={{ color: THEME.textPrimary, lineHeight: 26, flex: 1, minWidth: 0 }}>
-            {chip.label}
-          </AppText>
-          <AppText
-            className="text-[13px] font-semibold"
-            numberOfLines={1}
-            style={{ color: THEME.textMuted, paddingTop: 4 }}>
-            {index + 1} of {total}
-          </AppText>
-        </View>
-        <View style={{ flexDirection: 'row', gap: 4 }}>
-          {Array.from({ length: Math.max(total, 1) }, (_, i) => (
-            <View
-              key={i}
-              style={{
-                flex: 1,
-                height: 3,
-                borderRadius: 999,
-                backgroundColor: i < filledCount ? THEME.accent : THEME.border,
-              }}
-            />
-          ))}
-        </View>
+        <AppText
+          className="text-[20px] font-extrabold"
+          numberOfLines={1}
+          style={{ color: THEME.textPrimary, lineHeight: 24 }}>
+          {chip.label}
+        </AppText>
         {page === 1 ? (
-          <>
+          <View style={{ flex: 1, minHeight: 0, justifyContent: 'center', gap: 6 }}>
             <AppText
               className="text-[17px] font-extrabold"
+              numberOfLines={1}
               style={{ color: THEME.textPrimary, lineHeight: 22 }}>
               {copy('interests.rateSkill')}
             </AppText>
@@ -102,37 +119,37 @@ export function ActivityCard({
               value={followUp.stanceScore}
               onChange={(next) => onChange({ ...followUp, stanceScore: clampStanceScore(next) })}
             />
-          </>
+          </View>
+        ) : mayInnerScroll(chip) ? (
+          <ScrollView
+            style={{ flex: 1, minHeight: 0 }}
+            contentContainerStyle={{ gap: 6, paddingBottom: 4 }}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+            showsVerticalScrollIndicator={false}>
+            {page2}
+            {error ? (
+              <AppText className="text-[13px] font-semibold" style={{ color: THEME.danger }}>
+                {error}
+              </AppText>
+            ) : null}
+          </ScrollView>
         ) : (
-          <>
-            <ChipFollowUpCard chip={chip} room={room} followUp={followUp} onChange={onChange} units={units} />
-            {chip.isWork ? (
-              <View style={{ gap: 8 }}>
-                <Input
-                  label={copy('interests.occupation')}
-                  value={occupation}
-                  onChangeText={onOccupation}
-                  autoCapitalize="words"
-                />
-                <Input
-                  label={copy('interests.employer')}
-                  value={employer}
-                  onChangeText={onEmployer}
-                  autoCapitalize="words"
-                />
-              </View>
+          <View style={{ flex: 1, minHeight: 0, gap: 6 }}>
+            {page2}
+            {error ? (
+              <AppText className="text-[13px] font-semibold" style={{ color: THEME.danger }}>
+                {error}
+              </AppText>
             ) : null}
-            {chip.isOther ? (
-              <Input label={copy('interests.other')} value={otherText} onChangeText={onOtherText} grow />
-            ) : null}
-          </>
+          </View>
         )}
-        {error ? (
+        {page === 1 && error ? (
           <AppText className="text-[13px] font-semibold" style={{ color: THEME.danger }}>
             {error}
           </AppText>
         ) : null}
       </View>
-    </ScrollView>
+    </View>
   );
 }

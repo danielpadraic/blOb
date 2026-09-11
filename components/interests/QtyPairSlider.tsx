@@ -75,28 +75,91 @@ export function QtySlider({ label, kind, value, onChange, previewValue, emptyOk,
   }
 
   return (
-    <View className="gap-1">
-      <AppText className="text-[13px] font-semibold text-charcoal">{label}</AppText>
+    <View style={{ gap: 4 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <AppText
+          className="text-[13px] font-semibold text-charcoal"
+          numberOfLines={1}
+          style={{ flex: 1, minWidth: 0 }}>
+          {label}
+        </AppText>
+        <TextInput
+          accessibilityLabel={label}
+          value={focused ? draft : value == null && emptyOk ? '' : formatQty(kind, numeric)}
+          onChangeText={setDraft}
+          onFocus={() => {
+            setFocused(true);
+            setDraft(value == null && emptyOk ? '' : formatQty(kind, numeric));
+          }}
+          onBlur={() => {
+            commit();
+            setFocused(false);
+          }}
+          onSubmitEditing={commit}
+          keyboardType={band.step < 1 ? 'decimal-pad' : 'number-pad'}
+          inputMode={band.step < 1 ? 'decimal' : 'numeric'}
+          selectTextOnFocus
+          textAlign="center"
+          placeholder={emptyOk ? '' : undefined}
+          style={{
+            minWidth: 64,
+            minHeight: 32,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: THEME.border,
+            backgroundColor: THEME.surface,
+            fontSize: 15,
+            fontWeight: '800',
+            color: THEME.textPrimary,
+            paddingHorizontal: 8,
+            paddingVertical: 0,
+            ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null),
+          }}
+        />
+        {unitLabel ? (
+          <AppText className="text-[12px] text-muted" numberOfLines={1} style={{ flexShrink: 0 }}>
+            {unitLabel}
+          </AppText>
+        ) : null}
+      </View>
       <GestureDetector gesture={gesture}>
         <View
-          className="h-11 justify-center"
+          style={{ height: 36, justifyContent: 'center' }}
           onLayout={(event) => {
             width.value = Math.max(event.nativeEvent.layout.width, 1);
           }}
           accessibilityRole="adjustable"
           accessibilityLabel={label}
           accessibilityValue={{ min: band.min, max: band.max, now: numeric }}>
-          <View className="h-6 justify-center overflow-hidden rounded-full" style={{ backgroundColor: THEME.border }}>
+          <View
+            style={{
+              height: 22,
+              justifyContent: 'center',
+              overflow: 'hidden',
+              borderRadius: 999,
+              backgroundColor: THEME.border,
+            }}>
             <View
-              className="h-full rounded-full"
               style={{
+                height: '100%',
                 width: `${Math.min(Math.max(ratio, 0), 1) * 100}%`,
+                borderRadius: 999,
                 backgroundColor: THEME.accent,
               }}
             />
             <View
               pointerEvents="none"
-              className="absolute inset-0 flex-row items-center justify-between px-2">
+              style={{
+                position: 'absolute',
+                top: 0,
+                right: 0,
+                bottom: 0,
+                left: 0,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingHorizontal: 8,
+              }}>
               <AppText
                 className="text-[11px] font-bold"
                 style={{ color: leftOnFill ? THEME.primaryForeground : THEME.textPrimary }}>
@@ -110,11 +173,15 @@ export function QtySlider({ label, kind, value, onChange, previewValue, emptyOk,
             </View>
           </View>
           <View
-            className="absolute h-7 w-7 rounded-full"
+            pointerEvents="none"
             style={{
-              top: 8,
+              position: 'absolute',
+              top: 5,
               left: `${Math.min(Math.max(ratio, 0), 1) * 100}%`,
-              marginLeft: -14,
+              marginLeft: -13,
+              height: 26,
+              width: 26,
+              borderRadius: 999,
               backgroundColor: THEME.surface,
               borderWidth: 2,
               borderColor: THEME.accent,
@@ -122,42 +189,6 @@ export function QtySlider({ label, kind, value, onChange, previewValue, emptyOk,
           />
         </View>
       </GestureDetector>
-      <TextInput
-        accessibilityLabel={label}
-        value={focused ? draft : value == null && emptyOk ? '' : formatQty(kind, numeric)}
-        onChangeText={setDraft}
-        onFocus={() => {
-          setFocused(true);
-          setDraft(value == null && emptyOk ? '' : formatQty(kind, numeric));
-        }}
-        onBlur={() => {
-          commit();
-          setFocused(false);
-        }}
-        onSubmitEditing={commit}
-        keyboardType={band.step < 1 ? 'decimal-pad' : 'number-pad'}
-        inputMode={band.step < 1 ? 'decimal' : 'numeric'}
-        selectTextOnFocus
-        textAlign="center"
-        placeholder={emptyOk ? '' : undefined}
-        style={{
-          alignSelf: 'center',
-          minWidth: 72,
-          minHeight: 36,
-          borderRadius: 12,
-          borderWidth: 1,
-          borderColor: THEME.border,
-          backgroundColor: THEME.surface,
-          fontSize: 16,
-          fontWeight: '800',
-          color: THEME.textPrimary,
-          paddingHorizontal: 8,
-          ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null),
-        }}
-      />
-      {unitLabel ? (
-        <AppText className="text-center text-[12px] text-muted">{unitLabel}</AppText>
-      ) : null}
     </View>
   );
 }
@@ -176,7 +207,7 @@ export function PeriodRow({
     <View
       style={{
         flexDirection: 'row',
-        flexWrap: 'nowrap',
+        flexWrap: periods.length > 4 ? 'wrap' : 'nowrap',
         gap: 4,
         width: '100%',
         justifyContent: 'flex-start',
@@ -192,8 +223,8 @@ export function PeriodRow({
             accessibilityLabel={QTY_PERIOD_LABELS[value]}
             style={{
               flex: single ? 0 : 1,
-              minWidth: single ? undefined : 0,
-              minHeight: 32,
+              minWidth: single ? undefined : periods.length > 4 ? '47%' : 0,
+              minHeight: 28,
               paddingHorizontal: single ? 12 : 2,
               borderRadius: 999,
               borderWidth: 1,
@@ -244,7 +275,7 @@ export function QtyBlock({
   periods,
 }: QtyBlockProps) {
   return (
-    <View className="gap-2">
+    <View style={{ gap: 4 }}>
       <QtySlider
         label={label}
         kind={kind}
@@ -293,7 +324,7 @@ export function QtyPairSlider({
   periods,
 }: QtyPairSliderProps) {
   return (
-    <View style={{ gap: 8 }}>
+    <View style={{ gap: 6 }}>
       <QtyBlock
         label={currentLabel}
         kind={kind}
