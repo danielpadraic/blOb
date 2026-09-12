@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
 import { asCopyTone, copy } from '@/lib/copy';
-import { completeProfileWithRetries, withTimeout } from '@/lib/completeProfileRow';
+import { completeProfileWithRetries, mergeSelfProfilePatch, withTimeout } from '@/lib/completeProfileRow';
 import { supabase } from '@/lib/supabase';
 import type { Profile, ProfileUpdate, PublicProfile } from '@/lib/types';
 import { getErrorMessage, isUnknownColumnError } from '@/utils/errors';
@@ -312,10 +312,13 @@ export function useCompleteProfile() {
       });
     },
     onSuccess: (_data, patch) => {
-      queryClient.setQueryData(['profile', user?.id, 'self'], (current) =>
-        current && typeof current === 'object' ? { ...current, ...patch } : current,
+      if (!user?.id) {
+        return;
+      }
+      queryClient.setQueryData(['profile', user.id, 'self'], (current) =>
+        mergeSelfProfilePatch(current, user.id, patch as Record<string, unknown>),
       );
-      void queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
+      void queryClient.invalidateQueries({ queryKey: ['profile', user.id] });
     },
   });
 }

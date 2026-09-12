@@ -4,6 +4,7 @@ import {
   buildCompleteProfileRow,
   completeProfileWithRetries,
   coreProfileUpsertRow,
+  mergeSelfProfilePatch,
   namesOnlyProfileUpsertRow,
   omitOptionalOnboardingFields,
   omitNullishProfileFields,
@@ -94,6 +95,27 @@ describe('complete profile row — optional Physical Details', () => {
     expect(omitNullishProfileFields({ id: 'user-1', username: 'a', gender: null })).not.toHaveProperty(
       'gender',
     );
+  });
+
+  it('writes name fields into an empty profile cache so Home can open', () => {
+    expect(
+      mergeSelfProfilePatch(null, 'user-1', { username: 'danielh', display_name: 'Daniel' }),
+    ).toMatchObject({
+      id: 'user-1',
+      username: 'danielh',
+      display_name: 'Daniel',
+    });
+    expect(
+      mergeSelfProfilePatch(
+        { id: 'user-1', tos_accepted_at: '2026-09-12T00:00:00.000Z' },
+        'user-1',
+        { username: 'danielh', display_name: 'Daniel' },
+      ),
+    ).toMatchObject({
+      tos_accepted_at: '2026-09-12T00:00:00.000Z',
+      username: 'danielh',
+      display_name: 'Daniel',
+    });
   });
 
   it('treats a real username + display name as persisted, not blob_ placeholders', () => {

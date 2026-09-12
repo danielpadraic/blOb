@@ -4,6 +4,18 @@ import { apexBlobOrigin } from '@/lib/webHost';
 export const AUTH_CALLBACK_PATH = '/auth/callback';
 export const AUTH_LOGIN_PATH = '/(auth)/login';
 export const NATIVE_EMAIL_CALLBACK = 'blob://auth/callback';
+export const ONBOARDING_HREF = '/onboarding';
+
+/** After sign-in / email confirm. Never send an unnamed session to Home. */
+export function postAuthLandingHref(path: 'boot' | 'auth' | 'setup' | 'app'): string {
+  if (path === 'auth') {
+    return AUTH_LOGIN_PATH;
+  }
+  if (path === 'app') {
+    return '/feed';
+  }
+  return ONBOARDING_HREF;
+}
 
 export function loginHrefWithAuthError(message: string, email?: string): string {
   const safe = message.replace(/\s+/g, ' ').trim().slice(0, 180);

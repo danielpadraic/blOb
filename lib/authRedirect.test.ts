@@ -10,6 +10,8 @@ import {
   loginHrefAfterSignup,
   loginHrefWithAuthError,
   loginHrefWithoutEmailQuery,
+  ONBOARDING_HREF,
+  postAuthLandingHref,
   registerHrefWithForm,
   registerStartsOnForm,
   stripWebAuthCallbackUrl,
@@ -167,5 +169,14 @@ describe('emailAuthRedirectTo', () => {
         Object.defineProperty(globalThis, 'window', { configurable: true, value: previousWindow });
       }
     }
+  });
+});
+
+describe('postAuthLandingHref', () => {
+  it('sends unnamed or booting sessions to onboarding, not Home', () => {
+    expect(postAuthLandingHref('setup')).toBe(ONBOARDING_HREF);
+    expect(postAuthLandingHref('boot')).toBe(ONBOARDING_HREF);
+    expect(postAuthLandingHref('app')).toBe('/feed');
+    expect(postAuthLandingHref('auth')).toBe('/(auth)/login');
   });
 });

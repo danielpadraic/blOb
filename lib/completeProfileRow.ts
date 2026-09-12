@@ -77,6 +77,19 @@ export function namesOnlyProfileUpsertRow(
   });
 }
 
+/** Finish/Skip must write a row even when get_my_profile never populated cache. */
+export function mergeSelfProfilePatch(
+  current: unknown,
+  userId: string,
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  const base =
+    current && typeof current === 'object' && !Array.isArray(current)
+      ? { ...(current as Record<string, unknown>) }
+      : { id: userId };
+  return { ...base, id: userId, ...patch };
+}
+
 export function profileSetupNamesPersisted(row: {
   username?: string | null;
   display_name?: string | null;

@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter, Redirect } from 'expo-router';
 import type { Href } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BodyFatSlider } from '@/components/profile/BodyFatSlider';
@@ -48,6 +49,7 @@ import { fitnessProfileFromUser } from '@/lib/fitnessProfile';
 import { ProfilePhotoSaveSheet } from '@/components/profile/ProfilePhotoSaveSheet';
 import { ensureOwnProfileRow, pickCropProfilePhoto } from '@/lib/profilePhoto';
 import type { PostAudience } from '@/lib/postAudience';
+import { mergeSelfProfilePatch } from '@/lib/completeProfileRow';
 import { AUTH_LOGIN_PATH } from '@/lib/authRedirect';
 import { TABS_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
@@ -98,6 +100,7 @@ const STEP_COPY = [
 
 export function ProfileSetupWizard() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const { profile } = useMyProfile();
   const completeProfile = useCompleteProfile();
@@ -246,9 +249,7 @@ export function ProfileSetupWizard() {
       setPendingPhoto(uri);
     } catch (error) {
       const message = getErrorMessage(error);
-      setFormError(
-        message === 'Turn on photo access in Settings.' ? message : copy('error.uploadPhoto'),
-      );
+      setFormError(copy('error.uploadPhoto'));
     }
   }
 
@@ -337,7 +338,7 @@ export function ProfileSetupWizard() {
     setFormError(null);
     setSaving(true);
     try {
-      await completeProfile.mutateAsync({
+      const patch = {
         username: normalizeUsername(values.username),
         display_name: values.display_name,
         avatar_url: profile?.avatar_url,
@@ -363,7 +364,13 @@ export function ProfileSetupWizard() {
               motivation_tone: tone,
             }
           : {}),
-      });
+      };
+      await completeProfile.mutateAsync(patch);
+      if (user?.id) {
+        queryClient.setQueryData(['profile', user.id, 'self'], (current) =>
+          mergeSelfProfilePatch(current ?? profile, user.id, patch),
+        );
+      }
       router.replace(TABS_HREF);
     } catch (error) {
       const message = getProfileSetupSaveMessage(error);
@@ -422,7 +429,7 @@ export function ProfileSetupWizard() {
               onPress={() => void goNext()}
               disabled={
                 step === 0 &&
-                (availability.isTaken || availability.isChecking || !availability.isAvailable)
+                (availability.isTaken || availability.isChecking || availability.isAvailable === false)
               }
             />
           ) : (
@@ -823,11 +830,16 @@ export function ProfileSetupWizard() {
         if (!uri) {
           return;
         }
-        void uploadAvatar.mutateAsync({ uri, audience }).then((result) => {
-          if (!result.shared) {
-            setFormError(copy('profile.photoShareFail'));
-          }
-        });
+        void uploadAvatar
+          .mutateAsync({ uri, audience })
+          .then((result) => {
+            if (!result.shared) {
+              setFormError(copy('profile.photoShareFail'));
+            }
+          })
+          .catch(() => {
+            setFormError(copy('error.uploadPhoto'));
+          });
       }}
     />
     </SafeAreaView>
@@ -836,7 +848,19 @@ export function ProfileSetupWizard() {
 
 export default function ProfileSetupScreen() {
   const { profile, isFetched } = useMyProfile();
-  if (isFetched && !hasAcceptedLegal(profile)) {
+  if (!isFetched) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: THEME.background }} edges={['top', 'left', 'right']}>
+        <View className="flex-1 items-center justify-center">
+          <BlobMascot size={160} motion="pulse" />
+          <AppText className="mt-5" style={{ color: THEME.textMuted }}>
+            blOb is waking up…
+          </AppText>
+        </View>
+      </SafeAreaView>
+    );
+  }
+  if (!hasAcceptedLegal(profile)) {
     return <Redirect href={'/onboarding/legal' as Href} />;
   }
   return <ProfileSetupWizard />;

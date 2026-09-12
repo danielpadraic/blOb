@@ -12,11 +12,15 @@ import { useCopyTone } from '@/hooks/useCopy';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useStalled } from '@/hooks/useStalled';
 import { reportAppError } from '@/lib/appErrors';
-import { blobAuthCallbackDeepLink, loginHrefWithAuthError, stripWebAuthCallbackUrl } from '@/lib/authRedirect';
+import {
+  blobAuthCallbackDeepLink,
+  loginHrefWithAuthError,
+  postAuthLandingHref,
+  stripWebAuthCallbackUrl,
+} from '@/lib/authRedirect';
 import { hasAuthCallbackPayload, parseAuthRedirectParams } from '@/lib/authRedirectParams';
 import { copy } from '@/lib/copy';
 import { nativeCallbackUrlFromParams, pickCanonicalAuthCallbackUrl } from '@/lib/oauthRedirect';
-import { TABS_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import { apexBlobUrl, canonicalizeWwwBlobHost } from '@/lib/webHost';
 import { getAuthCallbackMessage, getErrorMessage } from '@/utils/errors';
@@ -189,7 +193,7 @@ export default function AuthCallbackScreen() {
             title={copy('auth.continueInBrowser')}
             size="lg"
             variant="ghost"
-            onPress={() => router.replace(TABS_HREF)}
+            onPress={() => router.replace(postAuthLandingHref(path) as Href)}
           />
         </View>
       </Screen>
@@ -198,10 +202,11 @@ export default function AuthCallbackScreen() {
 
   // The root layout stops blocking on boot after 2s, but this screen waits on the profile query
   // too. When that never resolved the user sat on "Signing in…" with nothing to tap, so once the
-  // wait stops being plausible we hand off: into the app if a session exists, back to login if not.
+  // wait stops being plausible we hand off. A session that is not clearly complete goes to
+  // /onboarding (legal first), never straight to Home.
   if (settleStalled) {
     return session ? (
-      <Redirect href={TABS_HREF} />
+      <Redirect href={postAuthLandingHref(path === 'app' ? 'app' : 'setup') as Href} />
     ) : (
       <Redirect href={loginHrefWithAuthError(copy('auth.signInTimeout', tone)) as Href} />
     );
@@ -219,17 +224,13 @@ export default function AuthCallbackScreen() {
     return <Redirect href={'/auth/reset-password' as Href} />;
   }
 
-  if (emailConfirmed) {
-    return <Redirect href={TABS_HREF} />;
-  }
-
   if (path === 'auth') {
     return <Redirect href="/(auth)/login" />;
   }
 
-  if (path === 'setup') {
-    return <Redirect href="/onboarding/profile-setup" />;
+  if (emailConfirmed && path !== 'app') {
+    return <Redirect href={postAuthLandingHref('setup') as Href} />;
   }
 
-  return <Redirect href={TABS_HREF} />;
+  return <Redirect href={postAuthLandingHref(path) as Href} />;
 }
