@@ -1,10 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   buildCompleteProfileRow,
+  completeProfileWithRetries,
   coreProfileUpsertRow,
+  namesOnlyProfileUpsertRow,
   omitOptionalOnboardingFields,
   omitNullishProfileFields,
+  profileSetupNamesPersisted,
+  shouldCompleteSetupAfterWriteError,
 } from '@/lib/completeProfileRow';
 
 describe('complete profile row — optional Physical Details', () => {
@@ -90,5 +94,105 @@ describe('complete profile row — optional Physical Details', () => {
     expect(omitNullishProfileFields({ id: 'user-1', username: 'a', gender: null })).not.toHaveProperty(
       'gender',
     );
+  });
+
+  it('treats a real username + display name as persisted, not blob_ placeholders', () => {
+    expect(profileSetupNamesPersisted({ username: 'danielh', display_name: 'Daniel' })).toBe(true);
+    expect(profileSetupNamesPersisted({ username: 'blob_abc123', display_name: 'Daniel' })).toBe(false);
+    expect(profileSetupNamesPersisted({ username: 'danielh', display_name: '' })).toBe(false);
+  });
+
+  it('leaves setup when metrics fail after names persist, but not when the username is taken', () => {
+    const metricsDenied = { code: '42501', message: 'permission denied for column body_fat_pct' };
+    expect(
+      shouldCompleteSetupAfterWriteError({ namesPersisted: true, error: metricsDenied }),
+    ).toBe(true);
+    expect(
+      shouldCompleteSetupAfterWriteError({
+        namesPersisted: true,
+        error: { code: '23505', message: 'duplicate key value violates unique constraint profiles_username_key' },
+      }),
+    ).toBe(false);
+    expect(
+      shouldCompleteSetupAfterWriteError({ namesPersisted: false, error: metricsDenied }),
+    ).toBe(false);
+  });
+
+  it('writes names only after optional body columns fail, then completes', async () => {
+    const calls: string[] = [];
+    await completeProfileWithRetries({
+      userId: 'user-1',
+      patch: {
+        username: 'danielh',
+        display_name: 'Daniel',
+        gender: 'male',
+        height_cm: 180,
+        current_weight: 80,
+        body_fat_pct: 11,
+        body_metrics_completed_at: '2026-09-11T00:00:00.000Z',
+        fitness_profile: { preferred_units: 'imperial' },
+        motivation_tone: 'gentle',
+      },
+      upsert: async (row) => {
+        if ('body_fat_pct' in row || 'fitness_profile' in row || 'motivation_tone' in row) {
+          calls.push('full');
+          return { error: { code: 'PGRST204', message: 'Could not find the body_fat_pct column' } };
+        }
+        if ('typical_weekly_workout_frequency' in row || 'primary_activities' in row) {
+          calls.push('core');
+          return { error: { code: '42501', message: 'permission denied for column typical_weekly_workout_frequency' } };
+        }
+        calls.push('names');
+        expect(row).toMatchObject({
+          id: 'user-1',
+          username: 'danielh',
+          display_name: 'Daniel',
+        });
+        expect(row).not.toHaveProperty('body_fat_pct');
+        expect(row).not.toHaveProperty('fitness_profile');
+        return { error: null };
+      },
+      readNames: async () => ({ username: 'danielh', display_name: 'Daniel' }),
+    });
+    expect(calls[0]).toBe('full');
+    expect(calls.at(-1)).toBe('names');
+    expect(namesOnlyProfileUpsertRow('user-1', { username: 'danielh', display_name: 'Daniel' })).toEqual({
+      id: 'user-1',
+      username: 'danielh',
+      display_name: 'Daniel',
+    });
+  });
+
+  it('completes from a verify-read when every upsert fails but names are already on the row', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await completeProfileWithRetries({
+      userId: 'user-1',
+      patch: {
+        username: 'danielh',
+        display_name: 'Daniel',
+        gender: 'female',
+        body_metrics_completed_at: '2026-09-11T00:00:00.000Z',
+        body_fat_pct: 22,
+      },
+      upsert: async () => ({
+        error: { code: '42501', message: 'permission denied for column fitness_profile' },
+      }),
+      readNames: async () => ({ username: 'danielh', display_name: 'Daniel' }),
+    });
+    expect(warn).toHaveBeenCalledWith('[blob:setup]', '42501', 'permission denied for column fitness_profile');
+    warn.mockRestore();
+  });
+
+  it('stays on the form with a taken-username reason when names did not persist', async () => {
+    await expect(
+      completeProfileWithRetries({
+        userId: 'user-1',
+        patch: { username: 'takenname', display_name: 'Daniel' },
+        upsert: async () => ({
+          error: { code: '23505', message: 'duplicate key value violates unique constraint profiles_username_key' },
+        }),
+        readNames: async () => ({ username: 'blob_abc', display_name: null }),
+      }),
+    ).rejects.toThrow('That username is taken. Try another one.');
   });
 });

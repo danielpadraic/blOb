@@ -136,6 +136,11 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
       ref={boxRef}
       collapsable={false}
       className="w-full gap-1.5"
+      onLayout={() => {
+        if (focused && boxRef.current) {
+          form?.scrollFieldIntoView(boxRef.current);
+        }
+      }}
       style={Platform.OS === 'web' ? ({ overflowAnchor: 'none' } as object) : undefined}>
       {label ? (
         <AppText

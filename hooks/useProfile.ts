@@ -2,16 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
 import { asCopyTone, copy } from '@/lib/copy';
-import {
-  buildCompleteProfileRow,
-  coreProfileUpsertRow,
-  isOptionalProfileWriteError,
-  omitOptionalOnboardingFields,
-  withTimeout,
-} from '@/lib/completeProfileRow';
+import { completeProfileWithRetries, withTimeout } from '@/lib/completeProfileRow';
 import { supabase } from '@/lib/supabase';
 import type { Profile, ProfileUpdate, PublicProfile } from '@/lib/types';
-import { getErrorMessage, getProfileSetupSaveMessage, isUnknownColumnError } from '@/utils/errors';
+import { getErrorMessage, isUnknownColumnError } from '@/utils/errors';
 import { normalizeUsername } from '@/lib/username';
 import { isProfileComplete } from '@/utils/validators';
 import { useAuth } from '@/hooks/useAuth';
@@ -289,8 +283,6 @@ export function useCompleteProfile() {
         throw new Error('You need to be signed in.');
       }
 
-      const row = buildCompleteProfileRow(user.id, patch);
-
       const tryUpsert = async (next: Record<string, unknown>) => {
         try {
           const result = await withTimeout(
@@ -303,32 +295,21 @@ export function useCompleteProfile() {
         }
       };
 
-      const first = await tryUpsert(row);
-      if (!first.error) {
-        return;
-      }
-
-      const retryRow = omitOptionalOnboardingFields(omitOptionalPreferences(row));
-      const retry = await tryUpsert(retryRow);
-      if (!retry.error) {
-        return;
-      }
-
-      const core = coreProfileUpsertRow(user.id, retryRow);
-      const last = await tryUpsert(core);
-      if (!last.error) {
-        return;
-      }
-
-      const failed = last.error ?? retry.error ?? first.error;
-      throw new Error(
-        isUnknownColumnError(first.error) ||
-          isUnknownColumnError(retry.error) ||
-          isUnknownColumnError(last.error) ||
-          isOptionalProfileWriteError(failed)
-          ? copy('error.saveDetails')
-          : getProfileSetupSaveMessage(failed),
-      );
+      await completeProfileWithRetries({
+        userId: user.id,
+        patch,
+        upsert: tryUpsert,
+        readNames: async () => {
+          const result = await withTimeout(
+            supabase.from('profiles').select('username, display_name').eq('id', user.id).maybeSingle(),
+            8000,
+          );
+          if (result.error) {
+            return null;
+          }
+          return result.data;
+        },
+      });
     },
     onSuccess: (_data, patch) => {
       queryClient.setQueryData(['profile', user?.id, 'self'], (current) =>

@@ -48,6 +48,7 @@ import { fitnessProfileFromUser } from '@/lib/fitnessProfile';
 import { ProfilePhotoSaveSheet } from '@/components/profile/ProfilePhotoSaveSheet';
 import { ensureOwnProfileRow, pickCropProfilePhoto } from '@/lib/profilePhoto';
 import type { PostAudience } from '@/lib/postAudience';
+import { AUTH_LOGIN_PATH } from '@/lib/authRedirect';
 import { TABS_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import type { WeightUnit } from '@/lib/types';
@@ -55,6 +56,8 @@ import {
   getErrorMessage,
   getProfileSetupSaveMessage,
   isOsSettingsPermissionCopy,
+  isSignedOutSetupError,
+  isUsernameTakenError,
 } from '@/utils/errors';
 import {
   cmToFeetInches,
@@ -363,7 +366,18 @@ export function ProfileSetupWizard() {
       });
       router.replace(TABS_HREF);
     } catch (error) {
-      setFormError(getProfileSetupSaveMessage(error));
+      const message = getProfileSetupSaveMessage(error);
+      if (isUsernameTakenError(error)) {
+        setFormError(message);
+        setStep(0);
+        return;
+      }
+      if (isSignedOutSetupError(error)) {
+        setFormError(message);
+        router.replace(AUTH_LOGIN_PATH as Href);
+        return;
+      }
+      setFormError(message);
     } finally {
       setSaving(false);
     }
@@ -473,67 +487,75 @@ export function ProfileSetupWizard() {
               {uploadAvatar.isPending ? 'Uploading…' : 'Add a photo'}
             </AppText>
           </Pressable>
-          <Controller
-            control={control}
-            name="username"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <Input
-                label="Username"
-                autoCapitalize="none"
-                autoCorrect={false}
-                textContentType="username"
-                value={value}
-                onChangeText={(text) => onChange(normalizeUsername(text))}
-                onBlur={onBlur}
-                error={
-                  availability.isTaken
-                    ? 'That username is taken'
-                    : value.trim()
-                      ? errors.username?.message
-                      : undefined
-                }
-                hint={errors.username?.message || availability.isTaken ? undefined : usernameHint}
-              />
-            )}
-          />
+          <KeyboardField>
+            <Controller
+              control={control}
+              name="username"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <Input
+                  label="Username"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  textContentType="username"
+                  value={value}
+                  onChangeText={(text) => onChange(normalizeUsername(text))}
+                  onBlur={onBlur}
+                  error={
+                    availability.isTaken
+                      ? 'That username is taken'
+                      : value.trim()
+                        ? errors.username?.message
+                        : undefined
+                  }
+                  hint={errors.username?.message || availability.isTaken ? undefined : usernameHint}
+                />
+              )}
+            />
+          </KeyboardField>
           {handleLabel ? (
             <AppText className="text-xs font-semibold" style={{ color: THEME.accent }}>
               {handleLabel}
             </AppText>
           ) : null}
-          <Controller
-            control={control}
-            name="display_name"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <Input
-                label="Display name"
-                textContentType="name"
-                value={value}
-                onChangeText={(text) => {
-                  onChange(text);
-                  if (text.trim().length >= 2) {
-                    void trigger('display_name');
-                  }
-                }}
-                onBlur={onBlur}
-                error={value.trim().length >= 2 ? undefined : errors.display_name?.message}
-              />
-            )}
-          />
-          <Controller
-            control={control}
-            name="bio"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <Input
-                label="Bio"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                multiline
-                error={errors.bio?.message}
-              />
-            )}
-          />
+          <KeyboardField>
+            <Controller
+              control={control}
+              name="display_name"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <Input
+                  label="Display name"
+                  textContentType="name"
+                  value={value}
+                  onChangeText={(text) => {
+                    onChange(text);
+                    if (text.trim().length >= 2) {
+                      void trigger('display_name');
+                    }
+                  }}
+                  onBlur={onBlur}
+                  error={value.trim().length >= 2 ? undefined : errors.display_name?.message}
+                />
+              )}
+            />
+          </KeyboardField>
+          <KeyboardField>
+            <Controller
+              control={control}
+              name="bio"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <Input
+                  label="Bio"
+                  value={value}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  multiline
+                  grow
+                  maxLength={160}
+                  error={errors.bio?.message}
+                />
+              )}
+            />
+          </KeyboardField>
           <MotivationToneChips
             value={tone}
             onChange={setTone}

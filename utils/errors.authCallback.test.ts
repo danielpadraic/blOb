@@ -76,7 +76,7 @@ describe('profile setup save errors are not OS Settings copy', () => {
     const denied = { code: '42501', message: 'permission denied for column gender' };
     expect(getErrorMessage(denied)).toBe(copy('error.saveDetails'));
     expect(getErrorMessage(denied)).not.toBe(OS_SETTINGS_PERMISSION_COPY);
-    expect(getProfileSetupSaveMessage(denied)).toBe(copy('error.saveDetails'));
+    expect(getProfileSetupSaveMessage(denied)).toBe('We couldn’t save your name. Try again.');
     expect(getProfileSetupSaveMessage(denied).toLowerCase()).not.toContain('settings');
   });
 
@@ -87,6 +87,21 @@ describe('profile setup save errors are not OS Settings copy', () => {
     expect(getProfileSetupSaveMessage(denied)).not.toBe(OS_SETTINGS_PERMISSION_COPY);
   });
 
+  it('maps taken username, signed out, and network to a specific setup reason', () => {
+    expect(
+      getProfileSetupSaveMessage({
+        code: '23505',
+        message: 'duplicate key value violates unique constraint profiles_username_key',
+      }),
+    ).toBe('That username is taken. Try another one.');
+    expect(getProfileSetupSaveMessage(new Error('You need to be signed in.'))).toBe(
+      'You need to be signed in.',
+    );
+    expect(getProfileSetupSaveMessage(new Error('timeout'))).toBe(
+      'We couldn’t reach blOb just now. Try again.',
+    );
+  });
+
   it('still uses Settings copy for a real OS camera/health denial', () => {
     expect(getErrorMessage(new Error('User denied camera permission'))).toBe(
       OS_SETTINGS_PERMISSION_COPY,
@@ -95,7 +110,7 @@ describe('profile setup save errors are not OS Settings copy', () => {
       OS_SETTINGS_PERMISSION_COPY,
     );
     expect(getProfileSetupSaveMessage(new Error('HealthKit authorization denied'))).toBe(
-      copy('error.saveDetails'),
+      'We couldn’t save your name. Try again.',
     );
   });
 

@@ -391,18 +391,80 @@ export function isOsSettingsPermissionCopy(text: string): boolean {
   );
 }
 
+export function isUsernameTakenError(error: unknown): boolean {
+  const raw = extractRawMessage(error).toLowerCase();
+  const mapped = getErrorMessage(error).toLowerCase();
+  const blob = `${raw} ${mapped}`;
+  return (
+    blob.includes('username is taken') ||
+    (blob.includes('username') &&
+      (blob.includes('duplicate') ||
+        blob.includes('unique') ||
+        blob.includes('already exists') ||
+        blob.includes('already taken')))
+  );
+}
+
+export function isSignedOutSetupError(error: unknown): boolean {
+  const raw = extractRawMessage(error).toLowerCase();
+  const mapped = getErrorMessage(error).toLowerCase();
+  const blob = `${raw} ${mapped}`;
+  return (
+    blob.includes('you need to be signed in') ||
+    blob.includes('not authenticated') ||
+    blob.includes('invalid jwt') ||
+    blob.includes('jwt expired') ||
+    (blob.includes('signed in') && (blob.includes('need') || blob.includes('please')))
+  );
+}
+
+export function isProfileSetupNetworkError(error: unknown): boolean {
+  const raw = extractRawMessage(error).toLowerCase();
+  return (
+    raw.includes('timeout') ||
+    raw.includes('network') ||
+    raw.includes('failed to fetch') ||
+    raw.includes('load failed') ||
+    raw.includes('network request failed')
+  );
+}
+
+/** Console only. Never put Postgres on the Finish button. */
+export function logProfileSetupError(error: unknown): void {
+  const record = error && typeof error === 'object' ? (error as Record<string, unknown>) : null;
+  const code = record?.code != null ? String(record.code) : '';
+  const message =
+    typeof record?.message === 'string' && record.message.trim()
+      ? record.message
+      : error instanceof Error
+        ? error.message
+        : String(error ?? '');
+  console.warn('[blob:setup]', code, message);
+}
+
 /** Profile onboarding save. Never tells the user to open OS Settings. */
 export function getProfileSetupSaveMessage(error: unknown): string {
-  const raw = extractRawMessage(error).toLowerCase();
-  if (raw.includes('timeout')) {
-    return 'We couldn’t reach blOb just now. Try again.';
+  if (isUsernameTakenError(error)) {
+    return 'That username is taken. Try another one.';
   }
-  if (isDatabasePrivilegeError(error) || isUnknownColumnError(error)) {
-    return copy('error.saveDetails');
+  if (isSignedOutSetupError(error)) {
+    return 'You need to be signed in.';
+  }
+  if (isProfileSetupNetworkError(error)) {
+    return 'We couldn’t reach blOb just now. Try again.';
   }
   const mapped = getErrorMessage(error);
   if (isOsSettingsPermissionCopy(mapped)) {
-    return copy('error.saveDetails');
+    return 'We couldn’t save your name. Try again.';
+  }
+  if (isDatabasePrivilegeError(error) || isUnknownColumnError(error)) {
+    return 'We couldn’t save your name. Try again.';
+  }
+  if (
+    /pgrst\d|42703|42501|42p01|23505|schema cache|permission denied for/i.test(mapped) ||
+    (mapped.toLowerCase().includes('column') && mapped.toLowerCase().includes('does not exist'))
+  ) {
+    return 'We couldn’t save your name. Try again.';
   }
   return mapped;
 }

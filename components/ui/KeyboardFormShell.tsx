@@ -172,11 +172,21 @@ export function KeyboardFormShell({
   }, []);
 
   useEffect(() => {
-    if (overlap <= 0 || !lastFieldNode.current) {
+    if (!fieldFocusedRef.current || !lastFieldNode.current) {
       return;
     }
     scrollFieldIntoView(lastFieldNode.current);
   }, [overlap, scrollFieldIntoView]);
+
+  useEffect(() => {
+    const sub = Dimensions.addEventListener('change', () => {
+      if (!fieldFocusedRef.current || !lastFieldNode.current) {
+        return;
+      }
+      scrollFieldIntoView(lastFieldNode.current);
+    });
+    return () => sub.remove();
+  }, [scrollFieldIntoView]);
 
   useEffect(() => {
     if (
@@ -219,7 +229,7 @@ export function KeyboardFormShell({
             contentContainerStyle,
           ]}
           keyboardShouldPersistTaps="handled"
-          automaticallyAdjustKeyboardInsets
+          automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
           keyboardDismissMode={
             protectFieldFocus ? 'none' : Platform.OS === 'ios' ? 'interactive' : 'on-drag'
           }
