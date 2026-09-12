@@ -6,7 +6,8 @@ import {
   isSignedOutSetupError,
   isUnknownColumnError,
   isUsernameTakenError,
-  logProfileSetupError,
+  logProfileSetupWrite,
+  setupWriteLogFromError,
 } from '@/utils/errors';
 
 export const OPTIONAL_ONBOARDING_KEYS = [
@@ -119,60 +120,117 @@ export function shouldCompleteSetupAfterWriteError(args: {
   return true;
 }
 
+export function namesPatchFromCompleteRow(row: Record<string, unknown>): {
+  username: string;
+  display_name: string;
+  bio: string | null;
+} {
+  const bio = row.bio == null || row.bio === '' ? null : String(row.bio);
+  return {
+    username: normalizeUsername(String(row.username ?? '')),
+    display_name: String(row.display_name ?? '').trim(),
+    bio,
+  };
+}
+
+export function optionalSetupUpdateRow(row: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (row.weight_unit === 'kg' || row.weight_unit === 'lb') {
+    out.weight_unit = row.weight_unit;
+  }
+  if (row.typical_weekly_workout_frequency != null) {
+    out.typical_weekly_workout_frequency = row.typical_weekly_workout_frequency;
+  }
+  if (Array.isArray(row.primary_activities)) {
+    out.primary_activities = row.primary_activities;
+  }
+  for (const key of OPTIONAL_ONBOARDING_KEYS) {
+    if (row[key] !== undefined) {
+      out[key] = row[key];
+    }
+  }
+  return out;
+}
+
+export function isMissingCompleteProfileRpc(error: unknown): boolean {
+  const record = error && typeof error === 'object' ? (error as Record<string, unknown>) : null;
+  const code = String(record?.code ?? '').toUpperCase();
+  const raw = `${record?.message ?? ''} ${error instanceof Error ? error.message : ''}`.toLowerCase();
+  return (
+    code === 'PGRST202' ||
+    code === '42883' ||
+    raw.includes('pgrst202') ||
+    raw.includes('could not find the function') ||
+    raw.includes('complete_my_profile') && raw.includes('schema cache')
+  );
+}
+
 export async function completeProfileWithRetries(args: {
   userId: string;
   patch: ProfileUpdate;
-  upsert: (row: Record<string, unknown>) => Promise<{ error: unknown }>;
+  writeNames: (input: {
+    username: string;
+    display_name: string;
+    bio: string | null;
+  }) => Promise<{
+    error: unknown;
+    data?: { username?: string | null; display_name?: string | null } | null;
+  }>;
+  writeOptional?: (row: Record<string, unknown>) => Promise<{ error: unknown }>;
   readNames: () => Promise<{ username?: string | null; display_name?: string | null } | null>;
+  hasSession?: boolean;
 }): Promise<void> {
   const row = buildCompleteProfileRow(args.userId, args.patch);
+  const namesInput = namesPatchFromCompleteRow(row);
+  const session = { hasSession: args.hasSession ?? true, userId: args.userId };
 
-  const first = await args.upsert(row);
-  if (!first.error) {
+  const names = await args.writeNames(namesInput);
+  logProfileSetupWrite({
+    attempt: 'names',
+    keys: ['username', 'display_name', 'bio'],
+    ...setupWriteLogFromError(names.error),
+    ...session,
+  });
+
+  if (names.error && (isUsernameTakenError(names.error) || isSignedOutSetupError(names.error))) {
+    throwProfileSetupWriteError(names.error);
+  }
+
+  let stored = names.data ?? null;
+  if (!profileSetupNamesPersisted(stored)) {
+    try {
+      stored = await args.readNames();
+    } catch {
+      stored = stored;
+    }
+  }
+
+  const namesOk = profileSetupNamesPersisted(stored ?? names.data);
+  if (namesOk) {
+    const optional = optionalSetupUpdateRow(row);
+    if (args.writeOptional && Object.keys(optional).length > 0) {
+      const extra = await args.writeOptional(optional);
+      logProfileSetupWrite({
+        attempt: 'optional',
+        keys: Object.keys(optional),
+        ...setupWriteLogFromError(extra.error),
+        ...session,
+      });
+    }
     return;
   }
 
-  const retryRow = omitOptionalOnboardingFields(row);
-  const retry = await args.upsert(retryRow);
-  if (!retry.error) {
-    return;
-  }
-
-  const core = coreProfileUpsertRow(args.userId, retryRow);
-  const last = await args.upsert(core);
-  if (!last.error) {
-    return;
-  }
-
-  const namesOnly = namesOnlyProfileUpsertRow(args.userId, row);
-  const names = await args.upsert(namesOnly);
-  if (!names.error) {
-    return;
-  }
-
-  let stored: { username?: string | null; display_name?: string | null } | null = null;
-  try {
-    stored = await args.readNames();
-  } catch {
-    stored = null;
-  }
-
-  const failed = names.error ?? last.error ?? retry.error ?? first.error;
-  if (
-    shouldCompleteSetupAfterWriteError({
-      namesPersisted: profileSetupNamesPersisted(stored),
-      error: failed,
-    })
-  ) {
-    logProfileSetupError(failed);
-    return;
-  }
-
-  throwProfileSetupWriteError(failed);
+  throwProfileSetupWriteError(names.error ?? new Error('We couldn’t save your name. Try again.'));
 }
 
 export function throwProfileSetupWriteError(error: unknown): never {
-  logProfileSetupError(error);
+  logProfileSetupWrite({
+    attempt: 'fail',
+    keys: [],
+    ...setupWriteLogFromError(error),
+    hasSession: true,
+    userId: null,
+  });
   throw new Error(getProfileSetupSaveMessage(error));
 }
 

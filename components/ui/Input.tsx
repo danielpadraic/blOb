@@ -3,7 +3,7 @@ import { Platform, TextInput, View, type TextInputProps, type ViewStyle } from '
 
 import { GrowingText } from '@/components/ui/GrowingText';
 import { AppText } from '@/components/ui/AppText';
-import { useKeyboardForm } from '@/components/ui/KeyboardFormShell';
+import { useKeyboardFieldLift, useKeyboardForm } from '@/components/ui/KeyboardFormShell';
 import { COMPOSER_MAX_LINES, FORM_LINE_HEIGHT, FORM_MIN_HEIGHT } from '@/lib/composerField';
 import { THEME } from '@/lib/theme';
 
@@ -74,6 +74,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
   const [focused, setFocused] = useState(false);
   const boxRef = useRef<View>(null);
   const form = useKeyboardForm();
+  const fieldLift = useKeyboardFieldLift();
   const sentence = Boolean(grow || (multiline && numberOfLines !== 1));
   const webAuthInput = Platform.OS === 'web' && Boolean(inverted) && !sentence;
   const boxStyle = [
@@ -100,6 +101,10 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
       if (target?.scrollIntoView) {
         requestAnimationFrame(() => target.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
       }
+      return;
+    }
+    if (fieldLift) {
+      fieldLift();
       return;
     }
     if (boxRef.current) {

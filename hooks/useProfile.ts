@@ -2,7 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
 import { asCopyTone, copy } from '@/lib/copy';
-import { completeProfileWithRetries, mergeSelfProfilePatch, withTimeout } from '@/lib/completeProfileRow';
+import {
+  completeProfileWithRetries,
+  isMissingCompleteProfileRpc,
+  mergeSelfProfilePatch,
+  withTimeout,
+} from '@/lib/completeProfileRow';
 import { supabase } from '@/lib/supabase';
 import type { Profile, ProfileUpdate, PublicProfile } from '@/lib/types';
 import { getErrorMessage, isUnknownColumnError } from '@/utils/errors';
@@ -283,32 +288,112 @@ export function useCompleteProfile() {
         throw new Error('You need to be signed in.');
       }
 
-      const tryUpsert = async (next: Record<string, unknown>) => {
-        try {
-          const result = await withTimeout(
-            supabase.from('profiles').upsert(next as never, { onConflict: 'id' }),
-            8000,
-          );
-          return { error: result.error };
-        } catch (error) {
-          return { error: error instanceof Error ? error : new Error('timeout') };
+      const readNames = async () => {
+        const result = await withTimeout(
+          supabase.from('profiles').select('username, display_name').eq('id', user.id).maybeSingle(),
+          8000,
+        );
+        if (result.error) {
+          return null;
         }
+        return result.data;
+      };
+
+      const updateNamesOnly = async (input: {
+        username: string;
+        display_name: string;
+        bio: string | null;
+      }) => {
+        const update = await withTimeout(
+          supabase
+            .from('profiles')
+            .update({
+              username: input.username,
+              display_name: input.display_name,
+              bio: input.bio,
+            } as never)
+            .eq('id', user.id)
+            .select('username, display_name')
+            .maybeSingle(),
+          8000,
+        );
+        if (!update.error && update.data) {
+          return { error: null, data: update.data };
+        }
+        if (update.error) {
+          return { error: update.error, data: null };
+        }
+
+        const stub = `blob_${user.id.replace(/-/g, '').slice(0, 10)}`;
+        const inserted = await withTimeout(
+          supabase.from('profiles').insert({ id: user.id, username: stub } as never).select('id').maybeSingle(),
+          8000,
+        );
+        if (inserted.error && !String(inserted.error.message ?? '').toLowerCase().includes('duplicate')) {
+          return { error: inserted.error, data: null };
+        }
+
+        const retry = await withTimeout(
+          supabase
+            .from('profiles')
+            .update({
+              username: input.username,
+              display_name: input.display_name,
+              bio: input.bio,
+            } as never)
+            .eq('id', user.id)
+            .select('username, display_name')
+            .maybeSingle(),
+          8000,
+        );
+        return { error: retry.error, data: retry.data };
       };
 
       await completeProfileWithRetries({
         userId: user.id,
         patch,
-        upsert: tryUpsert,
-        readNames: async () => {
-          const result = await withTimeout(
-            supabase.from('profiles').select('username, display_name').eq('id', user.id).maybeSingle(),
-            8000,
-          );
-          if (result.error) {
-            return null;
+        hasSession: true,
+        writeNames: async (input) => {
+          try {
+            const rpc = await withTimeout(
+              supabase.rpc('complete_my_profile', {
+                p_username: input.username,
+                p_display_name: input.display_name,
+                p_bio: input.bio,
+              }),
+              8000,
+            );
+            if (!rpc.error) {
+              const payload = rpc.data && typeof rpc.data === 'object' ? (rpc.data as Record<string, unknown>) : null;
+              return {
+                error: null,
+                data: {
+                  username: payload?.username != null ? String(payload.username) : input.username,
+                  display_name:
+                    payload?.display_name != null ? String(payload.display_name) : input.display_name,
+                },
+              };
+            }
+            if (!isMissingCompleteProfileRpc(rpc.error)) {
+              return { error: rpc.error, data: null };
+            }
+            return updateNamesOnly(input);
+          } catch (error) {
+            return { error: error instanceof Error ? error : new Error('timeout'), data: null };
           }
-          return result.data;
         },
+        writeOptional: async (row) => {
+          try {
+            const result = await withTimeout(
+              supabase.from('profiles').update(row as never).eq('id', user.id).select('username').maybeSingle(),
+              8000,
+            );
+            return { error: result.error };
+          } catch (error) {
+            return { error: error instanceof Error ? error : new Error('timeout') };
+          }
+        },
+        readNames,
       });
     },
     onSuccess: (_data, patch) => {

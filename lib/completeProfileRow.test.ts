@@ -140,7 +140,7 @@ describe('complete profile row — optional Physical Details', () => {
     ).toBe(false);
   });
 
-  it('writes names only after optional body columns fail, then completes', async () => {
+  it('writes names first and still leaves setup when optional body columns fail', async () => {
     const calls: string[] = [];
     await completeProfileWithRetries({
       userId: 'user-1',
@@ -155,29 +155,23 @@ describe('complete profile row — optional Physical Details', () => {
         fitness_profile: { preferred_units: 'imperial' },
         motivation_tone: 'gentle',
       },
-      upsert: async (row) => {
-        if ('body_fat_pct' in row || 'fitness_profile' in row || 'motivation_tone' in row) {
-          calls.push('full');
-          return { error: { code: 'PGRST204', message: 'Could not find the body_fat_pct column' } };
-        }
-        if ('typical_weekly_workout_frequency' in row || 'primary_activities' in row) {
-          calls.push('core');
-          return { error: { code: '42501', message: 'permission denied for column typical_weekly_workout_frequency' } };
-        }
+      writeNames: async (input) => {
         calls.push('names');
-        expect(row).toMatchObject({
-          id: 'user-1',
+        expect(input).toEqual({
           username: 'danielh',
           display_name: 'Daniel',
+          bio: null,
         });
-        expect(row).not.toHaveProperty('body_fat_pct');
-        expect(row).not.toHaveProperty('fitness_profile');
-        return { error: null };
+        return { error: null, data: input };
+      },
+      writeOptional: async (row) => {
+        calls.push('optional');
+        expect(row).toHaveProperty('body_fat_pct');
+        return { error: { code: '42501', message: 'permission denied for column body_fat_pct' } };
       },
       readNames: async () => ({ username: 'danielh', display_name: 'Daniel' }),
     });
-    expect(calls[0]).toBe('full');
-    expect(calls.at(-1)).toBe('names');
+    expect(calls).toEqual(['names', 'optional']);
     expect(namesOnlyProfileUpsertRow('user-1', { username: 'danielh', display_name: 'Daniel' })).toEqual({
       id: 'user-1',
       username: 'danielh',
@@ -185,7 +179,7 @@ describe('complete profile row — optional Physical Details', () => {
     });
   });
 
-  it('completes from a verify-read when every upsert fails but names are already on the row', async () => {
+  it('completes from a verify-read when the name write errors but names are already on the row', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     await completeProfileWithRetries({
       userId: 'user-1',
@@ -196,12 +190,20 @@ describe('complete profile row — optional Physical Details', () => {
         body_metrics_completed_at: '2026-09-11T00:00:00.000Z',
         body_fat_pct: 22,
       },
-      upsert: async () => ({
-        error: { code: '42501', message: 'permission denied for column fitness_profile' },
+      writeNames: async () => ({
+        error: { code: '42501', message: 'permission denied for column coins' },
+        data: null,
       }),
       readNames: async () => ({ username: 'danielh', display_name: 'Daniel' }),
     });
-    expect(warn).toHaveBeenCalledWith('[blob:setup]', '42501', 'permission denied for column fitness_profile');
+    expect(warn).toHaveBeenCalledWith(
+      '[blob:setup]',
+      expect.objectContaining({
+        attempt: 'names',
+        code: '42501',
+        message: 'permission denied for column coins',
+      }),
+    );
     warn.mockRestore();
   });
 
@@ -210,8 +212,9 @@ describe('complete profile row — optional Physical Details', () => {
       completeProfileWithRetries({
         userId: 'user-1',
         patch: { username: 'takenname', display_name: 'Daniel' },
-        upsert: async () => ({
-          error: { code: '23505', message: 'duplicate key value violates unique constraint profiles_username_key' },
+        writeNames: async () => ({
+          error: { code: '23505', message: 'USERNAME_TAKEN' },
+          data: null,
         }),
         readNames: async () => ({ username: 'blob_abc', display_name: null }),
       }),

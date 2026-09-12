@@ -396,6 +396,7 @@ export function isUsernameTakenError(error: unknown): boolean {
   const mapped = getErrorMessage(error).toLowerCase();
   const blob = `${raw} ${mapped}`;
   return (
+    blob.includes('username_taken') ||
     blob.includes('username is taken') ||
     (blob.includes('username') &&
       (blob.includes('duplicate') ||
@@ -429,17 +430,54 @@ export function isProfileSetupNetworkError(error: unknown): boolean {
   );
 }
 
-/** Console only. Never put Postgres on the Finish button. */
-export function logProfileSetupError(error: unknown): void {
+export function setupWriteLogFromError(error: unknown): {
+  code: string | null;
+  message: string | null;
+  hint: string | null;
+} {
   const record = error && typeof error === 'object' ? (error as Record<string, unknown>) : null;
-  const code = record?.code != null ? String(record.code) : '';
+  const code = record?.code != null ? String(record.code) : null;
   const message =
     typeof record?.message === 'string' && record.message.trim()
       ? record.message
       : error instanceof Error
         ? error.message
-        : String(error ?? '');
-  console.warn('[blob:setup]', code, message);
+        : error == null
+          ? null
+          : String(error);
+  const hint = typeof record?.hint === 'string' && record.hint.trim() ? record.hint : null;
+  return { code, message, hint };
+}
+
+/** Console only. Never put Postgres on the Finish button. */
+export function logProfileSetupWrite(entry: {
+  attempt: string;
+  keys: string[];
+  code?: string | null;
+  message?: string | null;
+  hint?: string | null;
+  hasSession: boolean;
+  userId: string | null;
+}): void {
+  console.warn('[blob:setup]', {
+    attempt: entry.attempt,
+    keys: entry.keys,
+    code: entry.code ?? null,
+    message: entry.message ?? null,
+    hint: entry.hint ?? null,
+    hasSession: entry.hasSession,
+    userId: entry.userId,
+  });
+}
+
+export function logProfileSetupError(error: unknown): void {
+  logProfileSetupWrite({
+    attempt: 'error',
+    keys: [],
+    ...setupWriteLogFromError(error),
+    hasSession: true,
+    userId: null,
+  });
 }
 
 /** Profile onboarding save. Never tells the user to open OS Settings. */

@@ -143,6 +143,10 @@ export function KeyboardFormShell({
   const safeBottom = Math.max(insets.bottom, 12);
   const [footerH, setFooterH] = useState(footer ? 64 : 0);
   const extraPad = footerH + 16;
+  const keyboardHeight = useKeyboardHeight();
+  const keyboardHeightRef = useRef(0);
+  keyboardHeightRef.current = keyboardHeight;
+  const androidKeyboardPad = Platform.OS === 'android' && keyboardHeight > 0 ? keyboardHeight : 0;
   const gutter = paddingHorizontal ?? (padded ? 16 : 0);
 
   const scrollToTop = useCallback(() => {
@@ -162,7 +166,10 @@ export function KeyboardFormShell({
         windowH: Dimensions.get('window').height,
         footerH: footerHeight.current,
         scrollY: scrollY.current,
-        keyboardOverlap: overlapRef.current,
+        keyboardOverlap: Math.max(
+          overlapRef.current,
+          Platform.OS === 'android' ? keyboardHeightRef.current : 0,
+        ),
         clampFooterToKeyboard: Platform.OS === 'android',
         scrollTo: (y) => {
           scrollRef.current?.scrollTo({ y, animated: true });
@@ -224,7 +231,7 @@ export function KeyboardFormShell({
             {
               flexGrow: 1,
               paddingHorizontal: gutter,
-              paddingBottom: extraPad,
+              paddingBottom: extraPad + androidKeyboardPad,
             },
             contentContainerStyle,
           ]}
@@ -270,20 +277,28 @@ export function KeyboardFormShell({
   );
 }
 
+const KeyboardFieldLiftContext = createContext<(() => void) | null>(null);
+
+export function useKeyboardFieldLift(): (() => void) | null {
+  return useContext(KeyboardFieldLiftContext);
+}
+
 export function KeyboardField({ children }: { children: ReactNode }) {
   const form = useKeyboardForm();
   const ref = useRef<View>(null);
 
+  const lift = useCallback(() => {
+    form?.setFieldFocused?.(true);
+    if (ref.current) {
+      form?.scrollFieldIntoView(ref.current);
+    }
+  }, [form]);
+
   return (
-    <View
-      ref={ref}
-      collapsable={false}
-      onTouchStart={() => {
-        if (ref.current) {
-          form?.scrollFieldIntoView(ref.current);
-        }
-      }}>
-      {children}
-    </View>
+    <KeyboardFieldLiftContext.Provider value={lift}>
+      <View ref={ref} collapsable={false} onTouchStart={lift}>
+        {children}
+      </View>
+    </KeyboardFieldLiftContext.Provider>
   );
 }
