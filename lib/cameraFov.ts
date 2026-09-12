@@ -35,7 +35,10 @@ export function clampFrontVideoZoom(value: number): number {
   return clamp(value, FRONT_VIDEO_ZOOM_MIN, FRONT_VIDEO_ZOOM_MAX);
 }
 
-/** Centered digital zoom. Rear is always 1. */
+/**
+ * Centered digital zoom. Rear is always 1.
+ * Native still preview must stay 1× on CameraView — apply this only via centeredFovCrop after snap.
+ */
 export function frontFovZoom(facing: CameraFovFacing, kind: CameraFovKind): number {
   if (facing !== 'front') {
     return 1;

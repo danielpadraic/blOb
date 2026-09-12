@@ -190,6 +190,7 @@ export function InAppCamera({
   const [stillStatus, setStillStatus] = useState<ReturnType<typeof stillShutterCopy> | null>(null);
   const recordingRef = useRef(false);
   const capturingRef = useRef(false);
+  const watchdogRemountedRef = useRef(false);
   const holdStillTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holdRef = useRef(false);
   const skipPressRef = useRef(false);
@@ -199,9 +200,9 @@ export function InAppCamera({
   const fovFacing: CameraFovFacing = facing === 'front' ? 'front' : 'back';
   const fovKind = video ? 'video' : 'still';
   const fovZoom = frontFovZoom(fovFacing, fovKind);
-  // Stills: digital crop on preview + saved frame (exact 1.30×). Video: CameraView zoom so the clip matches the preview.
+  // Native still preview is unscaled CameraView (scale blacks front on iOS). Tightness is post-snap crop.
+  // Video: CameraView zoom so the clip matches the preview.
   const nativeExpoZoom = video ? expoCameraZoom(fovFacing, 'video') : 0;
-  const nativePreviewScale = video ? 1 : fovZoom;
   const webCropVideo = video && fovZoom > 1 && webCanvasCaptureStreamSupported();
   const previewFovZoom = video && fovZoom > 1 && !webCropVideo ? 1 : fovZoom;
   const parentBlocked = blocked || webFallback;
@@ -649,6 +650,8 @@ export function InAppCamera({
   }
 
   useEffect(() => {
+    stopAllLiveMedia();
+    stopPrimedCameraStream();
     return () => {
       stopAllLiveMedia();
     };
@@ -848,14 +851,24 @@ export function InAppCamera({
   }, [focused, parentBlocked, retry, sessionOn, video, web]);
 
   useEffect(() => {
+    watchdogRemountedRef.current = false;
+  }, [facing]);
+
+  useEffect(() => {
     if (parentBlocked || !focused || !sessionOn || ask !== 'starting') {
       return;
     }
     const timer = setTimeout(() => {
+      if (!web && !watchdogRemountedRef.current) {
+        watchdogRemountedRef.current = true;
+        setReady(false);
+        setRetry((value) => value + 1);
+        return;
+      }
       setAsk((current) => (current === 'starting' ? 'error' : current));
     }, CAMERA_PREVIEW_WATCHDOG_MS);
     return () => clearTimeout(timer);
-  }, [ask, facing, focused, parentBlocked, retry, sessionOn]);
+  }, [ask, facing, focused, parentBlocked, retry, sessionOn, web]);
 
   useEffect(() => {
     if (parentBlocked || ask !== 'ready') {
@@ -1373,9 +1386,6 @@ export function InAppCamera({
           facing={facing}
           video={video}
           zoom={nativeExpoZoom}
-          previewScale={nativePreviewScale}
-          rotateDeg={previewRotateDeg}
-          box={previewBox}
           onReady={onCameraReady}
           onUnavailable={checkin ? undefined : onUnavailable}
           onDenied={facing === 'front' ? () => stayOnRear() : onCameraDenied}
@@ -1446,6 +1456,7 @@ export function InAppCamera({
             <Pressable
               accessibilityRole="button"
               onPress={() => {
+                watchdogRemountedRef.current = false;
                 setAsk('prompt');
                 setReady(false);
                 setSessionOn(true);
@@ -1668,17 +1679,20 @@ export function InAppCamera({
             disabled={showDenied || Boolean(stillStatus) || recording}
             onPress={() => {
               const next = facing === 'back' ? 'front' : 'back';
+              if (!web) {
+                cameraRef.current?.stopRecording();
+              }
+              stopMedia({
+                stream: webStreamRef.current,
+                video: webVideoRef.current,
+                recorder: recorderRef.current,
+              });
+              webStreamRef.current = null;
+              recorderRef.current = null;
+              stopPrimedCameraStream();
+              watchdogRemountedRef.current = false;
               setAsk('starting');
               setReady(false);
-              if (web) {
-                stopMedia({
-                  stream: webStreamRef.current,
-                  video: webVideoRef.current,
-                  recorder: recorderRef.current,
-                });
-                webStreamRef.current = null;
-                recorderRef.current = null;
-              }
               rememberCameraFacing(next, resolvedFacingKind);
               setFacing(next);
               setRetry((value) => value + 1);
@@ -1780,9 +1794,6 @@ const NativeCameraPreview = memo(function NativeCameraPreview({
   facing,
   video,
   zoom,
-  previewScale,
-  rotateDeg = 0,
-  box,
   onReady,
   onUnavailable,
   onDenied,
@@ -1792,9 +1803,6 @@ const NativeCameraPreview = memo(function NativeCameraPreview({
   facing: CameraType;
   video: boolean;
   zoom: number;
-  previewScale: number;
-  rotateDeg?: number;
-  box?: { width: number; height: number };
   onReady: () => void;
   onUnavailable?: () => void;
   onDenied: () => void;
@@ -1831,33 +1839,11 @@ const NativeCameraPreview = memo(function NativeCameraPreview({
     onDeniedRef.current();
   }, []);
 
-  const rotate = rotateDeg !== 0 && !!box?.width && !!box?.height;
-  const scale = previewScale > 1 ? previewScale : 1;
-  const transform: Array<{ rotate: string } | { scale: number }> = [];
-  if (rotate) {
-    transform.push({ rotate: `${rotateDeg}deg` });
-  }
-  if (scale > 1) {
-    transform.push({ scale });
-  }
   return (
     <View style={{ flex: 1, overflow: 'hidden', backgroundColor: THEME.primary }}>
       <CameraView
         ref={cameraRef}
-        style={
-          rotate && box
-            ? {
-                position: 'absolute',
-                width: box.height,
-                height: box.width,
-                left: (box.width - box.height) / 2,
-                top: (box.height - box.width) / 2,
-                transform,
-              }
-            : scale > 1
-              ? { ...StyleSheet.absoluteFillObject, transform: [{ scale }] }
-              : StyleSheet.absoluteFill
-        }
+        style={StyleSheet.absoluteFill}
         facing={facing}
         zoom={zoom}
         mode={video ? 'video' : 'picture'}
@@ -1871,11 +1857,7 @@ const NativeCameraPreview = memo(function NativeCameraPreview({
   prev.facing === next.facing &&
   prev.video === next.video &&
   prev.zoom === next.zoom &&
-  prev.previewScale === next.previewScale &&
-  prev.cameraRef === next.cameraRef &&
-  prev.rotateDeg === next.rotateDeg &&
-  prev.box?.width === next.box?.width &&
-  prev.box?.height === next.box?.height,
+  prev.cameraRef === next.cameraRef,
 );
 
 function cropNativeStillToFov(input: {
