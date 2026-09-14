@@ -13,6 +13,7 @@ import {
   toggleStackedReactionList,
   type ReactionCount,
 } from '@/lib/reactions';
+import { mentionChipFromAuthor, type MentionChip } from '@/lib/mentions';
 import type { CommentWithAuthor, PostWithMeta, Reaction, ReactionType } from '@/lib/types';
 import { commentMediaUrls, commentTextWithoutMedia } from '@/utils/media';
 import { commentsForThread } from '@/lib/commentEdit';
@@ -278,6 +279,65 @@ export function applyLiveBackGesture(nav: LiveGestureNav | null | undefined, liv
 
 export function isLiveCheckinPost(post: CheckinPostLike): boolean {
   return isCheckinPost(post);
+}
+
+export type LiveComposerMode = 'idle' | 'reply' | 'edit';
+
+/** Reply and Edit replace the field. Idle is the standing Message Live draft. */
+export function liveComposerMode(input: { replyTo?: unknown; editing?: unknown }): LiveComposerMode {
+  if (input.editing) {
+    return 'edit';
+  }
+  if (input.replyTo) {
+    return 'reply';
+  }
+  return 'idle';
+}
+
+/** Remount key so switching mode cannot leak the last field into the next. */
+export function liveComposerInstanceKey(mode: LiveComposerMode, id?: string | null): string {
+  if (mode === 'edit') {
+    return `edit:${String(id ?? '').trim()}`;
+  }
+  if (mode === 'reply') {
+    return `reply:${String(id ?? '').trim()}`;
+  }
+  return 'idle';
+}
+
+/** Idle drafts persist. Reply / Edit never write into that draft. */
+export function liveComposerDraftKey(
+  mode: LiveComposerMode,
+  challengeId?: string | null,
+  source?: string | null,
+): string | undefined {
+  if (mode !== 'idle') {
+    return undefined;
+  }
+  const id = String(challengeId ?? '').trim() || String(source ?? '').trim();
+  return id ? `live:${id}` : undefined;
+}
+
+/** @Display Name chip for Reply. Parent id is not a tag. */
+export function liveReplyMentionChip(
+  author?: {
+    id?: string | null;
+    username?: string | null;
+    display_name?: string | null;
+  } | null,
+  authorId?: string | null,
+): MentionChip | null {
+  const chip = mentionChipFromAuthor(author, authorId ?? author?.id);
+  if (!chip) {
+    return null;
+  }
+  const display = author?.display_name?.trim() || chip.label;
+  return { ...chip, label: display, visibleName: display };
+}
+
+/** Only chips still in the field. Deleting the @ chip sends with no tag. */
+export function liveSubmitMentionIds(chips?: MentionChip[] | null): string[] {
+  return [...new Set((chips ?? []).map((chip) => String(chip.userId ?? '').trim()).filter(Boolean))];
 }
 
 /** InlineComposer puts photo/GIF URLs on their own lines. Split them for the lobby post. */

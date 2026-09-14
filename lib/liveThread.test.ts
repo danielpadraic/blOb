@@ -12,8 +12,13 @@ import {
   liveCheckinHeadline,
   liveCheckinLabel,
   liveComposeFromInline,
+  liveComposerDraftKey,
+  liveComposerInstanceKey,
+  liveComposerMode,
   liveEditMediaUrls,
   liveEditPrefill,
+  liveReplyMentionChip,
+  liveSubmitMentionIds,
   liveProofCaption,
   liveQuoteLine,
   liveQuotePreview,
@@ -261,6 +266,33 @@ describe('liveCheckinLabel', () => {
     expect(liveCheckinLabel({ source: 'checkin', checkin_stage: 'submitted' })).toBe(
       'Check-in Complete',
     );
+  });
+});
+
+describe('live composer modes', () => {
+  it('keeps idle drafts and remounts reply / edit on their own keys', () => {
+    expect(liveComposerMode({})).toBe('idle');
+    expect(liveComposerMode({ replyTo: { postId: 'p1' } })).toBe('reply');
+    expect(liveComposerMode({ editing: { id: 'p2' }, replyTo: { postId: 'p1' } })).toBe('edit');
+    expect(liveComposerInstanceKey('idle')).toBe('idle');
+    expect(liveComposerInstanceKey('reply', 'p1')).toBe('reply:p1');
+    expect(liveComposerInstanceKey('edit', 'p2')).toBe('edit:p2');
+    expect(liveComposerDraftKey('idle', 'c1')).toBe('live:c1');
+    expect(liveComposerDraftKey('reply', 'c1')).toBeUndefined();
+    expect(liveComposerDraftKey('edit', 'c1')).toBeUndefined();
+  });
+
+  it('builds a display-name reply chip and drops the tag when the chip is gone', () => {
+    expect(
+      liveReplyMentionChip({ id: 'u1', username: 'silas', display_name: 'Silas' }, 'u1'),
+    ).toEqual({
+      userId: 'u1',
+      username: 'silas',
+      label: 'Silas',
+      visibleName: 'Silas',
+    });
+    expect(liveSubmitMentionIds([{ userId: 'u1', username: 'silas', label: 'Silas' }])).toEqual(['u1']);
+    expect(liveSubmitMentionIds([])).toEqual([]);
   });
 });
 

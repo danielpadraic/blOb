@@ -1,9 +1,9 @@
-import { memo, useMemo, useRef, useState } from 'react';
+import { memo, useMemo, useRef } from 'react';
 import { Alert, Animated, PanResponder, Platform, Pressable, useWindowDimensions, View } from 'react-native';
 import { Image } from 'expo-image';
 
 import { LiveReactionChip } from '@/components/challenge/LiveReactionChip';
-import { LiveReactions } from '@/components/challenge/LiveReactions';
+import { LiveReactions, type LiveReactionAnchor } from '@/components/challenge/LiveReactions';
 import { InlineComposer } from '@/components/feed/InlineComposer';
 import { PostMediaCarousel } from '@/components/feed/PostMediaCarousel';
 import { useMediaLightboxOptional, type LightboxItem } from '@/components/feed/MediaLightbox';
@@ -62,6 +62,9 @@ type LiveBubbleProps = {
   onReply?: () => void;
   onEdit?: () => void;
   onHistory?: () => void;
+  pickerOpen?: boolean;
+  onPickerOpen?: (anchor: LiveReactionAnchor) => void;
+  onPickerClose?: () => void;
 };
 
 export const LiveBubble = memo(function LiveBubble({
@@ -76,10 +79,14 @@ export const LiveBubble = memo(function LiveBubble({
   onReply,
   onEdit,
   onHistory,
+  pickerOpen = false,
+  onPickerOpen,
+  onPickerClose,
 }: LiveBubbleProps) {
   const lightbox = useMediaLightboxOptional();
   const social = useSocialSheetsOptional();
   const moreRef = useRef<View>(null);
+  const bubbleRef = useRef<View>(null);
   const editing = useCommentEditing(comment?.id ?? '');
   const updateComment = useUpdateComment();
   const removed = Boolean(comment) && !isLiveComment(comment);
@@ -163,6 +170,7 @@ export const LiveBubble = memo(function LiveBubble({
   }
 
   function openCommentMenu() {
+    closePicker();
     if (!comment || !social) {
       return;
     }
@@ -175,15 +183,26 @@ export const LiveBubble = memo(function LiveBubble({
   const commentMedia = comment ? commentMediaUrls(comment.content) : [];
   const pool = reactions ?? post.reactions;
   const hasPill = Boolean(pool?.length);
-  const [pickerOpen, setPickerOpen] = useState(false);
   const pillCorner = alignEnd ? ('end' as const) : ('start' as const);
 
-  function openPicker() {
-    setPickerOpen(true);
+  function closePicker() {
+    onPickerClose?.();
+  }
+
+  function openPicker(anchor?: LiveReactionAnchor) {
+    if (anchor && (anchor.width > 0 || anchor.height > 0)) {
+      onPickerOpen?.(anchor);
+      return;
+    }
+    bubbleRef.current?.measureInWindow((x, y, width, height) => {
+      onPickerOpen?.({ x, y, width, height });
+    });
   }
 
   return (
     <View
+      ref={bubbleRef}
+      collapsable={false}
       style={{
         alignItems: alignEnd ? 'flex-end' : 'flex-start',
         maxWidth: '100%',
@@ -522,10 +541,27 @@ export const LiveBubble = memo(function LiveBubble({
               align={alignEnd ? 'end' : 'start'}
               pickerOpen={pickerOpen}
               onPickerOpen={openPicker}
-              onPickerClose={() => setPickerOpen(false)}
-              onReact={onReact}
-              onReply={onReply}
-              onEdit={onEdit}
+              onPickerClose={closePicker}
+              onReact={(type) => {
+                onReact(type);
+                closePicker();
+              }}
+              onReply={
+                onReply
+                  ? () => {
+                      closePicker();
+                      onReply();
+                    }
+                  : undefined
+              }
+              onEdit={
+                onEdit
+                  ? () => {
+                      closePicker();
+                      onEdit();
+                    }
+                  : undefined
+              }
             />
           </View>
           )}

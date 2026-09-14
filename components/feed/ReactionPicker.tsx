@@ -75,11 +75,13 @@ export function ReactionDismissScrim({ onClose }: { onClose: () => void }) {
 type ReactionPickerProps = {
   selected?: readonly string[] | string | null;
   align?: 'start' | 'end';
+  /** Live overlay: the host already placed this tray. Home still uses the inline pin. */
+  anchored?: boolean;
   onPick: (type: ReactionType) => void;
 };
 
 /** Vertical, transparent. Stay-open. Bob PNG only. */
-export function ReactionPicker({ selected, align = 'start', onPick }: ReactionPickerProps) {
+export function ReactionPicker({ selected, align = 'start', anchored = false, onPick }: ReactionPickerProps) {
   const active = new Set(
     (Array.isArray(selected) ? selected : selected ? [selected] : []).map((type) => String(type)),
   );
@@ -87,15 +89,17 @@ export function ReactionPicker({ selected, align = 'start', onPick }: ReactionPi
     <View
       pointerEvents="box-none"
       style={[
-        {
-          position: 'absolute',
-          left: align === 'end' ? undefined : 0,
-          right: align === 'end' ? 0 : undefined,
-          bottom: '100%',
-          marginBottom: 6,
-          zIndex: 41,
-          alignItems: align === 'end' ? 'flex-end' : 'flex-start',
-        },
+        anchored
+          ? { zIndex: 41, alignItems: align === 'end' ? 'flex-end' : 'flex-start' }
+          : {
+              position: 'absolute',
+              left: align === 'end' ? undefined : 0,
+              right: align === 'end' ? 0 : undefined,
+              bottom: '100%',
+              marginBottom: 6,
+              zIndex: 41,
+              alignItems: align === 'end' ? 'flex-end' : 'flex-start',
+            },
         reactionNoSelectStyle,
       ]}>
       <View style={{ gap: 2 }}>

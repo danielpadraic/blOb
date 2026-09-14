@@ -11,6 +11,7 @@ import {
   LIVE_PILL_HEIGHT,
   LIVE_PILL_OVERLAP,
   liveReactionPill,
+  liveReactionTrayFrame,
   markOptimisticReactionWrite,
   mergeReactionListsByKey,
   PICKER_REACTION_TYPES,
@@ -125,5 +126,18 @@ describe('shared reactions', () => {
     const corner = cornerReactionChips(reactions, 'me');
     expect(corner.map((row) => row.type)).toEqual(['like', 'love', 'laugh', 'fire', 'sad']);
     expect(corner.find((row) => row.type === 'love')?.mine).toBe(true);
+  });
+
+  it('sits the Live tray above the thumb when there is room', () => {
+    const frame = liveReactionTrayFrame({
+      host: { x: 0, y: 0, width: 390, height: 700 },
+      thumb: { x: 24, y: 400, width: 44, height: 44 },
+      align: 'start',
+      trayHeight: 80,
+      trayWidth: 44,
+    });
+    expect(frame.beside).toBe(false);
+    expect(frame.top).toBe(314);
+    expect(frame.left).toBe(24);
   });
 });

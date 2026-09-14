@@ -72,6 +72,46 @@ export const REACTION_MARK_BUTTON = 24;
 export const REACTION_MARK_CORNER = 20;
 export const REACTION_MARK_PICKER = 32;
 export const REACTION_MARK_HIT = 44;
+/** Vertical Live / Home tray: one mark per type, 2px gaps. */
+export const LIVE_REACTION_TRAY_GAP = 2;
+export const LIVE_REACTION_TRAY_WIDTH = REACTION_MARK_HIT;
+export const LIVE_REACTION_TRAY_HEIGHT =
+  PICKER_REACTION_TYPES.length * REACTION_MARK_HIT +
+  (PICKER_REACTION_TYPES.length - 1) * LIVE_REACTION_TRAY_GAP;
+
+export type LiveReactionTrayAnchor = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+/** Place the tray above the thumb, or beside it if that would cover the bubble. */
+export function liveReactionTrayFrame(input: {
+  host: LiveReactionTrayAnchor;
+  thumb: LiveReactionTrayAnchor;
+  align: 'start' | 'end';
+  trayHeight?: number;
+  trayWidth?: number;
+}): { left: number; top: number; beside: boolean } {
+  const trayH = input.trayHeight ?? LIVE_REACTION_TRAY_HEIGHT;
+  const trayW = input.trayWidth ?? LIVE_REACTION_TRAY_WIDTH;
+  const thumbLeft = input.thumb.x - input.host.x;
+  const thumbTop = input.thumb.y - input.host.y;
+  const aboveTop = thumbTop - trayH - 6;
+  const left =
+    input.align === 'end' ? thumbLeft + input.thumb.width - trayW : thumbLeft;
+  if (aboveTop >= 8) {
+    return { left, top: aboveTop, beside: false };
+  }
+  const besideLeft =
+    input.align === 'end' ? thumbLeft - trayW - 6 : thumbLeft + input.thumb.width + 6;
+  return {
+    left: besideLeft,
+    top: Math.max(8, thumbTop + input.thumb.height / 2 - trayH / 2),
+    beside: true,
+  };
+}
 export const REACTION_STACK_MAX = 6;
 /** @deprecated Use REACTION_MARK_BUTTON. Kept so Wave rail files do not churn. */
 export const REACTION_MARK_COMPACT = REACTION_MARK_BUTTON;

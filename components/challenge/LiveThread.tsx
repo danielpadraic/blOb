@@ -13,6 +13,10 @@ import {
 } from 'react-native';
 
 import { LiveBubble } from '@/components/challenge/LiveBubble';
+import {
+  ReactionDismissScrim,
+  ReactionPicker,
+} from '@/components/feed/ReactionPicker';
 import { LiveFailBanner, LiveRowBoundary, LiveSafeBoundary } from '@/components/challenge/LiveSafeBoundary';
 import { InlineComposer } from '@/components/feed/InlineComposer';
 import { WhoReactedSheet, type WhoReactedTarget } from '@/components/feed/WhoReactedSheet';
@@ -43,10 +47,15 @@ import {
   liveRowKey,
   isLiveCheckinPost,
   liveComposeFromInline,
+  liveComposerDraftKey,
+  liveComposerInstanceKey,
+  liveComposerMode,
   liveEditMediaUrls,
   liveEditPrefill,
   liveQuoteLine,
   liveQuotePreview,
+  liveReplyMentionChip,
+  liveSubmitMentionIds,
   EMPTY_LIVE_POSTS,
   reuseLiveThreadRows,
   seedLiveFeedPosts,
@@ -76,7 +85,8 @@ import {
   commentTargetHardMissing,
 } from '@/lib/commentHighlight';
 import type { MentionChip } from '@/lib/mentions';
-import { authorLabel, resolveLiveAuthor, safeUserId } from '@/lib/safeIds';
+import { liveReactionTrayFrame, userReactionTypes } from '@/lib/reactions';
+import { resolveLiveAuthor, safeUserId } from '@/lib/safeIds';
 import { THEME } from '@/lib/theme';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { backfillLatestFitnessOcr } from '@/lib/health/runPostSendOcr';
@@ -89,10 +99,20 @@ import { commentMediaUrls } from '@/utils/media';
 
 type LiveReplyTarget = {
   postId: string;
+  authorId: string;
   name: string;
   preview: string;
   avatarUrl?: string | null;
   mention?: MentionChip | null;
+};
+
+type LivePickerTarget = {
+  rowId: string;
+  post: PostWithMeta;
+  commentId?: string | null;
+  align: 'start' | 'end';
+  left: number;
+  top: number;
 };
 
 type LiveThreadProps = {
@@ -182,6 +202,9 @@ export function LiveThread({
   const highlightedOnce = useRef<string | null>(null);
   const [replyTo, setReplyTo] = useState<LiveReplyTarget | null>(null);
   const [editing, setEditing] = useState<PostWithMeta | null>(null);
+  const [picker, setPicker] = useState<LivePickerTarget | null>(null);
+  const hostRef = useRef<View>(null);
+  const composerMode = liveComposerMode({ replyTo, editing });
   const [missingComment, setMissingComment] = useState(false);
   const [highlightFlash, setHighlightFlash] = useState(false);
   const [liftOpen, setLiftOpen] = useState(false);
@@ -706,8 +729,18 @@ export function LiveThread({
   }, [currentUserId, reads.cursor, rows]);
 
   const submitLine = useCallback(
-    async (content: string, mentionedUserIds: string[] = [], parentId?: string | null) => {
+    async (
+      content: string,
+      mentionedUserIds: string[] = [],
+      parentId?: string | null,
+      chips?: MentionChip[],
+    ) => {
       const split = liveComposeFromInline(content);
+      const mentionIds = liveSubmitMentionIds(chips ?? mentionedUserIds.map((userId) => ({
+        userId,
+        username: userId,
+        label: userId,
+      })));
       if (editing) {
         const mediaUrls = liveEditMediaUrls(editing, split.mediaUrls);
         if (isLiveCheckinPost(editing) && mediaUrls.length === 0) {
@@ -725,6 +758,7 @@ export function LiveThread({
           checkinId: editing.checkin_id,
         });
         setEditing(null);
+        setComposerOpen(false);
         jumpToLiveEdge();
         return;
       }
@@ -736,12 +770,13 @@ export function LiveThread({
         mediaUrls: split.mediaUrls,
         source: composeSource,
         audience: composeAudience,
-        mentionedUserIds,
+        mentionedUserIds: mentionIds,
         parentId: parentId ?? null,
         liftSessionId: attachedLift?.id ?? null,
       });
       setAttachedLift(null);
       setReplyTo(null);
+      setComposerOpen(false);
       // Sending is an explicit act: the author always lands on their own new message.
       jumpToLiveEdge();
     },
@@ -750,34 +785,83 @@ export function LiveThread({
 
   const [composerOpen, setComposerOpen] = useState(false);
 
+  const closePicker = useCallback(() => {
+    setPicker(null);
+  }, []);
+
   const collapseComposer = useCallback(() => {
     Keyboard.dismiss();
     setComposerOpen(false);
+    closePicker();
+  }, [closePicker]);
+
+  const cancelReply = useCallback(() => {
+    setReplyTo(null);
+    setComposerOpen(false);
+    Keyboard.dismiss();
+  }, []);
+
+  const cancelEdit = useCallback(() => {
+    setEditing(null);
+    setComposerOpen(false);
+    Keyboard.dismiss();
   }, []);
 
   const startReply = useCallback((target: LiveReplyTarget) => {
+    closePicker();
     setEditing(null);
     setReplyTo(target);
     setComposerOpen(true);
-  }, []);
+  }, [closePicker]);
 
   useEffect(() => {
     if (focused) {
       return;
     }
     setReplyTo(null);
+    setEditing(null);
     setComposerOpen(false);
+    setPicker(null);
     Keyboard.dismiss();
   }, [focused]);
 
   const startEdit = useCallback((post: PostWithMeta) => {
+    closePicker();
     if (isLiveCheckinPost(post) && post.challenge_id) {
       social?.openEdit(post);
       return;
     }
     setReplyTo(null);
     setEditing(post);
-  }, [social]);
+    setComposerOpen(true);
+  }, [closePicker, social]);
+
+  const openRowPicker = useCallback(
+    (
+      rowId: string,
+      post: PostWithMeta,
+      commentId: string | null,
+      align: 'start' | 'end',
+      thumb: { x: number; y: number; width: number; height: number },
+    ) => {
+      hostRef.current?.measureInWindow((hx, hy, hw, hh) => {
+        const frame = liveReactionTrayFrame({
+          host: { x: hx, y: hy, width: hw, height: hh },
+          thumb,
+          align,
+        });
+        setPicker({
+          rowId,
+          post,
+          commentId,
+          align,
+          left: frame.left,
+          top: frame.top,
+        });
+      });
+    },
+    [],
+  );
 
   const renderItem = useCallback(
     ({ item, index }: { item: LiveThreadRow; index: number }) => {
@@ -799,6 +883,17 @@ export function LiveThread({
               post={display}
               currentUserId={currentUserId}
               comment={item.comment}
+              pickerOpen={picker?.rowId === `comment:${item.comment.id}`}
+              onPickerOpen={(anchor) =>
+                openRowPicker(
+                  `comment:${item.comment.id}`,
+                  item.parent,
+                  item.comment.id,
+                  display.author_id === currentUserId ? 'end' : 'start',
+                  anchor,
+                )
+              }
+              onPickerClose={closePicker}
               highlighted={highlightFlash && highlightCommentId === item.comment.id}
               quote={{
                 name: parentAuthor.name,
@@ -815,10 +910,11 @@ export function LiveThread({
                   ? () =>
                       startReply({
                         postId: item.parent.id,
+                        authorId: commentAuthor.authorId ?? '',
                         name: commentAuthor.name,
                         preview: liveChatText(item.comment.content) || 'Message',
                         avatarUrl: commentAuthor.avatarUrl,
-                        mention: mentionFromAuthor(item.comment.author, item.comment.author_id),
+                        mention: liveReplyMentionChip(item.comment.author, item.comment.author_id),
                       })
                   : undefined
               }
@@ -845,6 +941,17 @@ export function LiveThread({
             currentUserId={currentUserId}
             highlighted={highlightFlash && highlightPostId === item.post.id && !highlightCommentId}
             quote={quote}
+            pickerOpen={picker?.rowId === liveRowKey(item)}
+            onPickerOpen={(anchor) =>
+              openRowPicker(
+                liveRowKey(item),
+                item.post,
+                null,
+                postAuthor.authorId === currentUserId ? 'end' : 'start',
+                anchor,
+              )
+            }
+            onPickerClose={closePicker}
             onReact={(type) => onReact(item.post, type)}
             onOpenWho={(type) => openWho(item.post.id, type, null, item.post.reactions)}
             onEdit={
@@ -862,10 +969,11 @@ export function LiveThread({
                 ? () =>
                     startReply({
                       postId: item.post.id,
+                      authorId: postAuthor.authorId ?? '',
                       name: postAuthor.name,
                       preview: liveQuotePreview(item.post) || 'Message',
                       avatarUrl: postAuthor.avatarUrl,
-                      mention: mentionFromAuthor(item.post.author, item.post.author_id),
+                      mention: liveReplyMentionChip(item.post.author, item.post.author_id),
                     })
                 : undefined
             }
@@ -879,7 +987,7 @@ export function LiveThread({
         </LiveRowBoundary>
       );
     },
-    [canCompose, currentUserId, highlightCommentId, highlightFlash, highlightPostId, onReact, onRowError, openWho, posts, social, startEdit, startReply],
+    [canCompose, closePicker, currentUserId, highlightCommentId, highlightFlash, highlightPostId, onReact, onRowError, openRowPicker, openWho, picker?.rowId, posts, social, startEdit, startReply],
   );
 
   const renderQuietEmpty = useCallback(
@@ -900,6 +1008,8 @@ export function LiveThread({
 
   return (
     <View
+      ref={hostRef}
+      collapsable={false}
       style={{
         flex: 1,
         minHeight: 0,
@@ -1083,7 +1193,7 @@ export function LiveThread({
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Cancel reply"
-                onPress={() => setReplyTo(null)}
+                onPress={cancelReply}
                 style={{ minHeight: 28, minWidth: 28, alignItems: 'center', justifyContent: 'center' }}>
                 <AppText className="text-[16px] font-semibold" style={{ color: THEME.textMuted }}>
                   ×
@@ -1103,7 +1213,7 @@ export function LiveThread({
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Cancel edit"
-                onPress={() => setEditing(null)}
+                onPress={cancelEdit}
                 style={{ minHeight: 28, minWidth: 28, alignItems: 'center', justifyContent: 'center' }}>
                 <AppText className="text-[16px] font-semibold" style={{ color: THEME.textMuted }}>
                   ×
@@ -1112,28 +1222,40 @@ export function LiveThread({
             </View>
           ) : null}
           <InlineComposer
-            key={editing ? `edit-${editing.id}` : 'live'}
+            key={liveComposerInstanceKey(
+              composerMode,
+              composerMode === 'edit' ? editing?.id : replyTo?.postId,
+            )}
             bar
             idleOneLine
             expanded={composerOpen}
-            attachedLift={editing ? null : attachedLift}
-            onAttachLift={editing ? undefined : () => setLiftOpen(true)}
+            attachedLift={composerMode === 'edit' ? null : attachedLift}
+            onAttachLift={composerMode === 'edit' ? undefined : () => setLiftOpen(true)}
             onRemoveLift={() => setAttachedLift(null)}
-            autoFocus={Boolean(replyTo || editing)}
+            autoFocus={composerMode !== 'idle'}
             placeholder={placeholder ?? copy('live.placeholder')}
-            submitLabel={editing ? copy('live.save') : (sendLabel ?? copy('live.send'))}
+            submitLabel={composerMode === 'edit' ? copy('live.save') : (sendLabel ?? copy('live.send'))}
             submitting={Boolean(composing || editPost.isPending)}
             audience={composeAudience}
             memberIds={memberIds}
-            draftKey={`live:${readCursorChallengeId || composeSource}`}
-            initialText={editing ? liveEditPrefill(editing) : undefined}
-            // Quote chip is the reply. Never seed @.
-            replyTo={null}
-            onExpandedChange={setComposerOpen}
-            onSubmit={async (content, mentionedUserIds) => {
+            draftKey={liveComposerDraftKey(
+              composerMode,
+              readCursorChallengeId,
+              composeSource,
+            )}
+            initialText={composerMode === 'edit' && editing ? liveEditPrefill(editing) : undefined}
+            replyTo={composerMode === 'reply' ? replyTo?.mention ?? null : null}
+            onExpandedChange={(next) => {
+              setComposerOpen(next);
+              if (next) {
+                closePicker();
+              }
+            }}
+            onSubmit={async (content, mentionedUserIds, chips) => {
               try {
-                await submitLine(content, mentionedUserIds, replyTo?.postId);
+                await submitLine(content, mentionedUserIds, replyTo?.postId, chips);
                 setReplyTo(null);
+                setEditing(null);
               } catch (error) {
                 Alert.alert('Couldn’t post that', getErrorMessage(error));
               }
@@ -1143,6 +1265,44 @@ export function LiveThread({
       ) : (
         <View style={{ height: composerPad }} />
       )}
+
+      {picker ? (
+        <View
+          pointerEvents="box-none"
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            zIndex: 60,
+          }}>
+          <ReactionDismissScrim onClose={closePicker} />
+          <View
+            pointerEvents="box-none"
+            style={{
+              position: 'absolute',
+              left: picker.left,
+              top: picker.top,
+              zIndex: 61,
+            }}>
+            <ReactionPicker
+              anchored
+              align={picker.align}
+              selected={userReactionTypes(
+                picker.commentId
+                  ? picker.post.comments?.find((comment) => comment.id === picker.commentId)?.reactions
+                  : picker.post.reactions,
+                currentUserId,
+              )}
+              onPick={(type) => {
+                onReact(picker.post, type, picker.commentId);
+                closePicker();
+              }}
+            />
+          </View>
+        </View>
+      ) : null}
 
       <LiftPickerSheet
         visible={liftOpen}
@@ -1200,23 +1360,6 @@ function LiveDayBreakRow({ dateLine, dayLine }: { dateLine: string; dayLine: str
       ) : null}
     </View>
   );
-}
-
-function mentionFromAuthor(
-  author: PostWithMeta['author'],
-  authorId?: string | null,
-): MentionChip | null {
-  const userId = safeUserId(author, authorId);
-  const username = author?.username?.trim();
-  if (!username && !userId) {
-    return null;
-  }
-  return {
-    userId: userId ?? username ?? '',
-    username: username || userId || 'someone',
-    label: authorLabel(author),
-    visibleName: author?.display_name?.trim() || authorLabel(author),
-  };
 }
 
 function commentAsLivePost(comment: CommentWithAuthor, parent: PostWithMeta): PostWithMeta {
