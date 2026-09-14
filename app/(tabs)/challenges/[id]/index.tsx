@@ -378,12 +378,17 @@ export default function ChallengeDetailScreen() {
   );
   const [receiptOpen, setReceiptOpen] = useState(receiptParam === '1');
   const [liveMounted, setLiveMounted] = useState(() => pageTab === 'feed');
+  const [livePainted, setLivePainted] = useState(false);
 
   useEffect(() => {
     if (pageTab === 'feed') {
       setLiveMounted(true);
     }
   }, [pageTab]);
+
+  useEffect(() => {
+    setLivePainted(false);
+  }, [id]);
 
   useEffect(() => {
     if (isCalloutObserver) {
@@ -640,7 +645,7 @@ export default function ChallengeDetailScreen() {
   useContextualTour(
     'challenge-live',
     challengeLiveSteps,
-    Boolean(user?.id && liveTabFocused && liveMounted && challenge && !windowEnded && feed.isFetched),
+    Boolean(user?.id && liveTabFocused && liveMounted && livePainted && challenge && !windowEnded),
     user?.id,
   );
   const judgingHold =
@@ -1167,8 +1172,9 @@ export default function ChallengeDetailScreen() {
         </Pressable>
       ) : null}
       {liveMounted ? (
-        <TourAnchor
-          id="tour-challenge-live"
+        <View
+          collapsable={false}
+          pointerEvents={pageTab === 'feed' ? 'auto' : 'none'}
           style={{
             flex: pageTab === 'feed' ? 1 : 0,
             minHeight: pageTab === 'feed' ? 0 : 0,
@@ -1176,13 +1182,18 @@ export default function ChallengeDetailScreen() {
             overflow: 'hidden',
             opacity: pageTab === 'feed' ? 1 : 0,
           }}>
-        <View
-          collapsable={false}
-          pointerEvents={pageTab === 'feed' ? 'auto' : 'none'}
-          style={{
-            flex: 1,
-            minHeight: 0,
-          }}>
+          <TourAnchor
+            id="tour-challenge-live"
+            style={{
+              position: 'absolute',
+              top: 12,
+              right: 16,
+              width: 8,
+              height: 8,
+              opacity: 0,
+            }}>
+            <View />
+          </TourAnchor>
           {challenge?.is_callout ? (
             <CalloutLiveWatchChip watching={isCalloutObserver} count={watchingCount} />
           ) : null}
@@ -1215,6 +1226,7 @@ export default function ChallengeDetailScreen() {
           memberIds={mentionMemberIds}
           placeholder={isCalloutObserver ? CALLOUT_CHEER_PLACEHOLDER : undefined}
           footerReserve={stickyJoin ? stickyBlock : 0}
+          onFirstPaint={() => setLivePainted(true)}
           onRefresh={() => void onRefresh()}
           onRetry={() => void feed.refetch()}
           onCompose={(input) => createPost.mutateAsync(input)}
@@ -1222,7 +1234,6 @@ export default function ChallengeDetailScreen() {
         />
           </LiveSafeBoundary>
         </View>
-        </TourAnchor>
       ) : null}
       {pageTab !== 'feed' ? (
       <ScrollView

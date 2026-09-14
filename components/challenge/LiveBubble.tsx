@@ -1,5 +1,5 @@
 import { memo, useMemo, useRef, useState } from 'react';
-import { Alert, Animated, PanResponder, Platform, Pressable, View } from 'react-native';
+import { Alert, Animated, PanResponder, Platform, Pressable, useWindowDimensions, View } from 'react-native';
 import { Image } from 'expo-image';
 
 import { LiveReactionChip } from '@/components/challenge/LiveReactionChip';
@@ -34,7 +34,7 @@ import {
   REPLY_SWIPE_MAX,
   REPLY_SWIPE_TRIGGER,
 } from '@/lib/liveThread';
-import { mediaUrlsForPost } from '@/lib/postMediaCarousel';
+import { liveInlineFrameHeight, liveInlineSeedWidth, mediaUrlsForPost } from '@/lib/postMediaCarousel';
 import { resolveLiveAuthor } from '@/lib/safeIds';
 import { CheckinProofStatsRow } from '@/components/challenge/CheckinProofStats';
 import { LiftPostCard } from '@/components/lift/LiftPostCard';
@@ -91,6 +91,8 @@ export const LiveBubble = memo(function LiveBubble({
   const checkin = isLiveCheckinPost(post);
   const system = isLiveSystemPost(post);
   const visuals = liveVisualUrls(post, mine);
+  const { width: windowW } = useWindowDimensions();
+  const reservedProofH = liveInlineFrameHeight(liveInlineSeedWidth(Math.max(windowW, 160)));
   const time = formatLiveClock(post.created_at);
   const caption = checkin
     ? checkinCardCaption(post.content, null, post.edited_at)
@@ -389,24 +391,34 @@ export const LiveBubble = memo(function LiveBubble({
                 ) : null}
               </View>
               </Pressable>
-              {visuals.length > 0 ? (
-                <PostMediaCarousel
-                  postId={post.id}
-                  urls={visuals}
-                  workout={workout}
-                  pauseCycle
-                  liveInline
-                  lightboxOrigin={
-                    String(post.challenge_id ?? '').trim()
-                      ? {
-                          kind: 'live',
-                          challengeId: String(post.challenge_id),
-                          postId: post.id,
-                        }
-                      : { kind: 'other' }
-                  }
-                />
-              ) : null}
+              <View
+                style={{
+                  height: reservedProofH,
+                  width: '100%',
+                  marginTop: 6,
+                  borderRadius: 18,
+                  overflow: 'hidden',
+                  backgroundColor: THEME.line,
+                }}>
+                {visuals.length > 0 ? (
+                  <PostMediaCarousel
+                    postId={post.id}
+                    urls={visuals}
+                    workout={workout}
+                    pauseCycle
+                    liveInline
+                    lightboxOrigin={
+                      String(post.challenge_id ?? '').trim()
+                        ? {
+                            kind: 'live',
+                            challengeId: String(post.challenge_id),
+                            postId: post.id,
+                          }
+                        : { kind: 'other' }
+                    }
+                  />
+                ) : null}
+              </View>
             </View>
             {removed || editing ? null : (
               <LiveReactionChip

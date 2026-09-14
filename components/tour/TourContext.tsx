@@ -196,7 +196,8 @@ export function TourProvider({ children }: { children: ReactNode }) {
   const requestContextual = useCallback(
     (input: { id: ContextualTourId; steps: ContextualTourStep[]; userId: string }) => {
       setContextual((current) => current ?? input);
-      setSpotlight(true);
+      // Live’s hole used to wrap the whole thread and scroll it. Card only; list stays still.
+      setSpotlight(input.id !== 'challenge-live');
     },
     [],
   );

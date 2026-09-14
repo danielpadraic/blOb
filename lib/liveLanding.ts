@@ -14,6 +14,21 @@ function postKey(postId?: string | null): string {
   return String(postId ?? '').trim();
 }
 
+/** One line when Live scrolls without a finger, wheel, or trackpad drag. */
+export function logLiveAutoScroll(input: {
+  reason: string;
+  rowId?: string | null;
+  willScroll: boolean;
+  itemCount: number;
+}): void {
+  console.log('[blob:live]', {
+    reason: input.reason,
+    rowId: input.rowId ?? null,
+    willScroll: input.willScroll,
+    itemCount: input.itemCount,
+  });
+}
+
 /** First focused paint of this challenge’s Live already chose a row. */
 export function hasLiveInitialScroll(challengeId?: string | null): boolean {
   const id = challengeKey(challengeId);

@@ -73,7 +73,31 @@ describe('seedLiveFeedPosts / liveRowKey', () => {
         },
         0,
       ),
+    ).toBe('post-new');
+    expect(
+      liveRowKey(
+        {
+          kind: 'post',
+          post: { checkin_id: '11111111-1111-4111-8111-111111111111' },
+        },
+        99,
+      ),
     ).toBe('checkin:11111111-1111-4111-8111-111111111111');
+  });
+
+  it('does not reseed the check-in object when only comments are added', () => {
+    const raw = {
+      id: 'p-media',
+      author_id: 'u-1',
+      media_urls: ['https://cdn.test/pre.jpg'],
+      comments: [] as { id: string; content: string }[],
+    };
+    const first = seedLiveFeedPosts([raw])[0];
+    raw.comments = [{ id: 'c1', content: 'hi' }];
+    const next = seedLiveFeedPosts([raw])[0];
+    expect(next).toBe(first);
+    expect(next.comments).toHaveLength(1);
+    expect(next.media_urls).toEqual(['https://cdn.test/pre.jpg']);
   });
 
   it('reseeds when media_urls are patched onto the same object', () => {

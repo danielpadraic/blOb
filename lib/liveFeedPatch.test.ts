@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   dedupeLivePostsByCheckinId,
   matchOptimisticLiveIndex,
+  mergeLiveFeedSnapshot,
   patchLiveFeedList,
   uniqueLivePostsById,
   upsertLiveFeedPost,
@@ -238,5 +239,24 @@ describe('dedupeLivePostsByCheckinId', () => {
       { id: 'b', checkin_id: 'not-a-uuid', content: 'yo', media_urls: [] },
     ];
     expect(dedupeLivePostsByCheckinId(rows)).toEqual(rows);
+  });
+});
+
+describe('mergeLiveFeedSnapshot', () => {
+  it('patches media onto the same object and keeps neighbors', () => {
+    const prev = [A, B];
+    const incoming = [
+      { ...A, media_urls: ['https://cdn.test/one.jpg', 'https://cdn.test/one.jpg?tok=2'] },
+      { ...B },
+    ];
+    const next = mergeLiveFeedSnapshot(prev, incoming);
+    expect(next[1]).toBe(B);
+    expect(next[0].id).toBe('a');
+    expect(next[0].media_urls).toEqual(['https://cdn.test/one.jpg']);
+  });
+
+  it('returns the incoming list on first paint when nothing is on screen yet', () => {
+    const incoming = [A, B];
+    expect(mergeLiveFeedSnapshot(undefined, incoming)[0]).toBe(A);
   });
 });

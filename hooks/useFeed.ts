@@ -108,7 +108,12 @@ import {
   type HomeFeedCursor,
 } from '@/lib/homeFeed';
 import { hydrateLiveCheckinMedia } from '@/lib/checkinMediaRestore';
-import { dedupeLivePostsByCheckinId, uniqueLivePostsById, upsertLiveFeedPost } from '@/lib/liveFeedPatch';
+import {
+  dedupeLivePostsByCheckinId,
+  mergeLiveFeedSnapshot,
+  uniqueLivePostsById,
+  upsertLiveFeedPost,
+} from '@/lib/liveFeedPatch';
 import { logHomeFirstPaintQueries } from '@/lib/homeFeedVideo';
 
 const REACTION_COLUMNS = 'id, user_id, post_id, comment_id, reaction_type, created_at';
@@ -1445,7 +1450,10 @@ export function useFeed(challengeId?: string | null) {
         userId: user?.id,
         queryClient,
       });
-      return uniqueLivePostsById(dedupeLivePostsByCheckinId(posts));
+      const incoming = uniqueLivePostsById(dedupeLivePostsByCheckinId(posts));
+      const key = challengeId ? liveListKey(challengeId, user?.id) : feedListKey('challenge', user?.id);
+      const prev = queryClient.getQueryData<PostWithMeta[]>(key);
+      return mergeLiveFeedSnapshot(Array.isArray(prev) ? prev : undefined, incoming);
     },
   });
 

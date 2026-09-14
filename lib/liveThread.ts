@@ -97,7 +97,7 @@ export function sortLivePosts<T extends LivePostLike>(posts: T[]): T[] {
     });
 }
 
-/** FlatList key. Check-in rows use checkin_id so a stats patch does not remount the bubble. */
+/** FlatList key. post.id, else checkin_id. Never index. Never media_urls length. */
 export function liveRowKey(
   row:
     | {
@@ -108,18 +108,18 @@ export function liveRowKey(
       }
     | null
     | undefined,
-  index = 0,
+  _index = 0,
 ): string {
   try {
+    const id = String(row?.id ?? '').trim();
+    if (id) {
+      return id;
+    }
     if (row?.kind === 'post') {
       const checkinId = liveCheckinKey(row.post?.checkin_id);
       if (checkinId) {
         return `checkin:${checkinId}`;
       }
-    }
-    const id = String(row?.id ?? '').trim();
-    if (id) {
-      return id;
     }
     return `live:${row?.kind ?? 'row'}:${String(row?.createdAt ?? '')}`;
   } catch {
@@ -137,13 +137,22 @@ function asStats(value: unknown): PostWithMeta['checkin_stats'] {
 type SeededLivePost = { fingerprint: string; seeded: PostWithMeta };
 const seededPostCache = new WeakMap<object, SeededLivePost>();
 
+function commentIdsKey(comments: unknown): string {
+  if (!Array.isArray(comments)) {
+    return '';
+  }
+  return comments
+    .map((comment) => String((comment as { id?: string | null })?.id ?? '').trim())
+    .filter(Boolean)
+    .join(',');
+}
+
 function seedFingerprint(post: PostWithMeta): string {
   return [
     uniqueProofUrls(post.media_urls).join('\n'),
     uniqueProofUrls(post.hidden_media_urls).join('\n'),
     JSON.stringify(asStats(post.checkin_stats)),
     String(post.author_id ?? ''),
-    String((post.comments ?? []).length),
     String(post.content ?? ''),
   ].join('|');
 }
@@ -164,15 +173,18 @@ export function seedLiveFeedPosts(posts: unknown): PostWithMeta[] {
       continue;
     }
     const fingerprint = seedFingerprint(post);
+    const comments = Array.isArray(post.comments)
+      ? post.comments.filter((comment) => comment && comment.id).map((comment) => seedLiveAuthor(comment))
+      : [];
     const cached = seededPostCache.get(raw);
     if (cached && cached.fingerprint === fingerprint) {
+      if (commentIdsKey(cached.seeded.comments) !== commentIdsKey(comments)) {
+        cached.seeded.comments = comments;
+      }
       out.push(cached.seeded);
       continue;
     }
     const seeded = seedLiveAuthor({ ...post, id });
-    const comments = Array.isArray(post.comments)
-      ? post.comments.filter((comment) => comment && comment.id).map((comment) => seedLiveAuthor(comment))
-      : [];
     const next = {
       ...seeded,
       id,

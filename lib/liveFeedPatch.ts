@@ -1,5 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 
+import { mediaUrlKey } from '@/lib/challengeProofs';
 import { mergeReactionListsByKey } from '@/lib/reactions';
 
 type FeedPostRow = {
@@ -92,10 +93,14 @@ function unionUrlList(left: unknown, right: unknown): string[] {
   const seen = new Set<string>();
   for (const url of [...(asUrlList(left) ?? []), ...(asUrlList(right) ?? [])]) {
     const next = url.trim();
-    if (!next || seen.has(next)) {
+    if (!next) {
       continue;
     }
-    seen.add(next);
+    const key = mediaUrlKey(next);
+    if (!key || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
     out.push(next);
   }
   return out;
@@ -298,6 +303,26 @@ export function uniqueLivePostsById<T extends { id?: string | null }>(posts: rea
 
 function finishLiveList<T extends { id: string }>(list: T[]): T[] {
   return dedupeLivePostsByCheckinId(uniqueLivePostsById(list));
+}
+
+/**
+ * A refetch / hydrate snapshot patches the list already on screen.
+ * Same posts.id (or checkin_id) keeps the same object. New rows append.
+ */
+export function mergeLiveFeedSnapshot<T extends { id: string }>(
+  previous: T[] | undefined,
+  incoming: T[],
+): T[] {
+  const next = finishLiveList(incoming);
+  if (!previous?.length) {
+    return next;
+  }
+  let current = previous;
+  for (const row of next) {
+    const patched = patchLiveFeedList(current, { eventType: 'INSERT', new: row as FeedPostRow });
+    current = Array.isArray(patched) ? (patched as T[]) : current;
+  }
+  return finishLiveList(current);
 }
 
 /**

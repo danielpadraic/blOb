@@ -42,7 +42,7 @@ export function TourAnchor({ id, children, style }: TourAnchorProps) {
     if ((!tour?.active && !tour?.createActive && !tour?.spotlight) || tour.targetId !== id) {
       return;
     }
-    if (Platform.OS === 'web' && !tour.createActive) {
+    if (Platform.OS === 'web' && !tour.createActive && id !== 'tour-challenge-live') {
       const node = viewRef.current;
       if (node != null && typeof (node as unknown as { scrollIntoView?: unknown }).scrollIntoView === 'function') {
         (node as unknown as { scrollIntoView: (opts: ScrollIntoViewOptions) => void }).scrollIntoView({

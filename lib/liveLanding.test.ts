@@ -1,9 +1,10 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 
 import {
   clearLiveInitialScroll,
   hasLiveInitialScroll,
   liveLandingFocus,
+  logLiveAutoScroll,
   markLiveInitialScroll,
   peekSentLiveCheckin,
   rememberSentLiveCheckin,
@@ -55,5 +56,17 @@ describe('live landing', () => {
       postId: null,
       latest: true,
     });
+  });
+
+  it('logs a non-drag scroll with reason, rowId, willScroll, and itemCount', () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    logLiveAutoScroll({ reason: 'first-paint', rowId: 'p1', willScroll: true, itemCount: 12 });
+    expect(spy).toHaveBeenCalledWith('[blob:live]', {
+      reason: 'first-paint',
+      rowId: 'p1',
+      willScroll: true,
+      itemCount: 12,
+    });
+    spy.mockRestore();
   });
 });

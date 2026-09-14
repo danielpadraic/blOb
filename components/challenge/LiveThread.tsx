@@ -53,9 +53,9 @@ import {
   type LiveThreadRow,
 } from '@/lib/liveThread';
 import {
-  clearLiveInitialScroll,
   hasLiveInitialScroll,
   liveLandingFocus,
+  logLiveAutoScroll,
   markLiveInitialScroll,
   peekSentLiveCheckin,
   takeSentLiveCheckin,
@@ -123,6 +123,8 @@ type LiveThreadProps = {
   readCursorChallengeId?: string | null;
   /** Live tab is on screen. Leaving clears the @chip, not the draft. */
   focused?: boolean;
+  /** Fires after this visit’s first list frame (or a still empty list). Tour waits on this. */
+  onFirstPaint?: () => void;
   onRefresh?: () => void;
   onRetry?: () => void;
   onCompose: (input: ComposeInput) => Promise<unknown> | void;
@@ -157,6 +159,7 @@ export function LiveThread({
   dayBreakChallenge,
   readCursorChallengeId,
   focused = true,
+  onFirstPaint,
   onRefresh,
   onRetry,
   onCompose,
@@ -248,7 +251,7 @@ export function LiveThread({
    */
   const atEndRef = useRef(false);
   const draggingRef = useRef(false);
-  const firstPaintPendingRef = useRef(true);
+  const firstPaintPendingRef = useRef(false);
   /** Last reported offset, used to tell a user's upward scroll from our own downward pin. */
   const lastOffsetRef = useRef(0);
   const emptyList = rows.length === 0;
@@ -339,17 +342,13 @@ export function LiveThread({
   const postsRef = useRef(posts);
   postsRef.current = posts;
 
-  const logLive = useCallback((why: string) => {
-    if (!__DEV__) {
-      return;
-    }
+  const logLive = useCallback((why: string, willScroll: boolean, rowId?: string | null) => {
     const current = postsRef.current ?? [];
-    console.log('[blob:live]', {
-      why,
-      atEnd: atEndRef.current,
-      userDragging: draggingRef.current,
-      postsLen: current.length,
-      lastId: current[current.length - 1]?.id ?? null,
+    logLiveAutoScroll({
+      reason: why,
+      rowId: rowId ?? current[current.length - 1]?.id ?? null,
+      willScroll,
+      itemCount: current.length,
     });
   }, []);
 
@@ -363,20 +362,23 @@ export function LiveThread({
    */
   const pinToLiveEdge = useCallback(
     (animated: boolean, why: string) => {
-      if ((postsRef.current?.length ?? 0) === 0) {
-        logLive(`skip-pin-empty:${why}`);
+      const current = postsRef.current ?? [];
+      const newest = current[current.length - 1];
+      const rowId = newest?.id ?? null;
+      if (current.length === 0) {
+        logLive(why, false, rowId);
         return;
       }
-      if (!shouldPinToLiveEnd({
+      const willScroll = shouldPinToLiveEnd({
         atEnd: atEndRef.current,
         dragging: draggingRef.current,
         firstPaintPending: firstPaintPendingRef.current,
-      })) {
-        logLive(`skip-pin:${why}`);
+      });
+      logLive(why, willScroll, rowId);
+      if (!willScroll) {
         return;
       }
       if (why !== 'first-paint' && why !== 'new-post' && why !== 'composer-open') {
-        const newest = postsRef.current?.[postsRef.current.length - 1];
         logUnexpectedLiveReset({
           reason: why,
           postId: newest?.id ?? null,
@@ -385,7 +387,6 @@ export function LiveThread({
           y: lastOffsetRef.current,
         });
       }
-      logLive(`pin:${why}`);
       atEndRef.current = true;
       requestAnimationFrame(() => {
         listRef.current?.scrollToEnd({ animated });
@@ -398,7 +399,7 @@ export function LiveThread({
 
   /** The user asked for the newest row, so this one ignores the guard. */
   const jumpToLiveEdge = useCallback(() => {
-    logLive('jump-to-newest');
+    logLive('jump-to-newest', true);
     atEndRef.current = true;
     firstPaintPendingRef.current = false;
     setNotAtEnd(false);
@@ -429,18 +430,42 @@ export function LiveThread({
   }, [highlightCommentId, highlightPostId]);
 
   const landingChallengeId = readCursorChallengeId ?? '';
-  useEffect(() => {
-    return () => {
-      clearLiveInitialScroll(landingChallengeId);
-    };
-  }, [landingChallengeId]);
+  const onFirstPaintRef = useRef(onFirstPaint);
+  onFirstPaintRef.current = onFirstPaint;
+  const firstPaintStartedRef = useRef(false);
+  const firstPaintNotifiedRef = useRef(false);
+  const lastLandingIdRef = useRef(landingChallengeId);
+  if (lastLandingIdRef.current !== landingChallengeId) {
+    lastLandingIdRef.current = landingChallengeId;
+    firstPaintStartedRef.current = false;
+    firstPaintNotifiedRef.current = false;
+    firstPaintPendingRef.current = false;
+  }
+  const finishFirstPaintPinRef = useRef<() => void>(() => undefined);
+  const notifyFirstPaint = useCallback(() => {
+    if (firstPaintNotifiedRef.current) {
+      return;
+    }
+    firstPaintNotifiedRef.current = true;
+    onFirstPaintRef.current?.();
+  }, []);
 
   useEffect(() => {
-    if (!focused || rows.length === 0) {
+    if (!focused) {
       return;
     }
     if (landingChallengeId && hasLiveInitialScroll(landingChallengeId)) {
       firstPaintPendingRef.current = false;
+      notifyFirstPaint();
+      return;
+    }
+    if (rows.length === 0) {
+      if (commentsReady) {
+        notifyFirstPaint();
+      }
+      return;
+    }
+    if (firstPaintStartedRef.current) {
       return;
     }
     const landing = liveLandingFocus({
@@ -458,29 +483,55 @@ export function LiveThread({
           return;
         }
       } else {
+        firstPaintStartedRef.current = true;
         highlightedOnce.current = highlightKey;
         firstPaintPendingRef.current = false;
         markLiveInitialScroll(landingChallengeId);
         takeSentLiveCheckin(landingChallengeId);
+        logLive('highlight', true, landing.commentId || landing.postId);
         const timer = setTimeout(() => {
           try {
             listRef.current?.scrollToIndex({ index, animated: false, viewPosition: 0.35 });
           } catch {
             // Keep the targeted index. Do not bounce to newest or Day 1.
           }
+          notifyFirstPaint();
         }, 80);
         return () => clearTimeout(timer);
       }
     }
+    firstPaintStartedRef.current = true;
     firstPaintPendingRef.current = true;
-    pinToLiveEdge(false, 'first-paint');
-    if (landingChallengeId) {
-      takeSentLiveCheckin(landingChallengeId);
-    }
-    // `rows` is deliberately absent: this effect must run when the thread opens or a link targets a
-    // message, never every time a row arrives or a reaction changes.
+    takeSentLiveCheckin(landingChallengeId);
+    const frame = requestAnimationFrame(() => {
+      finishFirstPaintPinRef.current();
+    });
+    return () => cancelAnimationFrame(frame);
+    // Do not re-run when commentsReady / isLoading flips. That was the bounce after media hydrate.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [commentsReady, focused, highlightCommentId, highlightKey, highlightPostId, landingChallengeId, pinToLiveEdge, rows.length === 0]);
+  }, [focused, highlightCommentId, highlightKey, highlightPostId, landingChallengeId, pinToLiveEdge, rows.length === 0]);
+
+  const finishFirstPaintPin = useCallback(() => {
+    if (emptyList) {
+      return;
+    }
+    if (highlightKey && highlightedOnce.current === highlightKey) {
+      return;
+    }
+    if (landingChallengeId && hasLiveInitialScroll(landingChallengeId)) {
+      firstPaintPendingRef.current = false;
+      notifyFirstPaint();
+      return;
+    }
+    if (!firstPaintPendingRef.current) {
+      return;
+    }
+    pinToLiveEdge(false, 'first-paint');
+    markLiveInitialScroll(landingChallengeId);
+    firstPaintPendingRef.current = false;
+    notifyFirstPaint();
+  }, [emptyList, highlightKey, landingChallengeId, notifyFirstPaint, pinToLiveEdge]);
+  finishFirstPaintPinRef.current = finishFirstPaintPin;
 
   const lastNewestIdRef = useRef<string | null>(null);
   useEffect(() => {
@@ -498,28 +549,6 @@ export function LiveThread({
       pinToLiveEdge(false, 'new-post');
     }
   }, [pinToLiveEdge, rows]);
-
-  // Keep pinning until the newest row is on screen. A single scrollToEnd on a half-measured
-  // list is how Live parked on Day 2. Stop only when the user scrolls up or time runs out
-  // after we have actually landed.
-  useEffect(() => {
-    const retry = setInterval(() => {
-      if (firstPaintPendingRef.current && !draggingRef.current) {
-        pinToLiveEdge(false, 'first-paint');
-      }
-    }, 350);
-    const stop = setTimeout(() => {
-      if (firstPaintPendingRef.current && atEndRef.current) {
-        firstPaintPendingRef.current = false;
-        markLiveInitialScroll(landingChallengeId);
-      }
-      firstPaintPendingRef.current = false;
-    }, 2200);
-    return () => {
-      clearInterval(retry);
-      clearTimeout(stop);
-    };
-  }, [landingChallengeId, pinToLiveEdge]);
 
   const reads = useLiveThreadReads(readCursorChallengeId);
   markReadLatestRef.current = () => {
@@ -616,7 +645,7 @@ export function LiveThread({
     if (unreadAbove.oldestIndex < 0) {
       return;
     }
-    logLive('jump-to-oldest-unread');
+    logLive('jump-to-oldest-unread', true);
     firstPaintPendingRef.current = false;
     try {
       listRef.current?.scrollToIndex({
@@ -845,7 +874,7 @@ export function LiveThread({
       );
       })();
       return (
-        <LiveRowBoundary postId={liveRowKey(item, index)} onError={onRowError}>
+        <LiveRowBoundary postId={liveRowKey(item)} onError={onRowError}>
           {bubble}
         </LiveRowBoundary>
       );
@@ -896,6 +925,9 @@ export function LiveThread({
           extraData={currentUserId ?? ''}
           keyExtractor={(item) => liveRowKey(item)}
           renderItem={renderItem}
+          maintainVisibleContentPosition={
+            Platform.OS === 'web' ? undefined : { minIndexForVisible: 0 }
+          }
           keyboardShouldPersistTaps="always"
           keyboardDismissMode="none"
           nestedScrollEnabled
@@ -916,29 +948,14 @@ export function LiveThread({
           }}
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
-          onContentSizeChange={() => {
-            if (emptyList) {
-              return;
-            }
-            if (highlightKey && highlightedOnce.current === highlightKey) {
-              return;
-            }
-            if (!firstPaintPendingRef.current) {
-              return;
-            }
-            // Keep pinning until the newest row is actually on screen. Marking the visit
-            // “scrolled” on the first incomplete scrollToEnd is how Live parked on Day 2.
-            pinToLiveEdge(false, 'first-paint');
-          }}
+          onLayout={finishFirstPaintPin}
+          onContentSizeChange={finishFirstPaintPin}
           onScrollToIndexFailed={() => {
-            if (emptyList) {
-              return;
-            }
             if (highlightKey && highlightedOnce.current === highlightKey) {
               return;
             }
             if (firstPaintPendingRef.current) {
-              pinToLiveEdge(false, 'first-paint');
+              finishFirstPaintPin();
             }
           }}
           contentContainerStyle={listContentStyle}
