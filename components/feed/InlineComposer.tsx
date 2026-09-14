@@ -7,7 +7,7 @@ import { GifPicker } from '@/components/feed/GifPicker';
 import { MentionField, type MentionFieldHandle } from '@/components/feed/MentionField';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuthOptional } from '@/hooks/useAuth';
 import { copy } from '@/lib/copy';
 import type { MentionChip, MentionDoc } from '@/lib/mentions';
 import {
@@ -98,7 +98,7 @@ export function InlineComposer({
   allowEmpty = false,
   failTitle,
 }: InlineComposerProps) {
-  const { user } = useAuth();
+  const user = useAuthOptional()?.user ?? null;
   const scope = draftKey ? composerDraftKey(draftKey) : null;
   const stored = scope ? readComposerDraft(scope) : null;
   const fieldRef = useRef<MentionFieldHandle>(null);

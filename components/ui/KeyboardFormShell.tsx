@@ -263,7 +263,8 @@ export function KeyboardFormShell({
             style={{
               paddingHorizontal: gutter,
               paddingTop: 10,
-              paddingBottom: overlap > 0 ? 0 : closedFooterPad ?? safeBottom,
+              paddingBottom:
+                overlap > 0 || keyboardHeight > 100 ? 0 : closedFooterPad ?? safeBottom,
               backgroundColor,
               borderTopWidth: 1,
               borderTopColor:

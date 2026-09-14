@@ -3,6 +3,7 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { supabase } from '@/lib/supabase';
 import { isOcrSpaHtml, isProjectStorageImageUrl } from '@/lib/health/ocrAllowlist';
 import { ocrEndpoint } from '@/lib/health/ocrEndpoint';
+import { invertJpegBase64 } from '@/lib/health/invertStill';
 import { dropOcrAvgIfAboveMax, hasOcrNumbers, type ParsedWorkoutOcr } from '@/lib/health/workoutOcr';
 
 /**
@@ -130,32 +131,75 @@ export async function readWorkoutScreenshot(input: {
     return miss('unauthorized', started, urls, slot, 0, false);
   }
 
+  const first = await postOcrWorkout({
+    token,
+    imageBase64,
+    storageUrl,
+    started,
+    urls,
+    slot,
+  });
+  if (first.ok && first.isWorkoutScreen && hasOcrNumbers(first.parsed)) {
+    return first;
+  }
+  if (first.reason === 'spa_html' || first.reason === 'unauthorized' || first.reason === 'timeout') {
+    return first;
+  }
+  // Dark Fitness screenshots: grayscale + invert of the same still, in memory only.
+  const inverted = imageBase64 ? await invertJpegBase64(imageBase64) : null;
+  if (!inverted) {
+    return first;
+  }
+  const second = await postOcrWorkout({
+    token,
+    imageBase64: inverted,
+    storageUrl: '',
+    started,
+    urls,
+    slot,
+  });
+  if (second.ok && second.isWorkoutScreen && hasOcrNumbers(second.parsed)) {
+    return second;
+  }
+  return first;
+}
+
+async function postOcrWorkout(input: {
+  token: string;
+  imageBase64: string | null;
+  storageUrl: string;
+  started: number;
+  urls: string[];
+  slot: string | null;
+}): Promise<OcrReadResult> {
   const endpoint = ocrEndpoint();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify(imageBase64 ? { imageBase64 } : { imageUrl: storageUrl }),
+      headers: { 'content-type': 'application/json', Authorization: `Bearer ${input.token}` },
+      body: JSON.stringify(
+        input.imageBase64 ? { imageBase64: input.imageBase64 } : { imageUrl: input.storageUrl },
+      ),
       signal: controller.signal,
     });
     const raw = await response.text();
     if (isOcrSpaHtml(response.headers.get('content-type'), raw)) {
-      return miss('spa_html', started, urls, slot, response.status, false);
+      return miss('spa_html', input.started, input.urls, input.slot, response.status, false);
     }
     let body: OcrReadResult;
     try {
       body = JSON.parse(raw) as OcrReadResult;
     } catch {
-      return miss('bad_json', started, urls, slot, response.status, response.status !== 404);
+      return miss('bad_json', input.started, input.urls, input.slot, response.status, response.status !== 404);
     }
     if (!response.ok) {
       const reason =
         typeof body?.reason === 'string' && body.reason.trim()
           ? body.reason
           : `http_${response.status}`;
-      return miss(reason, started, urls, slot, response.status, true);
+      return miss(reason, input.started, input.urls, input.slot, response.status, true);
     }
     const parsed = body?.parsed ? dropOcrAvgIfAboveMax(body.parsed) : body?.parsed;
     const result: OcrReadResult = {
@@ -170,9 +214,9 @@ export async function readWorkoutScreenshot(input: {
       reachable: true,
       status: response.status,
       ok,
-      ms: Date.now() - started,
-      slot,
-      urls,
+      ms: Date.now() - input.started,
+      slot: input.slot,
+      urls: input.urls,
       parsed: parsed ?? null,
       reason: ok
         ? undefined
@@ -185,7 +229,7 @@ export async function readWorkoutScreenshot(input: {
     return result;
   } catch (error) {
     const aborted = error instanceof Error && error.name === 'AbortError';
-    return miss(aborted ? 'timeout' : 'network', started, urls, slot, 0, false);
+    return miss(aborted ? 'timeout' : 'network', input.started, input.urls, input.slot, 0, false);
   } finally {
     clearTimeout(timer);
   }

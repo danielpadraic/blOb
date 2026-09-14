@@ -107,6 +107,7 @@ import {
   type HomeFeedAllowContext,
   type HomeFeedCursor,
 } from '@/lib/homeFeed';
+import { hydrateLiveCheckinMedia } from '@/lib/checkinMediaRestore';
 import { dedupeLivePostsByCheckinId, uniqueLivePostsById, upsertLiveFeedPost } from '@/lib/liveFeedPatch';
 import { logHomeFirstPaintQueries } from '@/lib/homeFeedVideo';
 
@@ -1243,6 +1244,7 @@ async function fetchPosts(input: {
   challengeId?: string | null;
   circleId?: string | null;
   userId?: string;
+  queryClient?: QueryClient;
 }): Promise<PostWithMeta[]> {
   const circleId = String(input.circleId ?? '').trim();
   if (circleId) {
@@ -1259,7 +1261,25 @@ async function fetchPosts(input: {
 
   if (input.challengeId) {
     const rows = await queryPosts({ kind: 'challenge', challengeId: input.challengeId });
-    return hydrateAuthors(await withSocial(rows, input.userId));
+    let hydrated = rows;
+    try {
+      hydrated = await hydrateAuthors(await withSocial(rows, input.userId));
+    } catch (error) {
+      console.log('[blob:live]', {
+        reason: 'social',
+        message: rawFeedError(error),
+      });
+      hydrated = rows;
+    }
+    try {
+      return await hydrateLiveCheckinMedia(hydrated, input.queryClient);
+    } catch (error) {
+      console.log('[blob:live]', {
+        reason: 'media',
+        message: rawFeedError(error),
+      });
+      return hydrated;
+    }
   }
 
   if (!input.userId) {
@@ -1420,7 +1440,11 @@ export function useFeed(challengeId?: string | null) {
     refetchOnReconnect: false,
     refetchInterval: false,
     queryFn: async () => {
-      const posts = await fetchPosts({ challengeId, userId: user?.id });
+      const posts = await fetchPosts({
+        challengeId,
+        userId: user?.id,
+        queryClient,
+      });
       return uniqueLivePostsById(dedupeLivePostsByCheckinId(posts));
     },
   });

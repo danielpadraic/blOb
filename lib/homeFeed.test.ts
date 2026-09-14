@@ -6,6 +6,7 @@ import {
   HOME_PAGE_SIZE,
   HOME_RAW_WINDOW,
   asIdSet,
+  idSetHas,
   filterHomeFeedPosts,
   homeFeedAllowsPost,
   homeFeedCursorFrom,
@@ -163,6 +164,12 @@ describe('asIdSet', () => {
     const ids = asIdSet(like);
     expect(ids.has('hidden-post')).toBe(true);
     expect(ids.has('writer')).toBe(true);
+  });
+
+  it('idSetHas never throws when the cache is an array', () => {
+    expect(idSetHas(['friend', { author_id: 'writer' }], 'writer')).toBe(true);
+    expect(idSetHas(null, 'writer')).toBe(false);
+    expect(idSetHas(undefined, 'writer')).toBe(false);
   });
 
   it('does not throw .has when hidden or friends is an array', () => {

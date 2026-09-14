@@ -827,3 +827,8 @@ export function useAuth(): AuthContextValue {
   }
   return context;
 }
+
+/** Live / composer: missing provider stubs instead of throwing the whole tab. */
+export function useAuthOptional(): AuthContextValue | null {
+  return useContext(AuthContext);
+}

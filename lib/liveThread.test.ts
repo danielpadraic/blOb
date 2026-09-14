@@ -76,6 +76,24 @@ describe('seedLiveFeedPosts / liveRowKey', () => {
     ).toBe('checkin:11111111-1111-4111-8111-111111111111');
   });
 
+  it('reseeds when media_urls are patched onto the same object', () => {
+    const raw = {
+      id: 'p-media',
+      author_id: 'u-1',
+      media_urls: [] as string[],
+      checkin_stats: null as { duration_sec?: number } | null,
+    };
+    expect(seedLiveFeedPosts([raw])[0].media_urls).toEqual([]);
+    raw.media_urls = ['https://cdn.test/pre.jpg', 'https://cdn.test/workout_card-1.jpg'];
+    raw.checkin_stats = { duration_sec: 2100 };
+    const next = seedLiveFeedPosts([raw])[0];
+    expect(next.media_urls).toEqual([
+      'https://cdn.test/pre.jpg',
+      'https://cdn.test/workout_card-1.jpg',
+    ]);
+    expect(next.checkin_stats).toEqual({ duration_sec: 2100 });
+  });
+
   it('reads the throwing file from a stack for Retry logs', () => {
     const err = new Error("Can't find variable useAuth");
     err.stack = `ReferenceError: Can't find variable useAuth\n    at usePeriodCheckin (hooks/useChallengeCheckin.ts:312:20)`;

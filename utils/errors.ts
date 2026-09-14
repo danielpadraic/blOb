@@ -485,6 +485,13 @@ export function getProfileSetupSaveMessage(error: unknown): string {
   if (isUsernameTakenError(error)) {
     return 'That username is taken. Try another one.';
   }
+  const rawSetup = extractRawMessage(error).toLowerCase();
+  if (rawSetup.includes('username_invalid') || rawSetup.includes('username_reserved')) {
+    return 'That username can’t be used. Try another one.';
+  }
+  if (rawSetup.includes('display_name_required')) {
+    return 'Enter a display name.';
+  }
   if (isSignedOutSetupError(error)) {
     return 'You need to be signed in.';
   }

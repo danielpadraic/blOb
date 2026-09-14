@@ -3,6 +3,22 @@
  * Never call `.has` on the raw value — arrays have no `.has`.
  * FriendEdge → the other person, not the viewer, not the friendship row id.
  */
+export function idSetHas(
+  input: unknown,
+  id: string | null | undefined,
+  viewerId?: string | null,
+): boolean {
+  const key = String(id ?? '').trim();
+  if (!key) {
+    return false;
+  }
+  try {
+    return asIdSet(input, viewerId).has(key);
+  } catch {
+    return false;
+  }
+}
+
 export function asIdSet(input: unknown, viewerId?: string | null): Set<string> {
   if (input instanceof Set) {
     return new Set(

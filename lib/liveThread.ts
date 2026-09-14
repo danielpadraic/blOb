@@ -134,7 +134,19 @@ function asStats(value: unknown): PostWithMeta['checkin_stats'] {
   return value as PostWithMeta['checkin_stats'];
 }
 
-const seededPostCache = new WeakMap<object, PostWithMeta>();
+type SeededLivePost = { fingerprint: string; seeded: PostWithMeta };
+const seededPostCache = new WeakMap<object, SeededLivePost>();
+
+function seedFingerprint(post: PostWithMeta): string {
+  return [
+    uniqueProofUrls(post.media_urls).join('\n'),
+    uniqueProofUrls(post.hidden_media_urls).join('\n'),
+    JSON.stringify(asStats(post.checkin_stats)),
+    String(post.author_id ?? ''),
+    String((post.comments ?? []).length),
+    String(post.content ?? ''),
+  ].join('|');
+}
 
 /** Fill author / media / stats so a bad Live row cannot throw on .id or .map. */
 export function seedLiveFeedPosts(posts: unknown): PostWithMeta[] {
@@ -146,14 +158,15 @@ export function seedLiveFeedPosts(posts: unknown): PostWithMeta[] {
     if (!raw || typeof raw !== 'object') {
       continue;
     }
-    const cached = seededPostCache.get(raw);
-    if (cached) {
-      out.push(cached);
-      continue;
-    }
     const post = raw as PostWithMeta;
     const id = String(post.id ?? '').trim();
     if (!id) {
+      continue;
+    }
+    const fingerprint = seedFingerprint(post);
+    const cached = seededPostCache.get(raw);
+    if (cached && cached.fingerprint === fingerprint) {
+      out.push(cached.seeded);
       continue;
     }
     const seeded = seedLiveAuthor({ ...post, id });
@@ -168,7 +181,7 @@ export function seedLiveFeedPosts(posts: unknown): PostWithMeta[] {
       checkin_stats: asStats(post.checkin_stats),
       comments,
     };
-    seededPostCache.set(raw, next);
+    seededPostCache.set(raw, { fingerprint, seeded: next });
     out.push(next);
   }
   return out;

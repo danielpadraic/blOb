@@ -882,7 +882,7 @@ const STRINGS = {
   'live.send': 'Send',
   'live.save': 'Save',
   'live.edit': 'Edit',
-  'live.loadFailed': 'Couldn’t load Live.',
+  'live.loadFailed': 'Couldn’t refresh Live',
   'live.quietTitle': 'This room is quiet. Say how the work went.',
   'live.quietBody': '',
   'live.joinToPost': 'Join the challenge to post in Live.',

@@ -3,7 +3,7 @@ import { asCircleVisibility, viewerCanSeeHomeCirclePost } from '@/lib/circles';
 import { asIdSet } from '@/lib/ids';
 import { asPostAudience, viewerCanSeeHomePost } from '@/lib/postAudience';
 
-export { asIdSet } from '@/lib/ids';
+export { asIdSet, idSetHas } from '@/lib/ids';
 
 export const HOME_FEED_SPLASH_MS = 3000;
 export const HOME_SATELLITE_MS = 2500;
