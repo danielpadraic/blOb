@@ -74,7 +74,7 @@ const OFFICIAL_DISPLAY_SELECT =
   'id, sponsor_name, sponsor_logo_url, rules, proofs, proof_type, proof_requirements, cover_image_url, buy_in_amount, prize_pool, currency, host_funded, host_budget, category, scoring_method, scoring_config, comparable_points_config, scoring_version';
 
 const LOBBY_SELECTS = [
-  'id, title, description, rules, is_official, is_callout, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, proofs, proof_type, status, starts_at, ends_at, timezone, series_id, day_windows, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, funding_model, creator_contribution, max_participants, is_unlimited, category, challenge_type, visibility, privacy_mode, frequency, target_count, tasks, task, created_at, updated_at, cover_image_url, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget, scoring_method, scoring_config, comparable_points_config, scoring_version, length_value, length_unit, duration_days, format, cumulative_metric, cumulative_target, cumulative_window, win_window, metrics, distance_meters_required, misses_allowed, join_until_at, host_rigor',
+  'id, title, description, rules, is_official, is_teacher_3day, teacher_kind, is_callout, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, proofs, proof_type, status, starts_at, ends_at, timezone, series_id, day_windows, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, funding_model, creator_contribution, max_participants, is_unlimited, category, challenge_type, visibility, privacy_mode, frequency, target_count, tasks, task, created_at, updated_at, cover_image_url, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget, scoring_method, scoring_config, comparable_points_config, scoring_version, length_value, length_unit, duration_days, format, cumulative_metric, cumulative_target, cumulative_window, win_window, metrics, distance_meters_required, misses_allowed, join_until_at, host_rigor',
   '*',
   'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, timezone, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, funding_model, creator_contribution, max_participants, is_unlimited, category, challenge_type, visibility, frequency, target_count, tasks, task, created_at, updated_at, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget',
   'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, timezone, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, category, challenge_type, visibility, frequency, target_count, tasks, task, created_at, updated_at, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget',
@@ -586,6 +586,8 @@ export function normalizeChallenge(row: ChallengeRow): Challenge {
     description: (row.description as string | null) ?? null,
     rules: (row.rules as string | null) ?? null,
     is_official: Boolean(row.is_official),
+    is_teacher_3day: Boolean(row.is_teacher_3day),
+    teacher_kind: row.teacher_kind ? String(row.teacher_kind) : null,
     is_callout: Boolean(row.is_callout),
     created_by: (row.created_by as string | null) ?? null,
     buy_in_amount: Number(row.buy_in_amount ?? 0),
@@ -628,7 +630,9 @@ export function normalizeChallenge(row: ChallengeRow): Challenge {
     creator_contribution: Number(row.creator_contribution ?? 0),
     max_participants:
       row.max_participants == null ? null : Number(row.max_participants),
-    min_participants: Math.max(Number(row.min_participants ?? 2), 2),
+    min_participants: Boolean(row.is_teacher_3day)
+      ? 1
+      : Math.max(Number(row.min_participants ?? 2), 2),
     start_roll_pending: Boolean(row.start_roll_pending),
     start_roll_keep_days: row.start_roll_keep_days == null ? null : Number(row.start_roll_keep_days),
     start_roll_shift_days: Number(row.start_roll_shift_days ?? 0),
@@ -970,7 +974,7 @@ export async function fetchOfficialDiscoverChallenges(_userId?: string): Promise
 
   const merged = new Map<string, Challenge>();
   for (const row of [...series, ...listedOfficial.map(normalizeChallenge)]) {
-    if (!isOfficialChallenge(row) || isLobbyEndedChallenge(row)) {
+    if (!isOfficialChallenge(row) || isLobbyEndedChallenge(row) || Boolean(row.is_teacher_3day)) {
       continue;
     }
     merged.set(row.id, row);

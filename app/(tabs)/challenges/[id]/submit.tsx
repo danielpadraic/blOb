@@ -94,6 +94,8 @@ import {
   type ChallengeProof,
   type ChallengeProofPart,
 } from '@/lib/challengeProofs';
+import { isHeartRateProofSlot } from '@/lib/checkinShare';
+import { isTeacher3DayChallenge, teacherHrProofAccepts } from '@/lib/teacher3day';
 import {
   athleteDistanceUnit,
   displayDistance,
@@ -1214,6 +1216,15 @@ function SubmitWorkoutInner() {
       explainSendBlocked();
       return;
     }
+    if (isTeacher3DayChallenge(challenge)) {
+      const hr = proofSteps.find((proof) => isHeartRateProofSlot(proof));
+      if (hr && !teacherHrProofAccepts(slotPart(hr, drafts[hr.id], distanceUnit))) {
+        setFailKind(null);
+        setError('Needs date, time, and graph or average.');
+        Alert.alert('Heart rate', 'Needs date, time, and graph or average.');
+        return;
+      }
+    }
     setError(null);
     setFailKind(null);
     if (isLikelyOffline()) {
@@ -1440,7 +1451,7 @@ function SubmitWorkoutInner() {
           queryClient,
         }).catch(() => undefined);
       }
-      if (shareWave && uid && !wavePublishedRef.current) {
+      if (shareWave && uid && !wavePublishedRef.current && !isTeacher3DayChallenge(challenge)) {
         const wave = pickCheckinWaveSource({
           proofs: proofSteps,
           parts: savedParts,

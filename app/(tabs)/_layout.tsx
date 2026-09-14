@@ -10,6 +10,7 @@ import { closeMediaLightbox, MediaLightboxHost } from '@/components/feed/MediaLi
 import { LiftPlayHost } from '@/components/lift/LiftPlayHost';
 import { closeSocialSheets, SocialSheetsHost } from '@/components/social/SocialSheets';
 import { JoinConfirmLayer, JoinConfirmProvider } from '@/components/challenge/JoinConfirmHost';
+import { TeacherBeginLayer, TeacherBeginProvider } from '@/components/teacher/TeacherBeginHost';
 import { InviteHost } from '@/components/challenge/InviteHost';
 import { OfficialPitchHost } from '@/components/challenge/OfficialPitchHost';
 import { InterestsHomeHost } from '@/components/interests/InterestsHomeHost';
@@ -65,9 +66,11 @@ export default function TabLayout() {
       <OfficialDobProvider>
         <GeoCashProvider>
         <JoinConfirmProvider>
+        <TeacherBeginProvider>
         <BugReportHost>
           <TabLayoutInner />
         </BugReportHost>
+        </TeacherBeginProvider>
         </JoinConfirmProvider>
         </GeoCashProvider>
       </OfficialDobProvider>
@@ -513,6 +516,7 @@ function TabLayoutInner() {
         />
       </View>
       <JoinConfirmLayer />
+      <TeacherBeginLayer />
       <View pointerEvents="box-none" style={styles.chromeLayer}>
         <WalletHost />
       </View>

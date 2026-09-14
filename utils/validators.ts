@@ -75,6 +75,15 @@ export const profileSetupSchema = z.object({
     .array(z.enum(ACTIVITY_OPTIONS))
     .min(1, 'Pick at least one activity'),
   show_fitness_stats_publicly: z.boolean(),
+  date_of_birth: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Add your birth date'),
+  declared_region: z.string().trim().length(2, 'Add your home state'),
+  phone: z
+    .string()
+    .trim()
+    .refine((value) => value.replace(/\D/g, '').length >= 10, 'Add a phone number'),
 }).superRefine((values, ctx) => {
   // Physical Details are optional in first-run. Every range below only applies
   // to a field the user actually filled in.
@@ -666,8 +675,9 @@ export type CreateChallengeValues = z.infer<typeof createChallengeSchema>;
 
 export const PROFILE_STEP_FIELDS = {
   0: ['username', 'display_name', 'bio'] as const,
-  1: ['primary_activities', 'typical_weekly_workout_frequency'] as const,
-  2: [
+  1: ['date_of_birth', 'declared_region', 'phone'] as const,
+  2: ['primary_activities', 'typical_weekly_workout_frequency'] as const,
+  3: [
     'gender',
     'height_cm',
     'height_ft',

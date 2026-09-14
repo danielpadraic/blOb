@@ -31,6 +31,7 @@ import { PaidReceiptOverlay } from '@/components/challenge/PaidReceiptOverlay';
 import { HostPrizeTopUp } from '@/components/challenge/HostPrizeTopUp';
 import { FieldNoteLabel, ChallengeNotesProvider } from '@/components/challenge/FieldNote';
 import { OfficialMoneyBoard } from '@/components/challenge/OfficialMoneyBoard';
+import { isTeacher3DayChallenge } from '@/lib/teacher3day';
 import { ChallengeDetailHeaderRight } from '@/components/challenge/ChallengeDetailOverflow';
 import { useInviteHost } from '@/components/challenge/InviteHost';
 import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
@@ -889,7 +890,7 @@ export default function ChallengeDetailScreen() {
   }
 
   function onJoinPress() {
-    if (joinSheet.loading || !challenge || isHost || isJoined || !canJoinBase) {
+    if (joinSheet.loading || !challenge || isHost || isJoined || !canJoinBase || isTeacher3DayChallenge(challenge)) {
       return;
     }
     if (challenge.is_official && !officialDob.ensureAdult()) {
@@ -1048,7 +1049,8 @@ export default function ChallengeDetailScreen() {
 
   const signupLines = signupProofLines(challenge);
   const hideBuyIn =
-    buyInAmount > 0 && (isBucksChallenge(challenge) || Boolean(challenge.host_funded));
+    isTeacher3DayChallenge(challenge) ||
+    (buyInAmount > 0 && (isBucksChallenge(challenge) || Boolean(challenge.host_funded)));
   const hasCheckins = (submittedCheckins.data ?? 0) > 0 || loggedToday;
   const startNeeded =
     challenge.status === 'live' || hasCheckins
@@ -1088,6 +1090,7 @@ export default function ChallengeDetailScreen() {
   const joinUntilLine = challenge && !isJoined && !isHost ? joinOpenUntilLine(challenge, new Date(nowMs)) : null;
   const joinClosed = joinBlocked === JOIN_CLOSED_COPY;
   const stickyJoin =
+    !isTeacher3DayChallenge(challenge) &&
     !isHost &&
     !isCalloutObserver &&
     !isJoined &&
@@ -1364,7 +1367,7 @@ export default function ChallengeDetailScreen() {
           </View>
         ) : null}
 
-        {challenge.is_official ? (
+        {challenge.is_official && !isTeacher3DayChallenge(challenge) ? (
           <>
             <ChallengeDetailsCard challenge={challenge} missesUsed={periodMisses.data ?? 0} />
             {Boolean(receipt) || moneyPhase === 'ended' ? null : (

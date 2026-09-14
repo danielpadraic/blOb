@@ -92,6 +92,21 @@ describe('complete profile row — optional Physical Details', () => {
       weight_unit: 'lb',
       primary_activities: ['running'],
     });
+    expect(
+      coreProfileUpsertRow('user-1', {
+        username: 'danielh',
+        display_name: 'Daniel',
+        date_of_birth: '1990-01-15',
+        declared_region: 'CO',
+        home_state: 'CO',
+        phone: '2085550100',
+        primary_activities: ['running'],
+      }),
+    ).toMatchObject({
+      date_of_birth: '1990-01-15',
+      declared_region: 'CO',
+      phone: '2085550100',
+    });
     expect(omitNullishProfileFields({ id: 'user-1', username: 'a', gender: null })).not.toHaveProperty(
       'gender',
     );

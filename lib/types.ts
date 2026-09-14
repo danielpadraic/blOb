@@ -113,7 +113,8 @@ export type ParticipantStatus =
   | 'completed'
   | 'failed'
   | 'withdrawn'
-  | 'refunded_pre_start';
+  | 'refunded_pre_start'
+  | 'missed';
 
 export type LiveMute = 'all' | 'mentions' | 'off';
 
@@ -367,6 +368,12 @@ export interface Profile {
   country?: string | null;
   last_precise_region?: string | null;
   last_precise_at?: string | null;
+  /** PRIVATE. Read via get_my_profile(). Never on the public profile. */
+  phone?: string | null;
+  challenge_credit_granted_at?: string | null;
+  challenge_credit_cents?: number | null;
+  teacher_camera_ready_at?: string | null;
+  teacher_hr_source?: 'health' | 'upload' | null;
   created_at: string;
   updated_at: string;
 }
@@ -413,6 +420,8 @@ export interface Challenge {
   description: string | null;
   rules: string | null;
   is_official: boolean;
+  is_teacher_3day?: boolean;
+  teacher_kind?: 'template' | 'instance' | string | null;
   /** Attached by accept_callout. Money stays on the callout RPCs. */
   is_callout?: boolean;
   created_by: string | null;
@@ -516,6 +525,9 @@ export interface ChallengeParticipant {
   status: ParticipantStatus;
   days_completed: number;
   joined_at: string;
+  began_at?: string | null;
+  ends_at?: string | null;
+  attempt_no?: number | null;
   completed_at: string | null;
   eliminated_at: string | null;
   ready_at?: string | null;
@@ -1075,6 +1087,9 @@ export type ProfileUpdate = Partial<
     | 'interests_nudge_at'
     | 'declared_region'
     | 'home_state'
+    | 'phone'
+    | 'teacher_camera_ready_at'
+    | 'teacher_hr_source'
     | 'address_line1'
     | 'address_line2'
     | 'city'

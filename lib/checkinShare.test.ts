@@ -46,7 +46,7 @@ describe('check-in proof captions', () => {
       minutes: 30,
     };
     expect(proofCaptionPlaceholder(hr)).toBe('Describe your workout');
-    expect(proofCaptionHelper(hr)).toBe('Share proof of at least 30 minutes of elevated heart rate.');
+    expect(proofCaptionHelper(hr)).toBe('Needs date, time, and graph or average.');
     expect(
       proofCaptionPlaceholder({ id: 'pre', name: 'Post a pre-workout selfie.', method: 'photo' }),
     ).toBe('Post a pre-workout selfie.');
@@ -72,6 +72,7 @@ describe('check-in share prefs', () => {
     expect(checkinHidesHomeShare({ privacy_mode: 'private_corporate' })).toBe(true);
     expect(checkinHidesHomeShare({ privacy_mode: 'private' })).toBe(true);
     expect(checkinHidesHomeShare({ privacy_mode: 'public' })).toBe(false);
+    expect(checkinHidesHomeShare({ privacy_mode: 'public', is_teacher_3day: true })).toBe(true);
     expect(applyCheckinShareLock({ home: true, wave: true }, true)).toEqual({
       home: false,
       wave: false,

@@ -19,7 +19,7 @@ import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useAuth } from '@/hooks/useAuth';
 import { ProfilePhotoSaveSheet } from '@/components/profile/ProfilePhotoSaveSheet';
-import { HomeStateField } from '@/components/geo/HomeStateField';
+import { AccountSpineFields } from '@/components/profile/AccountSpineFields';
 import { useMyProfile, useUpdateProfile, useUploadAvatar, useUploadCover, useUsernameAvailability } from '@/hooks/useProfile';
 import {
   BODY_FAT_DEFAULT,
@@ -35,6 +35,9 @@ import {
 } from '@/lib/bodyMetrics';
 import { ACTIVITY_OPTIONS, WORKOUT_FREQUENCY_OPTIONS } from '@/lib/constants';
 import { asCopyTone, copy, type CopyTone } from '@/lib/copy';
+import { officialDobStatus } from '@/lib/officialDob';
+import { parseUspsRegion } from '@/lib/geo/regions';
+import { teacherPhoneOk } from '@/lib/teacher3day';
 import {
   GOAL_OPTIONS,
   LAST_DONE_DEFAULT,
@@ -87,6 +90,9 @@ type EditValues = {
   body_fat_pct: number;
   motivation_tone: CopyTone;
   encouragement_tone: CopyTone;
+  date_of_birth: string;
+  declared_region: string;
+  phone: string;
   allow_profile_posts: boolean;
   mute_mentions: boolean;
   profile_visibility: 'public' | 'friends';
@@ -303,6 +309,15 @@ export function EditProfileForm({ profile }: { profile?: Profile | null }) {
     if (dirty.bio && values.bio.length > 160) {
       nextErrors.bio = 'Keep it to 160 characters';
     }
+    if (dirty.date_of_birth && officialDobStatus(values.date_of_birth) === 'dob_required') {
+      nextErrors.date_of_birth = 'Add your birth date';
+    }
+    if (dirty.declared_region && !parseUspsRegion(values.declared_region)) {
+      nextErrors.declared_region = 'Add your home state';
+    }
+    if (dirty.phone && !teacherPhoneOk(values.phone)) {
+      nextErrors.phone = 'Add a phone number';
+    }
     if (dirty.primary_activities && values.primary_activities.length === 0) {
       nextErrors.primary_activities = 'Pick at least one activity';
     }
@@ -334,6 +349,16 @@ export function EditProfileForm({ profile }: { profile?: Profile | null }) {
     }
     if (dirty.encouragement_tone) {
       patch.encouragement_tone = asCopyTone(values.encouragement_tone);
+    }
+    if (dirty.date_of_birth) {
+      patch.date_of_birth = values.date_of_birth;
+    }
+    if (dirty.declared_region) {
+      patch.declared_region = values.declared_region;
+      patch.home_state = values.declared_region;
+    }
+    if (dirty.phone) {
+      patch.phone = values.phone.trim() || null;
     }
     if (dirty.allow_profile_posts) {
       patch.allow_profile_posts = values.allow_profile_posts;
@@ -544,9 +569,16 @@ export function EditProfileForm({ profile }: { profile?: Profile | null }) {
                 />
               )}
             />
-            <HomeStateField
-              value={profile?.declared_region}
-              onSaved={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+            <AccountSpineFields
+              dateOfBirth={watch('date_of_birth')}
+              region={watch('declared_region')}
+              phone={watch('phone')}
+              onDob={(value) => setValue('date_of_birth', value, { shouldDirty: true })}
+              onRegion={(value) => setValue('declared_region', value, { shouldDirty: true })}
+              onPhone={(value) => setValue('phone', value, { shouldDirty: true })}
+              dobError={fieldError.date_of_birth}
+              regionError={fieldError.declared_region}
+              phoneError={fieldError.phone}
             />
             <MotivationToneChips
               value={tone}
@@ -942,6 +974,9 @@ function buildDefaults(profile?: Profile | null): EditValues {
       profile?.body_fat_pct != null ? clampBodyFat(Number(profile.body_fat_pct)) : BODY_FAT_DEFAULT,
     motivation_tone: asCopyTone(profile?.motivation_tone),
     encouragement_tone: asCopyTone(profile?.encouragement_tone),
+    date_of_birth: profile?.date_of_birth ?? '',
+    declared_region: profile?.declared_region ?? profile?.home_state ?? '',
+    phone: profile?.phone ?? '',
     allow_profile_posts: profile?.allow_profile_posts !== false,
     mute_mentions: Boolean(profile?.mute_mentions),
     profile_visibility: profile?.profile_visibility === 'friends' ? 'friends' : 'public',

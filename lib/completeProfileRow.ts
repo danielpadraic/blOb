@@ -62,6 +62,10 @@ export function coreProfileUpsertRow(
     weight_unit: row.weight_unit ?? 'lb',
     typical_weekly_workout_frequency: row.typical_weekly_workout_frequency ?? null,
     primary_activities: Array.isArray(row.primary_activities) ? row.primary_activities : [],
+    date_of_birth: row.date_of_birth ?? null,
+    declared_region: row.declared_region ?? null,
+    home_state: row.home_state ?? row.declared_region ?? null,
+    phone: row.phone ?? null,
   });
 }
 

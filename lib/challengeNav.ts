@@ -69,7 +69,13 @@ export function boundLeftoverId(): string {
   return challengeIdFromPath(boundLeftoverChallengePath()) ?? '';
 }
 
-const CHECKIN_NAV_SOURCES = new Set(['plus-checkin', 'checkin-pick', 'invite-checkin', 'live-begin']);
+const CHECKIN_NAV_SOURCES = new Set([
+  'plus-checkin',
+  'checkin-pick',
+  'invite-checkin',
+  'live-begin',
+  'home-official',
+]);
 const HOME_NAMED_NAV_SOURCES = new Set([
   'home-pill',
   'home-in-challenge',
@@ -512,7 +518,7 @@ function ensureWebNamedChallengeHref(href: string, destId: string): void {
 export function pushCheckinSubmit(
   router: { push: (href: never) => void },
   pickedId: string,
-  source: 'plus-checkin' | 'checkin-pick' | 'invite-checkin' | 'live-begin',
+  source: 'plus-checkin' | 'checkin-pick' | 'invite-checkin' | 'live-begin' | 'home-official',
   extra?: { from?: 'multi'; done?: string[] | string | null },
   pathname?: string | null,
 ): void {
@@ -548,7 +554,7 @@ export function pushCheckinSubmit(
 export function pushCheckinPickerRow(
   router: { push: (href: never) => void },
   row: Parameters<typeof checkinPickerHref>[0],
-  source: 'plus-checkin' | 'checkin-pick' | 'invite-checkin' | 'live-begin',
+  source: 'plus-checkin' | 'checkin-pick' | 'invite-checkin' | 'live-begin' | 'home-official',
   extra?: { from?: 'multi'; done?: string[] | string | null },
   pathname?: string | null,
 ): void {

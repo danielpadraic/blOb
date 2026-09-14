@@ -495,6 +495,12 @@ export function asPublicProfile(row: PublicProfile | null | undefined): PublicPr
     country?: unknown;
     home_state?: unknown;
     declared_region?: unknown;
+    phone?: unknown;
+    date_of_birth?: unknown;
+    challenge_credit_granted_at?: unknown;
+    challenge_credit_cents?: unknown;
+    teacher_camera_ready_at?: unknown;
+    teacher_hr_source?: unknown;
   };
   delete raw.gender;
   delete raw.pronoun;
@@ -505,6 +511,12 @@ export function asPublicProfile(row: PublicProfile | null | undefined): PublicPr
   delete raw.country;
   delete raw.home_state;
   delete raw.declared_region;
+  delete raw.phone;
+  delete raw.date_of_birth;
+  delete raw.challenge_credit_granted_at;
+  delete raw.challenge_credit_cents;
+  delete raw.teacher_camera_ready_at;
+  delete raw.teacher_hr_source;
   return raw;
 }
 

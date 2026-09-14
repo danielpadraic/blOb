@@ -81,6 +81,18 @@ function asOwnProfile(raw: unknown, userId: string): Profile | null {
     last_precise_region: (profile as Profile).last_precise_region ?? null,
     last_precise_at: (profile as Profile).last_precise_at ?? null,
     home_state: (profile as Profile).home_state ?? null,
+    phone: (profile as Profile).phone ?? null,
+    challenge_credit_granted_at: (profile as Profile).challenge_credit_granted_at ?? null,
+    challenge_credit_cents:
+      (profile as Profile).challenge_credit_cents == null
+        ? null
+        : Number((profile as Profile).challenge_credit_cents),
+    teacher_camera_ready_at: (profile as Profile).teacher_camera_ready_at ?? null,
+    teacher_hr_source:
+      (profile as Profile).teacher_hr_source === 'health' ||
+      (profile as Profile).teacher_hr_source === 'upload'
+        ? (profile as Profile).teacher_hr_source
+        : null,
     address_line1: (profile as Profile).address_line1 ?? null,
     address_line2: (profile as Profile).address_line2 ?? null,
     city: (profile as Profile).city ?? null,

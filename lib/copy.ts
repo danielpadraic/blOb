@@ -253,7 +253,7 @@ const STRINGS = {
   'geo.unavailable': 'Sorry, this Challenge isn’t available in your State.',
   'geo.unavailableSub': 'Coin Challenges and the rest of blOb still work.',
   'geo.homeState': 'Home state',
-  'geo.homeStateHelp': 'Used only to show Challenges you can enter. Never on your public profile.',
+  'geo.homeStateHelp': 'Used to show Challenges you can enter. Never on your public profile.',
   'geo.needRegion': 'Add your home state to enter cash Challenges.',
   'geo.addState': 'Add state',
   'geo.notNow': 'Not now',

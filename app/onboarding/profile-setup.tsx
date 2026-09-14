@@ -46,6 +46,7 @@ import {
 } from '@/lib/bodyMetrics';
 import { PROFILE_SETUP_TONE_OPTIONS, copy, profileSetupTone, type CopyTone } from '@/lib/copy';
 import { fitnessProfileFromUser } from '@/lib/fitnessProfile';
+import { AccountSpineFields } from '@/components/profile/AccountSpineFields';
 import { ProfilePhotoSaveSheet } from '@/components/profile/ProfilePhotoSaveSheet';
 import { ensureOwnProfileRow, pickCropProfilePhoto } from '@/lib/profilePhoto';
 import type { PostAudience } from '@/lib/postAudience';
@@ -87,6 +88,10 @@ const STEP_COPY = [
   {
     title: 'Join the lobby',
     body: 'We’ll set your name, your training, and your starting wallet.',
+  },
+  {
+    title: 'Your place',
+    body: 'Home state, birth date, and phone stay private. Needed for Official Challenges.',
   },
   {
     title: 'Training',
@@ -254,14 +259,14 @@ export function ProfileSetupWizard() {
   }
 
   async function goNext() {
-    const fields = [...PROFILE_STEP_FIELDS[step as 0 | 1 | 2]];
+    const fields = [...PROFILE_STEP_FIELDS[step as 0 | 1 | 2 | 3]];
     const valid = await trigger(fields);
     if (step === 0 && availability.isTaken) {
       return;
     }
     if (valid) {
       setFormError(null);
-      setStep((current) => Math.min(current + 1, 2));
+      setStep((current) => Math.min(current + 1, 3));
     }
   }
 
@@ -281,9 +286,14 @@ export function ProfileSetupWizard() {
       setStep(0);
       return;
     }
-    const trainingOk = await trigger([...PROFILE_STEP_FIELDS[1]]);
-    if (!trainingOk) {
+    const accountOk = await trigger([...PROFILE_STEP_FIELDS[1]]);
+    if (!accountOk) {
       setStep(1);
+      return;
+    }
+    const trainingOk = await trigger([...PROFILE_STEP_FIELDS[2]]);
+    if (!trainingOk) {
+      setStep(2);
       return;
     }
 
@@ -300,7 +310,7 @@ export function ProfileSetupWizard() {
         setValue(field, '', { shouldValidate: false });
       }
     } else {
-      const metricsOk = await trigger([...PROFILE_STEP_FIELDS[2]]);
+      const metricsOk = await trigger([...PROFILE_STEP_FIELDS[3]]);
       if (!metricsOk) {
         return;
       }
@@ -348,6 +358,10 @@ export function ProfileSetupWizard() {
           values.typical_weekly_workout_frequency,
         ),
         primary_activities: values.primary_activities,
+        date_of_birth: values.date_of_birth,
+        declared_region: values.declared_region,
+        home_state: values.declared_region,
+        phone: values.phone,
         ...(enteredMetrics
           ? {
               gender: enteredGender,
@@ -422,7 +436,7 @@ export function ProfileSetupWizard() {
           {formError && !isOsSettingsPermissionCopy(formError) ? (
             <AppText className="text-sm leading-5 text-coral-dark">{formError}</AppText>
           ) : null}
-          {step < 2 ? (
+          {step < 3 ? (
             <Button
               title="Continue"
               size="lg"
@@ -572,6 +586,24 @@ export function ProfileSetupWizard() {
       ) : null}
 
       {step === 1 ? (
+        <View className="mt-8">
+          <AccountSpineFields
+            dateOfBirth={watch('date_of_birth')}
+            region={watch('declared_region')}
+            phone={watch('phone')}
+            onDob={(value) => setValue('date_of_birth', value, { shouldValidate: true, shouldDirty: true })}
+            onRegion={(value) =>
+              setValue('declared_region', value, { shouldValidate: true, shouldDirty: true })
+            }
+            onPhone={(value) => setValue('phone', value, { shouldValidate: true, shouldDirty: true })}
+            dobError={errors.date_of_birth?.message}
+            regionError={errors.declared_region?.message}
+            phoneError={errors.phone?.message}
+          />
+        </View>
+      ) : null}
+
+      {step === 2 ? (
         <View className="mt-8 gap-5">
           <Card className="gap-4">
             <AppText className="text-base font-semibold text-charcoal">What do you train?</AppText>
@@ -624,7 +656,7 @@ export function ProfileSetupWizard() {
         </View>
       ) : null}
 
-      {step === 2 ? (
+      {step === 3 ? (
         <View className="mt-8 gap-5">
           <View className="gap-2">
             <AppText className="text-sm font-semibold text-charcoal">Gender</AppText>
@@ -921,5 +953,8 @@ function buildDefaults(
       ACTIVITY_OPTIONS.includes(item as (typeof ACTIVITY_OPTIONS)[number]),
     ) as ProfileSetupValues['primary_activities'],
     show_fitness_stats_publicly: false,
+    date_of_birth: profile?.date_of_birth ?? '',
+    declared_region: profile?.declared_region ?? profile?.home_state ?? '',
+    phone: profile?.phone ?? '',
   };
 }

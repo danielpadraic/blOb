@@ -44,12 +44,17 @@ export function prefsFromProfile(profile?: {
   };
 }
 
-/** Private / corporate: no Home announce and no Wave. */
+/** Private / corporate / 3-Day teacher: no Home announce and no Wave. */
 export function checkinHidesHomeShare(challenge?: {
   privacy_mode?: string | null;
   visibility?: string | null;
   challenge_lane?: string | null;
+  is_teacher_3day?: boolean | null;
+  teacher_kind?: string | null;
 } | null): boolean {
+  if (challenge?.is_teacher_3day || challenge?.teacher_kind === 'instance' || challenge?.teacher_kind === 'template') {
+    return true;
+  }
   const mode = String(challenge?.privacy_mode ?? '').toLowerCase();
   if (mode === 'private' || mode === 'private_corporate') {
     return true;
@@ -99,8 +104,7 @@ export function proofCaptionHelper(proof: ChallengeProof): string | null {
   if (!isHeartRateProofSlot(proof)) {
     return null;
   }
-  const instruction = proofDisplayName(proof).trim();
-  return instruction && instruction !== copy('checkin.describeWorkout') ? instruction : null;
+  return 'Needs date, time, and graph or average.';
 }
 
 export async function readLocalSharePrefs(userId: string): Promise<CheckinSharePrefs | null> {

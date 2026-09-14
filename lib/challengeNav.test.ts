@@ -325,6 +325,15 @@ describe('named challenge href lock', () => {
   });
 });
 
+describe('home Official Check In', () => {
+  it('routes the 3-Day banner to /challenges/{id}/submit, never Wave', () => {
+    const href = assertCheckinSubmitHref(PRAYER);
+    expect(href).toBe(`/challenges/${PRAYER}/submit`);
+    expect(href).not.toMatch(/wave/i);
+    expect(isForbiddenCheckinHref(href, PRAYER)).toBe(false);
+  });
+});
+
 describe('Check In stack lock', () => {
   it('remounts leftover 30-Day before Prayer /submit', () => {
     vi.useFakeTimers();

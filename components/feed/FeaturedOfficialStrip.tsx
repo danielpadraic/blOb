@@ -1,126 +1,62 @@
-import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
-import { useQuery } from '@tanstack/react-query';
 import { usePathname, useRouter } from 'expo-router';
 
-import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
-import { useOfficialDob } from '@/components/interests/OfficialDobHost';
+import { useTeacherBeginOptional } from '@/components/teacher/TeacherBeginHost';
 import { TourAnchor } from '@/components/tour/TourAnchor';
 import { AppText } from '@/components/ui/AppText';
-import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { useAuth } from '@/hooks/useAuth';
-import { useMyChallengeProgress } from '@/hooks/useChallenge';
 import { useMyProfile } from '@/hooks/useProfile';
-import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
-import { openChallengeLobby } from '@/lib/challengeOpen';
-import { requiresOfficialBodyMetrics } from '@/lib/challengeExperience';
-import { fetchOfficialDiscoverChallenges, withParticipantCounts } from '@/lib/challenges';
-import { formatCashCompact } from '@/lib/currency';
-import { fillGatePair } from '@/lib/lobbyChallenge';
+import { useTeacher3DayState } from '@/hooks/useTeacher3Day';
+import { pushCheckinSubmit } from '@/lib/challengeNav';
+import { officialDobStatus } from '@/lib/officialDob';
 import {
-  armingCountdownLabel,
-  isOfficialJoinable,
-  officialGuaranteeAmount,
-  OFFICIAL_WEEK_10_SLUG,
-} from '@/lib/officialSeries';
-import { BODY_METRICS_HREF } from '@/lib/routes';
+  TEACHER_PRIZE_CHIP,
+  emptyTeacher3DayState,
+  teacherBannerCta,
+  teacherBannerHelper,
+  teacherBannerTitle,
+} from '@/lib/teacher3day';
 import { THEME } from '@/lib/theme';
-import type { ChallengeWithStats } from '@/lib/types';
 
 const BLOB_WORDMARK = require('@/assets/mascot/blob-logo.png');
 const BAR = '#123832';
-const STRIP_MS = 2500;
-
-function withStripTimeout<T>(run: Promise<T>, fallback: T): Promise<T> {
-  return Promise.race([
-    run.catch(() => fallback),
-    new Promise<T>((resolve) => {
-      setTimeout(() => resolve(fallback), STRIP_MS);
-    }),
-  ]);
-}
-
-function pickJoinableOfficial(
-  rows: ChallengeWithStats[],
-  joinedIds: Set<string>,
-): ChallengeWithStats | null {
-  const joinable = rows.filter((row) => isOfficialJoinable(row) && !joinedIds.has(row.id));
-  return joinable.find((row) => row.series_id === OFFICIAL_WEEK_10_SLUG) ?? joinable[0] ?? null;
-}
-
-function officialHomeTitle(card: ChallengeWithStats): string {
-  const guarantee = officialGuaranteeAmount(card) || 10;
-  return `Weekly ${formatCashCompact(guarantee)}`;
-}
 
 export function FeaturedOfficialStrip() {
   const router = useRouter();
   const pathname = usePathname();
   const { user } = useAuth();
   const { profile } = useMyProfile();
-  const mine = useMyChallengeProgress();
-  const joinSheet = useJoinConfirm();
-  const officialDob = useOfficialDob();
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  const joinedIds = new Set((mine.data ?? []).map((row) => row.challenge_id));
+  const teacher = useTeacher3DayState();
+  const beginHost = useTeacherBeginOptional();
+  const state = teacher.data ?? emptyTeacher3DayState();
+  const underage = officialDobStatus(profile?.date_of_birth) === 'underage';
+  const title = teacherBannerTitle(state);
+  const cta = teacherBannerCta(state);
+  const helper = teacherBannerHelper(state, underage);
+  const done = state.phase === 'done';
+  const disabled = underage || (done && true);
 
-  const featured = useQuery({
-    queryKey: ['home-official-strip', user?.id],
-    staleTime: 30_000,
-    retry: false,
-    queryFn: (): Promise<ChallengeWithStats | null> =>
-      withStripTimeout(
-        fetchOfficialDiscoverChallenges(user?.id)
-          .then((rows) => withParticipantCounts(rows))
-          .then((rows) => pickJoinableOfficial(rows, joinedIds)),
-        null,
-      ),
-  });
-
-  const challenge = featured.isError ? null : (featured.data ?? null);
-  const joined = Boolean(challenge && joinedIds.has(challenge.id));
-  const joinable = Boolean(challenge && isOfficialJoinable(challenge) && !joined);
-
-  useEffect(() => {
-    if (!joinable) {
-      return;
-    }
-    const timer = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [joinable]);
-
-  if (!challenge || !joinable) {
+  if (!user) {
     return null;
   }
 
-  const card = challenge;
-  const buyIn = Math.max(Number(card.buy_in_amount) || 0, 0);
-  const title = officialHomeTitle(card);
-  const joinLabel = `Join ${formatCashCompact(buyIn || 1)}`;
-  const needsBodyMetrics = Boolean(
-    user && requiresOfficialBodyMetrics(card) && !hasCompletedBodyMetrics(profile),
-  );
-  const arming = card.status === 'arming' || Boolean(card.armed_at);
-  const armingLine = arming
-    ? armingCountdownLabel(card.armed_at, new Date(nowMs)) ?? 'Starts in …'
-    : null;
-  const fill = armingLine ? null : fillGatePair(card);
-  const showFill = Boolean(fill && fill.count < fill.min);
-
-  function openDetail() {
-    openChallengeLobby(router, { id: card.id, snapshot: card, returnTo: 'feed', source: 'home-in-challenge', pathname });
-  }
-
-  function onJoin() {
-    if (card.is_official && !officialDob.ensureAdult()) {
+  function onCta() {
+    if (underage) {
       return;
     }
-    if (needsBodyMetrics) {
-      router.push(BODY_METRICS_HREF);
+    if (state.phase === 'live' && state.challengeId) {
+      pushCheckinSubmit(router, state.challengeId, 'home-official', undefined, pathname);
       return;
     }
-    joinSheet.open(card);
+    if (state.phase === 'missed') {
+      beginHost?.openRestart();
+      return;
+    }
+    if (state.phase === 'done') {
+      return;
+    }
+    beginHost?.openBegin();
   }
 
   return (
@@ -138,10 +74,7 @@ export function FeaturedOfficialStrip() {
           paddingRight: 8,
           paddingLeft: 10,
         }}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`${title}. ${armingLine ?? (showFill && fill ? `${fill.count}/${fill.min} to start` : '')}`}
-          onPress={openDetail}
+        <View
           style={{
             flex: 1,
             minWidth: 0,
@@ -172,48 +105,41 @@ export function FeaturedOfficialStrip() {
             style={{ color: '#FFFFFF' }}>
             {title}
           </AppText>
-          {armingLine ? (
+          {helper ? (
             <AppText
               className="mt-0.5 text-[12px] font-semibold"
               numberOfLines={1}
-              style={{ color: 'rgba(231, 247, 243, 0.72)', fontVariant: ['tabular-nums'] }}>
-              {armingLine}
+              style={{ color: 'rgba(231, 247, 243, 0.72)' }}>
+              {helper}
             </AppText>
-          ) : showFill && fill ? (
-            <View className="mt-0.5 flex-row items-center" style={{ gap: 4, minWidth: 0 }}>
-              <AppText
-                className="text-[12px] font-semibold"
-                numberOfLines={1}
-                style={{ color: 'rgba(231, 247, 243, 0.72)', fontVariant: ['tabular-nums'] }}>
-                {`${fill.count}/${fill.min}`}
-              </AppText>
-              <Glyph name={GLYPH.people} color="rgba(231, 247, 243, 0.72)" size={12} />
-              <AppText
-                className="text-[12px] font-semibold"
-                numberOfLines={1}
-                style={{ color: 'rgba(231, 247, 243, 0.72)' }}>
-                to start
-              </AppText>
-            </View>
+          ) : done ? (
+            <AppText
+              className="mt-0.5 text-[12px] font-semibold"
+              numberOfLines={1}
+              style={{ color: THEME.accentBright }}>
+              {TEACHER_PRIZE_CHIP}
+            </AppText>
           ) : null}
         </View>
-        </Pressable>
+        </View>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={joinLabel}
-          disabled={joinSheet.loading}
-          onPress={onJoin}
+          accessibilityLabel={cta}
+          disabled={disabled || (state.phase === 'live' && !state.challengeId)}
+          onPress={onCta}
           style={{
             minHeight: 36,
             paddingHorizontal: 14,
             borderRadius: 999,
-            backgroundColor: THEME.accent,
+            backgroundColor: done || underage ? 'rgba(231, 247, 243, 0.18)' : THEME.accent,
             alignItems: 'center',
             justifyContent: 'center',
-            opacity: joinSheet.loading ? 0.38 : 1,
+            opacity: disabled && !done ? 0.38 : 1,
           }}>
-          <AppText className="text-[13px] font-extrabold" style={{ color: THEME.accentForeground }}>
-            {joinLabel}
+          <AppText
+            className="text-[13px] font-extrabold"
+            style={{ color: done || underage ? '#F7FFFC' : THEME.accentForeground }}>
+            {cta}
           </AppText>
         </Pressable>
       </View>

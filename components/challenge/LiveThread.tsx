@@ -29,6 +29,7 @@ import { useEditPost } from '@/hooks/usePostEdit';
 import { useLiveThreadReads } from '@/hooks/useLiveThreadReads';
 import { useQueryClient } from '@tanstack/react-query';
 import { copy } from '@/lib/copy';
+import { isTeacher3DayChallenge, teacherLiveAllowsAuthor } from '@/lib/teacher3day';
 import {
   insertLiveDayBreaks,
   liveDayBreakFingerprint,
@@ -197,7 +198,13 @@ export function LiveThread({
   const onRowError = useCallback((message: string) => {
     setRowBanner((current) => current || message);
   }, []);
-  const sourcePosts = posts.length === 0 ? EMPTY_LIVE_POSTS : posts;
+  const sourcePosts = useMemo(() => {
+    const list = posts.length === 0 ? EMPTY_LIVE_POSTS : posts;
+    if (!isTeacher3DayChallenge(dayBreakChallenge)) {
+      return list;
+    }
+    return list.filter((post) => teacherLiveAllowsAuthor(post.author_id, currentUserId));
+  }, [currentUserId, dayBreakChallenge, posts]);
   const prevRowsRef = useRef<LiveThreadRow[]>(EMPTY_LIVE_ROWS);
   const thread = useMemo(() => {
     try {

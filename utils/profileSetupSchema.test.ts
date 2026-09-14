@@ -18,6 +18,9 @@ const NAMED_ONLY = {
   typical_weekly_workout_frequency: '3',
   primary_activities: ['running' as const],
   show_fitness_stats_publicly: false,
+  date_of_birth: '1990-01-15',
+  declared_region: 'CO',
+  phone: '2085550100',
 };
 
 function issuePaths(input: Record<string, unknown>): string[] {
@@ -34,6 +37,12 @@ describe('profileSetupSchema — Physical Details are optional', () => {
     expect(
       profileSetupSchema.safeParse({ ...NAMED_ONLY, weight_unit: 'kg' }).success,
     ).toBe(true);
+  });
+
+  it('requires home state, birth date, and phone on Account', () => {
+    expect(issuePaths({ ...NAMED_ONLY, date_of_birth: '' })).toContain('date_of_birth');
+    expect(issuePaths({ ...NAMED_ONLY, declared_region: '' })).toContain('declared_region');
+    expect(issuePaths({ ...NAMED_ONLY, phone: '' })).toContain('phone');
   });
 
   it('still requires a username and a display name', () => {
