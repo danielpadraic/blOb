@@ -1,4 +1,5 @@
 import { challengeDisplayTitle, isPlaceholderChallengeTitle } from '@/lib/challengeTitle';
+import { formatCashCompact } from '@/lib/currency';
 import { challengeDetailHref } from '@/lib/routes';
 
 const REFUND_TYPES = new Set([
@@ -100,6 +101,17 @@ export function walletReceiptName(input: {
   return 'Challenge prize';
 }
 
+function refundMoneyPhrase(amount?: number | null, currency?: string | null): string {
+  const value = Number(amount);
+  if (!Number.isFinite(value) || value <= 0) {
+    return '';
+  }
+  if (String(currency ?? '') === 'bucks') {
+    return formatCashCompact(value);
+  }
+  return String(Math.round(value));
+}
+
 export function walletReceiptHeadline(input: {
   entryType?: string | null;
   reason?: string | null;
@@ -107,11 +119,14 @@ export function walletReceiptHeadline(input: {
   title?: string | null;
   task?: string | null;
   place?: number | null;
+  amount?: number | null;
+  currency?: string | null;
 }): string {
   const name = walletReceiptName(input);
   const kind = walletReceiptKind(input.entryType, input.reason);
   if (kind === 'Refund') {
-    return `Refund · ${name}`;
+    const money = refundMoneyPhrase(input.amount, input.currency);
+    return money ? `${name} ${money} Refund` : `${name} · Refund`;
   }
   if (kind === 'Buy-in') {
     return `${name} · Buy-in`;
@@ -172,6 +187,8 @@ export function asWalletReceiptRow(input: {
       title: input.title,
       task: input.task,
       place: input.place,
+      amount: input.amount,
+      currency: input.currency,
     }),
   };
 }

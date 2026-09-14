@@ -149,6 +149,20 @@ describe('lobby tabs', () => {
         nowMs: now,
       }),
     ).toEqual(['ended']);
+    expect(
+      isLobbyEndedChallenge(
+        {
+          status: 'live',
+          duration_days: 30,
+          length_value: 30,
+          length_unit: 'days',
+          days_required: 6,
+          starts_at: '2026-09-02T11:00:00.000Z',
+          ends_at: '2026-09-08T11:00:00.000Z',
+        },
+        now,
+      ),
+    ).toBe(false);
   });
 });
 

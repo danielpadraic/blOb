@@ -101,10 +101,17 @@ export function WalletSheet() {
                 hitSlop={8}
                 onPress={closeWallet}
                 style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
-                <Glyph name={GLYPH.close} color={THEME.textPrimary} size={16} />
+                <Glyph name={GLYPH.chevronLeft} color={THEME.textPrimary} size={18} />
               </Pressable>
               <AppText className="flex-1 text-center text-lg font-bold text-charcoal">Wallet</AppText>
-              <View style={{ width: 44, height: 44 }} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                hitSlop={8}
+                onPress={closeWallet}
+                style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+                <Glyph name={GLYPH.close} color={THEME.textPrimary} size={16} />
+              </Pressable>
             </View>
           </View>
 

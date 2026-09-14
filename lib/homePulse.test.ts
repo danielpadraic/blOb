@@ -48,6 +48,20 @@ describe('selectPulseChallenges', () => {
       }),
     ).toBe(false);
     expect(
+      isPulsePillEligible({
+        id: 'thirty-live',
+        status: 'live',
+        title: '30-Day Consistency',
+        joined: true,
+        duration_days: 30,
+        length_value: 30,
+        length_unit: 'days',
+        days_required: 6,
+        starts_at: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+        ends_at: yesterday,
+      }),
+    ).toBe(true);
+    expect(
       selectPulseChallenges([
         { id: 'week-ended', status: 'live', title: 'Official Weekly', joined: true, ends_at: yesterday },
         { id: 'peer-ended', status: 'ended', title: 'Peer', joined: true },

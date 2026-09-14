@@ -1,5 +1,5 @@
 import { isEvenSplitPayout, type EvenSplitPayoutInput } from './payout';
-import { isSettlementClockEnded, isSettlementReviewReady } from './reviewWindow';
+import { isSettlementReviewReady, settlementEffectiveEndsAt } from './reviewWindow';
 
 function asKey(value: unknown): string {
   return String(value ?? '').trim().toLowerCase();
@@ -128,9 +128,13 @@ function settleJobOpen(challenge: SettleClockChallenge | null | undefined): bool
   return true;
 }
 
-/** Tick so status can flip to Ended. Does not mean pay yet. */
+/** Tick so status can flip to Ended. Uses the real end, not a stale status or 6-day stamp. */
 export function shouldTickSettlements(challenge: SettleClockChallenge | null | undefined, now = new Date()): boolean {
-  return settleJobOpen(challenge) && isSettlementClockEnded(challenge, now);
+  if (!settleJobOpen(challenge)) {
+    return false;
+  }
+  const end = settlementEffectiveEndsAt(challenge);
+  return Boolean(end && now.getTime() >= end.getTime());
 }
 
 /** Pay only after the real end plus the 2-hour review window. */

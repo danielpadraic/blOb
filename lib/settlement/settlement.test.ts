@@ -41,6 +41,8 @@ import {
   WRAPPING_UP_PROOFS_COPY,
   walletAmountLabel,
   winnerSettledNotifyCopy,
+  refundSettledNotifyCopy,
+  zeroShareSettledNotifyCopy,
 } from '@/lib/settlement/index';
 import { namedChallengePhrase } from '@/lib/challengeNotifyName';
 
@@ -115,6 +117,34 @@ describe('lifecycle', () => {
     };
     expect(shouldAutoSettle(shortEnd)).toBe(false);
     expect(overviewMoneyPhase(shortEnd)).toBe('live');
+  });
+
+  it('does not treat days_required=6 or status=ended as the settle clock', () => {
+    expect(
+      settlementSavedDurationDays({
+        duration_days: 30,
+        days_required: 6,
+        length_value: null,
+        length_unit: 'days',
+      }),
+    ).toBe(30);
+    expect(
+      settlementSavedDurationDays({
+        days_required: 6,
+        length_value: null,
+      }),
+    ).toBe(0);
+    const lastMorning = {
+      status: 'ended' as const,
+      prize_structure: 'equal_split',
+      duration_days: 30,
+      days_required: 6,
+      starts_at: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+      ends_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    };
+    expect(shouldTickSettlements(lastMorning)).toBe(false);
+    expect(shouldAutoSettle(lastMorning)).toBe(false);
+    expect(overviewMoneyPhase(lastMorning)).toBe('ended');
   });
 
   it('auto-settles even-split after the clock, never LMS', () => {
@@ -334,6 +364,12 @@ describe('copy', () => {
     );
     expect(splitSettledNotifyCopy('Daily Prayer', 2)).toBe(
       `${namedChallengePhrase('Daily Prayer')} settled. You split it with 2.`,
+    );
+    expect(zeroShareSettledNotifyCopy('Kids Chore', walletAmountLabel(0, 'bucks'))).toBe(
+      `${namedChallengePhrase('Kids Chore')} settled. Your share was $0.00.`,
+    );
+    expect(refundSettledNotifyCopy('Kids Chore', walletAmountLabel(25, 'bucks'))).toBe(
+      `${namedChallengePhrase('Kids Chore')} Refund. $25.00 is in your wallet.`,
     );
     expect(assertsNoBucksWord(winnerSettledNotifyCopy('Daily Prayer', walletAmountLabel(10, 'bucks')))).toBe(
       true,

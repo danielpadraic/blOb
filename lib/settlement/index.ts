@@ -70,11 +70,13 @@ export {
   lobbyResultCopy,
   nonWinnerSettledNotifyCopy,
   payoutReceivedCopy,
+  refundSettledNotifyCopy,
   settledCongratulateCopy,
   splitSettledNotifyCopy,
   voidNotifyCopy,
   walletAmountLabel,
   winnerSettledNotifyCopy,
+  zeroShareSettledNotifyCopy,
 } from './notify';
 export {
   getChallengeSettlementWithClient,

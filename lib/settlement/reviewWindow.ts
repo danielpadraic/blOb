@@ -1,5 +1,3 @@
-import { storedDurationDays } from '@/lib/challengeGoal';
-
 /** Proof-review hold after the real end. Official ends_at is already Chicago. */
 export const SETTLEMENT_REVIEW_WINDOW_MS = 2 * 60 * 60 * 1000;
 
@@ -13,13 +11,32 @@ function asInstant(value: string | Date | null | undefined): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+/** Calendar length only. days_required defaults to 6 and is a check-in target — never the pot length. */
 export function settlementSavedDurationDays(challenge: {
   days_required?: number | null;
   length_value?: number | null;
   length_unit?: string | null;
   duration_days?: number | null;
 } | null | undefined): number {
-  return Math.max(storedDurationDays(challenge) ?? 0, 0);
+  if (!challenge) {
+    return 0;
+  }
+  const explicit = Math.floor(Number(challenge.duration_days) || 0);
+  if (explicit > 0) {
+    return explicit;
+  }
+  const length = Math.floor(Number(challenge.length_value) || 0);
+  if (length > 0) {
+    const unit = String(challenge.length_unit ?? 'days').toLowerCase();
+    if (unit.startsWith('week')) {
+      return Math.max(length * 7, 1);
+    }
+    if (unit.startsWith('month')) {
+      return Math.max(length * 30, 1);
+    }
+    return length;
+  }
+  return 0;
 }
 
 /** Real end: saved duration wins over a short 6-day ends_at. */

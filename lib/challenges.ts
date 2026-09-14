@@ -74,7 +74,7 @@ const OFFICIAL_DISPLAY_SELECT =
   'id, sponsor_name, sponsor_logo_url, rules, proofs, proof_type, proof_requirements, cover_image_url, buy_in_amount, prize_pool, currency, host_funded, host_budget, category, scoring_method, scoring_config, comparable_points_config, scoring_version';
 
 const LOBBY_SELECTS = [
-  'id, title, description, rules, is_official, is_callout, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, proofs, proof_type, status, starts_at, ends_at, timezone, series_id, day_windows, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, funding_model, creator_contribution, max_participants, is_unlimited, category, challenge_type, visibility, privacy_mode, frequency, target_count, tasks, task, created_at, updated_at, cover_image_url, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget, scoring_method, scoring_config, comparable_points_config, scoring_version, length_value, length_unit, format, cumulative_metric, cumulative_target, cumulative_window, win_window, metrics, distance_meters_required, misses_allowed, join_until_at, host_rigor',
+  'id, title, description, rules, is_official, is_callout, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, proofs, proof_type, status, starts_at, ends_at, timezone, series_id, day_windows, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, funding_model, creator_contribution, max_participants, is_unlimited, category, challenge_type, visibility, privacy_mode, frequency, target_count, tasks, task, created_at, updated_at, cover_image_url, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget, scoring_method, scoring_config, comparable_points_config, scoring_version, length_value, length_unit, duration_days, format, cumulative_metric, cumulative_target, cumulative_window, win_window, metrics, distance_meters_required, misses_allowed, join_until_at, host_rigor',
   '*',
   'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, timezone, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, funding_model, creator_contribution, max_participants, is_unlimited, category, challenge_type, visibility, frequency, target_count, tasks, task, created_at, updated_at, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget',
   'id, title, description, rules, is_official, created_by, buy_in_amount, days_required, min_minutes, proof_requirements, status, starts_at, ends_at, timezone, prize_pool, prize_structure, top_places_mode, top_places_value, top_places_distribution, category, challenge_type, visibility, frequency, target_count, tasks, task, created_at, updated_at, sponsor_name, sponsor_logo_url, currency, host_funded, host_budget',
@@ -641,6 +641,7 @@ export function normalizeChallenge(row: ChallengeRow): Challenge {
     end_mode: (row.end_mode as string | null) ?? null,
     length_value: row.length_value == null ? null : Number(row.length_value),
     length_unit: (row.length_unit as string | null) ?? null,
+    duration_days: row.duration_days == null ? null : Number(row.duration_days),
     creator_participating: row.creator_participating == null ? true : Boolean(row.creator_participating),
     cover_image_url: asOptionalUrl(row.cover_image_url),
     sponsor_name: typeof row.sponsor_name === 'string' && row.sponsor_name.trim() ? row.sponsor_name.trim() : null,
@@ -1801,7 +1802,7 @@ export async function persistPrivacyMode(input: {
 }
 
 const START_WRITE_COLUMNS =
-  'id, starts_at, ends_at, status, length_value, length_unit, days_required, target_count, required_checkins, start_roll_pending, start_roll_keep_days, start_roll_shift_days';
+  'id, starts_at, ends_at, status, length_value, length_unit, duration_days, days_required, target_count, required_checkins, start_roll_pending, start_roll_keep_days, start_roll_shift_days';
 
 function startWritePatch(challengeId: string, data: unknown): Challenge {
   const row = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
@@ -1811,6 +1812,7 @@ function startWritePatch(challengeId: string, data: unknown): Challenge {
     ends_at: row.ends_at == null ? null : String(row.ends_at),
     length_value: row.length_value == null ? null : Number(row.length_value),
     length_unit: row.length_unit == null ? null : String(row.length_unit),
+    duration_days: row.duration_days == null ? null : Number(row.duration_days),
     days_required: row.days_required == null ? undefined : Number(row.days_required),
     target_count: row.target_count == null ? undefined : Number(row.target_count),
     required_checkins: row.required_checkins == null ? null : Number(row.required_checkins),

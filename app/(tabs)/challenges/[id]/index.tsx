@@ -809,6 +809,10 @@ export default function ChallengeDetailScreen() {
   const closePaidReceipt = useCallback(() => {
     setReceiptOpen(false);
     setPageTab('overview');
+    if (returnTo === 'home') {
+      router.replace('/feed');
+      return;
+    }
     if (id && receiptParam === '1') {
       router.replace(
         challengeDetailHref(id, returnTo === 'feed' ? 'feed' : 'lobby', null, { tab: 'overview' }),

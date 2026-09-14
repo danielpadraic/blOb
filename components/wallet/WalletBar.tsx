@@ -59,7 +59,11 @@ export function WalletBar({ compact = false }: { compact?: boolean }) {
 
   useEffect(() => {
     function onForeground() {
-      if (official || !profile?.id) {
+      if (!profile?.id) {
+        return;
+      }
+      void queryClient.invalidateQueries({ queryKey: ['profile'] });
+      if (official) {
         return;
       }
       if (!tourLocked && profile.tutorial_completed_at) {

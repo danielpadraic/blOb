@@ -32,9 +32,10 @@ export function PaidReceiptOverlay({
   onClose,
 }: PaidReceiptOverlayProps) {
   const insets = useSafeAreaInsets();
-  const name = challengeDisplayTitle(challenge) || 'this challenge';
+  const name = challengeDisplayTitle(challenge) || 'Challenge prize';
   const mine = settlement.payouts.find((row) => row.user_id === userId);
   const paid = joined && Number(mine?.amount) > 0;
+  const cash = String(challenge.currency ?? '') === 'bucks';
 
   useEffect(() => {
     if (!visible) {
@@ -77,7 +78,7 @@ export function PaidReceiptOverlay({
         </View>
         {paid ? (
           <View className="items-center pb-2">
-            <BlobMascot size={88} />
+            {cash ? null : <BlobMascot size={88} />}
             <AppText className="mt-2 text-[22px] font-bold leading-7" style={{ color: THEME.textPrimary }}>
               You got paid.
             </AppText>

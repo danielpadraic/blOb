@@ -58,8 +58,16 @@ describe('wallet settlement receipt', () => {
       task: 'Daily Prayer',
     });
     expect(row.refund).toBe(true);
-    expect(row.headline).toBe('Refund · Daily Prayer');
+    expect(row.headline).toBe('Daily Prayer 10 Refund');
     expect(row.amount).toBe(10);
+    expect(
+      walletReceiptHeadline({
+        entryType: 'refund_pre_start',
+        title: 'Kids Chore',
+        amount: 25,
+        currency: 'bucks',
+      }),
+    ).toBe('Kids Chore $25 Refund');
     expect(walletReceiptHeadline({ entryType: 'distribute_win', title: 'Official Weekly', place: 1 })).toBe(
       'Official Weekly · Prize',
     );
@@ -79,6 +87,6 @@ describe('wallet settlement receipt', () => {
         entryType: 'refund_pre_start',
         title: 'Kids Chore & Bible Points',
       }),
-    ).toBe('Refund · Kids Chore & Bible Points');
+    ).toBe('Kids Chore & Bible Points · Refund');
   });
 });

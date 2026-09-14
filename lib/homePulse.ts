@@ -64,7 +64,12 @@ export type PulseChallengeLike = {
   title?: string | null;
   task?: string | null;
   status?: string | null;
+  starts_at?: string | null;
   ends_at?: string | null;
+  duration_days?: number | null;
+  length_value?: number | null;
+  length_unit?: string | null;
+  days_required?: number | null;
   is_unlimited?: boolean | null;
   is_callout?: boolean | null;
   watching?: boolean | null;

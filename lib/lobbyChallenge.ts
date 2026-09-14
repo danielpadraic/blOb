@@ -20,6 +20,7 @@ import {
   officialGuaranteeAmount,
 } from '@/lib/officialSeries';
 import { authStorage } from '@/lib/utils/secureStore';
+import { isSettlementClockEnded } from '@/lib/settlement/reviewWindow';
 
 export const LOBBY_LAYOUT_KEY = 'blob.lobby-layout';
 export const LOBBY_UNCHECKED_KEY = 'blob.lobby-unchecked-today';
@@ -186,7 +187,12 @@ export function isLobbyEndedChallenge(
   row: {
     status?: string | null;
     ends_at?: string | null;
+    starts_at?: string | null;
     is_unlimited?: boolean | null;
+    duration_days?: number | null;
+    length_value?: number | null;
+    length_unit?: string | null;
+    days_required?: number | null;
   },
   nowMs = Date.now(),
 ): boolean {
@@ -196,6 +202,17 @@ export function isLobbyEndedChallenge(
   }
   if (row.is_unlimited) {
     return false;
+  }
+  const saved =
+    Math.floor(Number(row.duration_days) || 0) > 0 || Math.floor(Number(row.length_value) || 0) > 0;
+  if (saved) {
+    return isSettlementClockEnded(
+      {
+        ...row,
+        status: 'live',
+      },
+      new Date(nowMs),
+    );
   }
   const end = Date.parse(String(row.ends_at ?? ''));
   return Number.isFinite(end) && end <= nowMs;
@@ -224,7 +241,12 @@ export function isViewerOutOfPrize(progress?: {
 /** Tab lock: ended → host+player Active → host-only Hosting. Official is not exclusive. */
 export function lobbyTabForChallenge(input: {
   status?: string | null;
+  starts_at?: string | null;
   ends_at?: string | null;
+  duration_days?: number | null;
+  length_value?: number | null;
+  length_unit?: string | null;
+  days_required?: number | null;
   is_unlimited?: boolean | null;
   isOfficial?: boolean | null;
   isParticipant: boolean;
@@ -237,7 +259,12 @@ export function lobbyTabForChallenge(input: {
 /** Official (is_official) plus Hosting/Active from created_by / membership. Never sponsor_name. */
 export function lobbyTabsForChallenge(input: {
   status?: string | null;
+  starts_at?: string | null;
   ends_at?: string | null;
+  duration_days?: number | null;
+  length_value?: number | null;
+  length_unit?: string | null;
+  days_required?: number | null;
   is_unlimited?: boolean | null;
   isOfficial?: boolean | null;
   isParticipant: boolean;

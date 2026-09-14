@@ -51,6 +51,16 @@ export function nonWinnerSettledNotifyCopy(title: string, winnerName: string): s
   return clipPushLine(`${label} settled. ${name} took it.`);
 }
 
+export function zeroShareSettledNotifyCopy(title: string, amountLabel: string): string {
+  const label = namedChallengePhrase(title.trim() || 'this challenge');
+  return clipPushLine(`${label} settled. Your share was ${amountLabel}.`);
+}
+
+export function refundSettledNotifyCopy(title: string, amountLabel: string): string {
+  const label = namedChallengePhrase(title.trim() || 'this challenge');
+  return clipPushLine(`${label} Refund. ${amountLabel} is in your wallet.`);
+}
+
 export function walletAmountLabel(amount: number, currency?: string | null): string {
   if (String(currency ?? 'coins') === 'bucks') {
     return formatSettlementAmount(amount, 'bucks');
