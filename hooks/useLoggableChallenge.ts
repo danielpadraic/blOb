@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
-import { checkinPeriodCacheStamp, checkinPeriodKey, normalizePeriodKey } from '@/lib/checkinPeriod';
-import { isCheckinPickerRow, loggableStatusLine } from '@/lib/loggable';
+import { checkinPeriodCacheStamp, normalizePeriodKey, periodKeyFor } from '@/lib/checkinPeriod';
+import { isCheckinPickerRow, isLoggable, loggableStatusLine } from '@/lib/loggable';
 import { supabase } from '@/lib/supabase';
 import type { Challenge, ChallengeParticipant } from '@/lib/types';
 import { checkinCtaTitle, type CheckinPhase } from '@/lib/challengeCheckin';
@@ -111,26 +111,18 @@ export function useLoggableChallenges() {
 
       const historyByChallenge = historyFromCheckins(checkinRows);
 
-      return challenges
-        .filter((challenge) => isCheckinPickerRow(challenge, { isParticipant: true }, { now: clock }))
-        .sort((a, b) => {
-          const aDue = a.ends_at ? new Date(a.ends_at).getTime() : Number.POSITIVE_INFINITY;
-          const bDue = b.ends_at ? new Date(b.ends_at).getTime() : Number.POSITIVE_INFINITY;
-          if (aDue !== bDue) {
-            return aDue - bDue;
+      const rows: LoggableChallenge[] = [];
+      for (const challenge of challenges) {
+        try {
+          const expected = periodKeyFor(challenge, clock);
+          const stamped = submittedThisPeriod(challenge, checkinRows);
+          if (
+            !isLoggable(challenge, { isParticipant: true }, { now: clock, submittedThisPeriod: stamped })
+          ) {
+            continue;
           }
-          if (a.is_official !== b.is_official) {
-            return a.is_official ? -1 : 1;
-          }
-          const aJoined = joinedAt.get(a.id) ?? '';
-          const bJoined = joinedAt.get(b.id) ?? '';
-          return new Date(bJoined).getTime() - new Date(aJoined).getTime();
-        })
-        .map((challenge) => {
-          const expected = checkinPeriodKey(challenge, clock);
           const history = historyByChallenge.get(challenge.id) ?? [];
           const proofs = requiredChallengeProofs(challenge as never);
-          const stamped = submittedThisPeriod(challenge, checkinRows);
           const phase = phaseForPeriod(challenge, checkinRows);
           const parts = partsForPeriod(challenge, checkinRows);
           const blocking = blockingProofsForCheckin(proofs, challenge, {
@@ -145,7 +137,7 @@ export function useLoggableChallenges() {
             .map((proof) => proofDisplayName(proof));
           const completed = daysCompleted.get(challenge.id) ?? 0;
           const taskLabel = checkinTaskLabel(challenge);
-          return {
+          rows.push({
             ...challenge,
             daysCompleted: completed,
             submittedThisPeriod: stamped,
@@ -155,15 +147,51 @@ export function useLoggableChallenges() {
             remainingProofLabels:
               remaining.length > 0
                 ? remaining
-                : remainingProofLabelsOf({ ...challenge, taskLabel }, parts, phase === 'submitted' && remaining.length === 0 ? 'submitted' : phase),
+                : remainingProofLabelsOf(
+                    { ...challenge, taskLabel },
+                    parts,
+                    phase === 'submitted' && remaining.length === 0 ? 'submitted' : phase,
+                  ),
             statusLine: loggableStatusLine({
               ends_at: challenge.ends_at,
               days_required: challenge.days_required,
               daysCompleted: completed,
-              todayKey: checkinPeriodKey(challenge),
+              todayKey: expected,
             }),
-          };
-        });
+          });
+        } catch (error) {
+          console.log('[blob:checkin]', {
+            phase: 'picker-row',
+            status: 'fail',
+            id: challenge.id,
+            message: error instanceof Error ? error.message : String(error ?? ''),
+          });
+          if (isCheckinPickerRow(challenge, { isParticipant: true }, { now: clock })) {
+            rows.push({
+              ...challenge,
+              submittedThisPeriod: false,
+              checkinPhase: 'none',
+              ctaTitle: checkinCtaTitle('none'),
+              taskLabel: checkinTaskLabel(challenge),
+              remainingProofLabels: [],
+            });
+          }
+        }
+      }
+
+      return rows.sort((a, b) => {
+        const aDue = a.ends_at ? new Date(a.ends_at).getTime() : Number.POSITIVE_INFINITY;
+        const bDue = b.ends_at ? new Date(b.ends_at).getTime() : Number.POSITIVE_INFINITY;
+        if (aDue !== bDue) {
+          return aDue - bDue;
+        }
+        if (a.is_official !== b.is_official) {
+          return a.is_official ? -1 : 1;
+        }
+        const aJoined = joinedAt.get(a.id) ?? '';
+        const bJoined = joinedAt.get(b.id) ?? '';
+        return new Date(bJoined).getTime() - new Date(aJoined).getTime();
+      });
     },
   });
 }
@@ -206,15 +234,16 @@ function submittedThisPeriod(
   challenge: LoggableChallenge,
   checkinRows: Map<string, CheckinPeriodState>,
 ): boolean {
-  const key = checkinPeriodKey(challenge);
-  return checkinRows.get(`${challenge.id}:${key}`)?.phase === 'submitted';
+  const key = periodKeyFor(challenge);
+  return Boolean(key) && checkinRows.get(`${challenge.id}:${key}`)?.phase === 'submitted';
 }
 
 function phaseForPeriod(
   challenge: LoggableChallenge,
   checkinRows: Map<string, CheckinPeriodState>,
 ): CheckinPhase {
-  const phase = checkinRows.get(`${challenge.id}:${checkinPeriodKey(challenge)}`)?.phase;
+  const key = periodKeyFor(challenge);
+  const phase = key ? checkinRows.get(`${challenge.id}:${key}`)?.phase : undefined;
   return phase ?? 'none';
 }
 
@@ -222,7 +251,8 @@ function partsForPeriod(
   challenge: LoggableChallenge,
   checkinRows: Map<string, CheckinPeriodState>,
 ): unknown {
-  return checkinRows.get(`${challenge.id}:${checkinPeriodKey(challenge)}`)?.parts ?? null;
+  const key = periodKeyFor(challenge);
+  return key ? checkinRows.get(`${challenge.id}:${key}`)?.parts ?? null : null;
 }
 
 async function fetchActiveParticipations(userId: string): Promise<ParticipationRow[]> {

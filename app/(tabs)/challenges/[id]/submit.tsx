@@ -155,7 +155,7 @@ import { firstRouteParam } from '@/lib/challengeLoad';
 import { isChallengeRouteId } from '@/lib/challengeTimezone';
 import { parseDoneIds } from '@/lib/multiCheckin';
 import { CALLOUT_WATCHING_LINE } from '@/lib/callouts';
-import { challengeDetailHref, checkinSubmitHref, leaveCheckinHref, LOBBY_HREF, multiCheckinHref } from '@/lib/routes';
+import { challengeDetailHref, checkinSubmitHref, leaveCheckinHref, MULTI_CHECKIN_HREF, multiCheckinHref } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import type { PostWithMeta } from '@/lib/types';
 import { getCheckinSubmitMessage, getErrorMessage, logDev } from '@/utils/errors';
@@ -187,6 +187,15 @@ type SlotDraft = {
 
 function shareFieldFromNotes(notes?: string | null, snapshot?: CheckinHealthProof | null): string {
   return checkinComposerPrefill(checkinExtraCaption(stripHealthSummaryFromNotes(notes ?? '', snapshot)));
+}
+
+/** Hydrate never throws on a missing still. Empty string, not an unbound localUri. */
+function hydrateDraftUri(value: unknown): string {
+  try {
+    return String(value ?? '').trim();
+  } catch {
+    return '';
+  }
 }
 
 /**
@@ -369,11 +378,7 @@ function SubmitWorkoutInner() {
     };
   }, [closeCameraOverlay]);
 
-  useEffect(() => {
-    if (!id) {
-      router.replace(LOBBY_HREF);
-    }
-  }, [id, router]);
+  const missingId = !id;
 
   useEffect(() => {
     return () => {
@@ -645,10 +650,11 @@ function SubmitWorkoutInner() {
         const merged: SlotDraft = {
           // A generated workout card has an image AND Health provenance. Prefer the image so the
           // slot rehydrates as a thumb, not a "Health" chip with no preview.
-          uri:
+          uri: hydrateDraftUri(
             stills[0] ||
-            remoteUrl ||
-            (part?.healthWorkoutId ? `health:${part.healthWorkoutId}` : (current[proof.id]?.uri ?? '')),
+              remoteUrl ||
+              (part?.healthWorkoutId ? `health:${part.healthWorkoutId}` : current[proof.id]?.uri),
+          ),
           uris: stills,
           mimeType: current[proof.id]?.mimeType,
           text: part?.text ?? current[proof.id]?.text,
@@ -1993,6 +1999,20 @@ function SubmitWorkoutInner() {
   const distanceProofs = proofSteps.filter((proof) => proof.method === 'distance');
   const locationProofs = proofSteps.filter((proof) => proof.method === 'location');
   const stillNeeded = allReady ? undefined : checkinSendWhyNot(missing.map((proof) => proofDisplayName(proof)));
+
+  if (missingId) {
+    return (
+      <Screen padded={false} edges={TAB_ROOT_EDGES}>
+        <MascotState
+          kind="empty"
+          title="Couldn’t open that check-in"
+          body="Pick the challenge again. This one didn’t keep its id."
+          actionLabel="Check In"
+          onAction={() => router.replace(MULTI_CHECKIN_HREF)}
+        />
+      </Screen>
+    );
+  }
 
   return (
     <Screen padded={false} edges={TAB_ROOT_EDGES} keyboardAvoiding={false}>

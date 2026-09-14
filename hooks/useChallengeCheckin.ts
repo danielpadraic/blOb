@@ -24,6 +24,7 @@ import {
   checkinPeriodKey,
   checkinPeriodKeyCandidates,
   normalizePeriodKey,
+  periodKeyFor,
   type CheckinPeriodChallenge,
 } from '@/lib/checkinPeriod';
 import { dateStampInZone } from '@/lib/officialDays';
@@ -54,23 +55,6 @@ export type ChallengeCheckinView = ChallengeCheckin & {
   ctaTitle: string;
   isPrimary: boolean;
 };
-
-/** Already-checked-in / due use the challenge tz window from starts_at — never UTC midnight. */
-function periodKeyFor(challenge?: PeriodChallenge | null): string {
-  if (!challenge) {
-    return '';
-  }
-  try {
-    return checkinPeriodKey(challenge);
-  } catch {
-    try {
-      return normalizePeriodKey(dateStampInZone(new Date(), challengeClockTz(challenge)));
-    } catch {
-      // Fail closed: no key beats a silent UTC-midnight window.
-      return '';
-    }
-  }
-}
 
 function checkinQueryKey(challengeId: string | undefined, userId: string | undefined) {
   return ['challenge-checkin', challengeId, userId] as const;

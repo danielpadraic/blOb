@@ -39,7 +39,11 @@ const epochListeners = new Set<(epoch: number) => void>();
 /** Expo Router reuses one `[id]` screen unless this returns THAT row’s id. */
 export function challengeScreenGetId(input: { params?: Record<string, unknown> }): string | undefined {
   const id = firstRouteParam(input.params?.id);
-  return id || undefined;
+  if (id) {
+    return id;
+  }
+  // Missing params.id must not reuse leftover 30-Day / Prayer.
+  return `unbound-${challengesEpoch}`;
 }
 
 export function challengesStackEpoch(): number {
@@ -134,8 +138,18 @@ export function resolveNamedChallengeHref(href: string, id: string): string {
   return String(href);
 }
 
-export function shouldRemountBeforeNamedPush(mountedId: string, destId: string): boolean {
-  return Boolean(mountedId) && Boolean(destId) && mountedId !== destId;
+export function shouldRemountBeforeNamedPush(
+  mountedId: string,
+  destId: string,
+  leftoverPath?: string | null,
+): boolean {
+  if (!destId) {
+    return false;
+  }
+  if (mountedId && mountedId !== destId) {
+    return true;
+  }
+  return Boolean(mountedId) && mountedId === destId && isChallengeSubmitPath(leftoverPath);
 }
 
 export function isChallengesStackState(state?: NestedNavState | null): boolean {
@@ -315,8 +329,29 @@ export function boundLeftoverChallengePath(): string | null {
   return leftoverChallengePath(nestedChallengesState(state) ?? state);
 }
 
+const AFTER_STACK_MS = 80;
+
+function afterChallengesReady(go: () => void): void {
+  let done = false;
+  const run = () => {
+    if (done) {
+      return;
+    }
+    done = true;
+    go();
+  };
+  const unsub = subscribeChallengesEpoch(() => {
+    unsub();
+    setTimeout(run, 32);
+  });
+  setTimeout(() => {
+    unsub();
+    run();
+  }, AFTER_STACK_MS);
+}
+
 /** Reset leftover `[id]` first, then remount. Remounting first rehydrates 30-Day on Web. */
-export function resetChallengesTabHistory(): boolean {
+export function resetChallengesTabHistory(opts?: { remount?: boolean }): boolean {
   const leftover = Boolean(boundLeftoverId());
   const bound = boundChallenges;
   if (bound?.nav.dispatch) {
@@ -334,7 +369,9 @@ export function resetChallengesTabHistory(): boolean {
       }
     }
   }
-  remountChallengesStack();
+  if (opts?.remount !== false) {
+    remountChallengesStack();
+  }
   return leftover;
 }
 
@@ -375,19 +412,23 @@ export function pushChallengeHref(
 ): void {
   const destId = challengeIdFromPath(href) ?? String(id ?? '').trim();
   const destHref = destId ? resolveNamedChallengeHref(href, destId) : String(href);
+  const leftoverPath = boundLeftoverChallengePath();
   const mountedId = boundLeftoverId();
   logBlobNav(source, destId, destHref, mountedId);
-  if (!destId) {
-    router.push(destHref as never);
+  if (!destId || isLobbyListPath(destHref)) {
     return;
   }
   const go = () => {
     router.push(destHref as never);
     ensureWebNamedChallengeHref(destHref, destId);
   };
-  if (shouldRemountBeforeNamedPush(mountedId, destId)) {
+  if (shouldRemountBeforeNamedPush(mountedId, destId, leftoverPath)) {
     remountChallengesStack();
-    setTimeout(go, 60);
+    afterChallengesReady(go);
+    return;
+  }
+  if (!mountedId) {
+    afterChallengesReady(go);
     return;
   }
   go();
@@ -476,7 +517,11 @@ export function pushCheckinSubmit(
   pathname?: string | null,
 ): void {
   const id = String(pickedId ?? '').trim();
+  if (!id) {
+    return;
+  }
   const href = assertCheckinSubmitHref(id, extra);
+  const leftoverPath = boundLeftoverChallengePath();
   const mountedId = boundLeftoverId();
   logBlobNav(source, id, href, mountedId);
   const sameLive =
@@ -484,16 +529,20 @@ export function pushCheckinSubmit(
     mountedId === id &&
     challengeIdFromPath(pathname) === id &&
     !isChallengeSubmitPath(pathname);
-  if (sameLive) {
+  const go = () => {
     router.push(href as never);
     ensureWebCheckinHref(href, id);
+  };
+  if (sameLive) {
+    go();
     return;
   }
-  resetChallengesTabHistory();
-  setTimeout(() => {
-    router.push(href as never);
-    ensureWebCheckinHref(href, id);
-  }, 60);
+  if (mountedId && (mountedId !== id || isChallengeSubmitPath(leftoverPath))) {
+    resetChallengesTabHistory({ remount: true });
+    afterChallengesReady(go);
+    return;
+  }
+  afterChallengesReady(go);
 }
 
 export function pushCheckinPickerRow(
@@ -509,11 +558,20 @@ export function pushCheckinPickerRow(
     return;
   }
   const id = String(row.id ?? '').trim();
-  resetChallengesTabHistory();
-  logBlobNav(source, id, href, boundLeftoverId());
-  setTimeout(() => {
+  if (!id || isLobbyListPath(href)) {
+    return;
+  }
+  const mountedId = boundLeftoverId();
+  logBlobNav(source, id, href, mountedId);
+  const go = () => {
     router.push(href as never);
-  }, 60);
+  };
+  if (mountedId && mountedId !== id) {
+    resetChallengesTabHistory({ remount: true });
+    afterChallengesReady(go);
+    return;
+  }
+  afterChallengesReady(go);
 }
 
 export function goHome(

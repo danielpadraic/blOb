@@ -295,6 +295,22 @@ export function errorBoundaryRetryHref(pathname: string | null | undefined): str
   return next;
 }
 
+/**
+ * Dead Live Retry. That challenge’s Live thread only.
+ * Never /submit camera, never /capture, never Home, never Lobby with no id.
+ */
+export function liveRetryHref(pathname: string | null | undefined): string {
+  const path = String(pathname ?? '');
+  if (path.includes('/capture')) {
+    return '';
+  }
+  const id = challengeRetryId(path);
+  if (!id) {
+    return '';
+  }
+  return `/challenges/${id}?tab=feed`;
+}
+
 /** X / Close on Check In review. That challenge Live (or Overview/Board). Never Home, never /feed, never last-open. */
 export function leaveCheckinHref(
   id: string | null | undefined,

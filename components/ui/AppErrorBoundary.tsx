@@ -5,7 +5,7 @@ import { router, usePathname, type ErrorBoundaryProps } from 'expo-router';
 import { MascotState } from '@/components/mascot/MascotState';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { liveErrorFile } from '@/lib/liveThread';
-import { TABS_HREF, errorBoundaryRetryHref } from '@/lib/routes';
+import { TABS_HREF, errorBoundaryRetryHref, liveRetryHref } from '@/lib/routes';
 import { logWaveFail } from '@/lib/wavePublish';
 import { THEME } from '@/lib/theme';
 import { reportAppError } from '@/lib/appErrors';
@@ -43,6 +43,12 @@ function remountThrownScreen(retry: () => Promise<void>, pathname: string, error
   });
   if (current.includes('/capture') || next.includes('/capture')) {
     leaveCameraForHome();
+    return;
+  }
+  const live = liveRetryHref(current);
+  if (live && !current.includes('/submit')) {
+    router.replace(live);
+    void retry();
     return;
   }
   void retry();

@@ -131,9 +131,10 @@ describe('isLoggable format gate', () => {
     ).toBe(false);
   });
 
-  it('keeps a stamped daily challenge on the Check In picker', () => {
+  it('omits a stamped daily challenge from the logable picker and keeps multi', () => {
+    expect(isLoggable(thirtyDay, IN, { now: NOW, submittedThisPeriod: true })).toBe(false);
+    expect(isLoggable(miles128, IN, { now: NOW, submittedThisPeriod: true })).toBe(true);
     expect(isCheckinPickerRow(thirtyDay, IN, { now: NOW })).toBe(true);
-    expect(isCheckinPickerRow({ ...thirtyDay, format: 'consistency' }, IN, { now: NOW })).toBe(true);
     expect(checkinPeriodComplete(thirtyDay, { submittedThisPeriod: true })).toBe(true);
     expect(checkinPeriodComplete(thirtyDay, { checkinPhase: 'submitted' })).toBe(true);
     expect(checkinPeriodComplete({ ...LIVE, format: 'points' }, { submittedThisPeriod: true })).toBe(

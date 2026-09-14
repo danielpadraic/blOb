@@ -13,6 +13,7 @@ import {
   isLobbyListPath,
   leftoverChallengePath,
   pushChallengeHref,
+  pushCheckinSubmit,
   pushNotificationHref,
   remountChallengesStack,
   resetChallengesNestedInTabs,
@@ -72,7 +73,8 @@ describe('challengeScreenGetId', () => {
     expect(challengeScreenGetId({ params: { id: PRAYER } })).toBe(PRAYER);
     expect(challengeScreenGetId({ params: { id: THIRTY } })).toBe(THIRTY);
     expect(challengeScreenGetId({ params: { id: PRAYER } })).not.toBe(THIRTY);
-    expect(challengeScreenGetId({ params: {} })).toBeUndefined();
+    expect(challengeScreenGetId({ params: {} })).toMatch(/^unbound-/);
+    expect(challengeScreenGetId({ params: {} })).not.toBe(THIRTY);
   });
 });
 
@@ -288,21 +290,60 @@ describe('named challenge href lock', () => {
     expect(shouldRemountBeforeNamedPush(THIRTY, PRAYER)).toBe(true);
     expect(shouldRemountBeforeNamedPush('', THIRTY)).toBe(false);
     expect(shouldRemountBeforeNamedPush(THIRTY, THIRTY)).toBe(false);
+    expect(
+      shouldRemountBeforeNamedPush(PRAYER, PRAYER, leftoverChallengePath(challengesState('submit', PRAYER))),
+    ).toBe(true);
   });
 
   it('pushes the full /challenges/{id} from Home without resetting to Lobby', () => {
-    const dispatch = vi.fn();
+    vi.useFakeTimers();
+    try {
+      const dispatch = vi.fn();
+      const push = vi.fn();
+      bindChallengesStack({
+        getState: () => ({
+          index: 0,
+          routes: [{ name: 'feed' }, { name: 'challenges', state: challengesState('index') }],
+        }),
+        dispatch,
+      });
+      pushChallengeHref({ push }, `/challenges/${THIRTY}?tab=feed`, 'home-pill', THIRTY, '/feed');
+      expect(dispatch).not.toHaveBeenCalled();
+      expect(push).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(80);
+      expect(push).toHaveBeenCalledWith(`/challenges/${THIRTY}?tab=feed`);
+      expect(push.mock.calls[0]?.[0]).not.toBe('/challenges');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not push the Lobby list when the named id is missing', () => {
     const push = vi.fn();
-    bindChallengesStack({
-      getState: () => ({
-        index: 0,
-        routes: [{ name: 'feed' }, { name: 'challenges', state: challengesState('index') }],
-      }),
-      dispatch,
-    });
-    pushChallengeHref({ push }, `/challenges/${THIRTY}?tab=feed`, 'home-pill', THIRTY, '/feed');
-    expect(push).toHaveBeenCalledWith(`/challenges/${THIRTY}?tab=feed`);
-    expect(dispatch).not.toHaveBeenCalled();
+    pushChallengeHref({ push }, '/challenges', 'home-pill', '', '/feed');
+    expect(push).not.toHaveBeenCalled();
+  });
+});
+
+describe('Check In stack lock', () => {
+  it('remounts leftover 30-Day before Prayer /submit', () => {
+    vi.useFakeTimers();
+    try {
+      const push = vi.fn();
+      bindChallengesStack({
+        getState: () => challengesState('live'),
+        dispatch: vi.fn(),
+      });
+      expect(boundLeftoverId()).toBe(THIRTY);
+      pushCheckinSubmit({ push }, PRAYER, 'checkin-pick', undefined, '/feed');
+      expect(push).not.toHaveBeenCalled();
+      expect(boundLeftoverId()).toBe('');
+      vi.advanceTimersByTime(80);
+      expect(push).toHaveBeenCalledWith(`/challenges/${PRAYER}/submit`);
+      expect(String(push.mock.calls[0]?.[0])).not.toContain(THIRTY);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -321,7 +362,7 @@ describe('notification tap lock', () => {
       pushNotificationHref({ push }, href, 'alert');
       expect(push).not.toHaveBeenCalled();
       expect(boundLeftoverId()).toBe('');
-      vi.advanceTimersByTime(60);
+      vi.advanceTimersByTime(80);
       expect(push).toHaveBeenCalledTimes(1);
       expect(push.mock.calls[0]?.[0]).toBe(`/challenges/${PRAYER}?tab=overview`);
       expect(String(push.mock.calls[0]?.[0])).not.toMatch(/submit/);
@@ -332,11 +373,18 @@ describe('notification tap lock', () => {
   });
 
   it('rewrites leftover camera submit to Overview and never opens Lobby with no id', () => {
-    const push = vi.fn();
-    pushNotificationHref({ push }, `/challenges/${PRAYER}/submit`, 'push-tap');
-    expect(push).toHaveBeenCalledWith(`/challenges/${PRAYER}?tab=overview`);
-    push.mockClear();
-    pushNotificationHref({ push }, '/challenges', 'alert');
-    expect(push).not.toHaveBeenCalled();
+    vi.useFakeTimers();
+    try {
+      const push = vi.fn();
+      pushNotificationHref({ push }, `/challenges/${PRAYER}/submit`, 'push-tap');
+      vi.advanceTimersByTime(80);
+      expect(push).toHaveBeenCalledWith(`/challenges/${PRAYER}?tab=overview`);
+      push.mockClear();
+      pushNotificationHref({ push }, '/challenges', 'alert');
+      vi.advanceTimersByTime(80);
+      expect(push).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -6,6 +6,7 @@ import {
   challengeClockTz,
   consistencyPeriodAt,
   currentRequiredPeriodWindow,
+  periodKeyFor,
 } from '@/lib/checkinPeriod';
 import { DEFAULT_CHALLENGE_TIMEZONE } from '@/lib/challengeTimezone';
 import { zonedWallTime } from '@/lib/officialDays';
@@ -157,6 +158,22 @@ describe('consistencyPeriodAt', () => {
     );
     expect(slice?.periodKey).toBe('2026-09-02');
     expect(slice?.endsAt.toISOString()).toBe('2026-09-03T06:00:00.000Z');
+  });
+});
+
+describe('periodKeyFor', () => {
+  it('uses the challenge tz from starts_at and never throws', () => {
+    expect(
+      periodKeyFor(
+        {
+          timezone: 'America/Denver',
+          starts_at: '2026-09-03T06:00:00.000Z',
+          status: 'live',
+        },
+        new Date('2026-09-03T20:30:00Z'),
+      ),
+    ).toBe('2026-09-03');
+    expect(periodKeyFor(null)).toBe('');
   });
 });
 

@@ -159,6 +159,36 @@ export function checkinPeriodKey(
 }
 
 /**
+ * Picker / check-in window for THIS challenge tz from starts_at.
+ * Never UTC midnight. A bad tz logs and returns '' — the picker stays.
+ */
+export function periodKeyFor(challenge?: CheckinPeriodChallenge | null, now = new Date()): string {
+  if (!challenge) {
+    return '';
+  }
+  try {
+    return checkinPeriodKey(challenge, now);
+  } catch (error) {
+    console.log('[blob:checkin]', {
+      phase: 'periodKeyFor',
+      status: 'fail',
+      id: (challenge as { id?: string }).id ?? null,
+      message: error instanceof Error ? error.message : String(error ?? ''),
+    });
+    try {
+      return normalizePeriodKey(dateStampInZone(now, challengeClockTz(challenge)));
+    } catch (inner) {
+      console.log('[blob:checkin]', {
+        phase: 'periodKeyFor',
+        status: 'fallback-fail',
+        message: inner instanceof Error ? inner.message : String(inner ?? ''),
+      });
+      return '';
+    }
+  }
+}
+
+/**
  * Cache-bust stamp for lists that mix challenges (the Check In picker).
  * Already-checked-in / due use the challenge tz window — never a UTC-midnight key.
  */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { challengeHref, checkinSubmitHref, clipRouteId, errorBoundaryRetryHref, errorRetryHref, leaveCheckinHref, profileRetryHref, publishedRowId, waveHref } from '@/lib/routes';
+import { challengeHref, checkinSubmitHref, clipRouteId, errorBoundaryRetryHref, errorRetryHref, leaveCheckinHref, liveRetryHref, profileRetryHref, publishedRowId, waveHref } from '@/lib/routes';
 import { localUriFromPickerAsset } from '@/utils/media';
 import { isActiveWaveTagStatus } from '@/lib/waveTags';
 
@@ -51,6 +51,12 @@ describe('checkinSubmitHref', () => {
     expect(errorBoundaryRetryHref('/capture')).toBe('/feed');
     expect(errorBoundaryRetryHref('/capture?mode=story')).toBe('/feed');
     expect(errorBoundaryRetryHref('/challenges/abc-1')).toBe('/challenges/abc-1?tab=feed');
+    expect(liveRetryHref('/challenges/abc-1')).toBe('/challenges/abc-1?tab=feed');
+    expect(liveRetryHref('/challenges/abc-1/submit')).toBe('/challenges/abc-1?tab=feed');
+    expect(liveRetryHref('/challenges/abc-1?tab=overview')).toBe('/challenges/abc-1?tab=feed');
+    expect(liveRetryHref('/capture')).toBe('');
+    expect(liveRetryHref('/feed')).toBe('');
+    expect(liveRetryHref('/challenges')).toBe('');
     expect(errorRetryHref('/challenges/u/blob')).toBe('/challenges/u/blob');
     expect(errorBoundaryRetryHref('/challenges/u/blob')).toBe('/challenges/u/blob');
     expect(errorBoundaryRetryHref('/messages/2ca49850-b978-45d8-a282-2b644913c538')).toBe(

@@ -46,7 +46,7 @@ import { MascotState } from '@/components/mascot/MascotState';
 import { StackBackButton, useDismissTo } from '@/components/navigation/StackBackButton';
 import { useHostRoundPrompt } from '@/hooks/useHostRoundPrompt';
 import { useStalled } from '@/hooks/useStalled';
-import { BODY_METRICS_HREF, captureHref, challengeDetailHref, errorBoundaryRetryHref, LOBBY_HREF } from '@/lib/routes';
+import { BODY_METRICS_HREF, captureHref, challengeDetailHref, liveRetryHref, LOBBY_HREF } from '@/lib/routes';
 import { pushCheckinSubmit } from '@/lib/challengeNav';
 import {
   applyLiveBackGesture,
@@ -255,11 +255,12 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
             error: error?.message?.trim() || 'retry',
             file: liveErrorFile(error),
           });
-          const next = errorBoundaryRetryHref(pathname);
-          if (next.includes('/capture')) {
-            router.replace('/feed');
+          const next = liveRetryHref(pathname);
+          if (!next || next.includes('/capture') || next.includes('/submit')) {
+            void retry();
             return;
           }
+          router.replace(next as never);
           void retry();
         }}
       />
@@ -1767,7 +1768,7 @@ export default function ChallengeDetailScreen() {
                 size="md"
                 variant="primary"
                 onPress={() => {
-                  if (!id) {
+                  if (!id || waitingToStart || !hasChallengeStarted(challenge, new Date(nowMs))) {
                     return;
                   }
                   pushCheckinSubmit(router, id, 'live-begin', undefined, pathname);
