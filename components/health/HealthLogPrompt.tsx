@@ -1,5 +1,6 @@
 import { useRouter, useSegments } from 'expo-router';
 import { Pressable, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/ui/AppText';
 import { useHealthLogPrompt } from '@/hooks/useHealthLogPrompt';
@@ -9,15 +10,22 @@ import { checkinSubmitHref, MULTI_CHECKIN_HREF } from '@/lib/routes';
 import { formatHealthDuration } from '@/lib/health/proofSummary';
 import { THEME, themeShadow } from '@/lib/theme';
 
+/** Stack header + Overview/Board/Live tabs. Banner sits under both, never on the clock. */
+const CHALLENGE_LIVE_BANNER_LIFT = 44 + 48;
+
 export function HealthLogPromptHost() {
   const segments = useSegments();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const tone = useCopyTone();
   const prompt = useHealthLogPrompt();
 
-  const onSubmit = (segments as string[]).includes('submit');
+  const path = segments as string[];
+  const onSubmit = path.includes('submit');
+  const onChallengeLive = path.includes('challenges') && path.includes('[id]') && !onSubmit;
   const targets = prompt.targets;
   const visible = Boolean(prompt.workout && targets.length > 0 && !onSubmit);
+  const top = insets.top + (onChallengeLive ? CHALLENGE_LIVE_BANNER_LIFT : 8);
 
   if (!visible || !prompt.workout) {
     return null;
@@ -34,7 +42,7 @@ export function HealthLogPromptHost() {
     targets.length === 1 ? checkinSubmitHref(targets[0].id) : MULTI_CHECKIN_HREF;
 
   return (
-    <View pointerEvents="box-none" style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 45 }}>
+    <View pointerEvents="box-none" style={{ position: 'absolute', top, left: 0, right: 0, zIndex: 45 }}>
       <View
         className="mx-4 mt-2 flex-row items-center px-4 py-3"
         style={{

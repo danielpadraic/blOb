@@ -690,7 +690,7 @@ function SubmitWorkoutInner() {
       const next = { ...current };
       let changed = false;
       for (const proof of steps) {
-        const saved = clampProofCaption(parts[proof.id]?.caption ?? '');
+        const saved = checkinComposerPrefill(clampProofCaption(parts[proof.id]?.caption ?? ''));
         if (saved && !next[proof.id]?.trim()) {
           next[proof.id] = saved;
           changed = true;
@@ -1024,7 +1024,7 @@ function SubmitWorkoutInner() {
       // that stands in while it renders. Without the stamp the repair pass would redraw a card the
       // current renderer had just drawn.
       cardVersion: isRenderedWorkoutCard(draft) ? WORKOUT_CARD_VERSION : null,
-      caption: clampProofCaption(proofCaptions[proof.id] ?? draft?.caption ?? ''),
+      caption: checkinComposerPrefill(clampProofCaption(proofCaptions[proof.id] ?? draft?.caption ?? '')),
       notes,
     };
     try {
@@ -1562,10 +1562,20 @@ function SubmitWorkoutInner() {
       const enriched = withHeartRateFloor(enrichedDistance, samples);
       const snapshot = toCheckinHealthProof(enriched, samples);
       const healthWorkoutId = await upsertHealthWorkout(uid, enriched);
+      logDev('[blob:health]', {
+        attachCheckinId: checkinQuery.data?.id ?? null,
+        slot: target.id,
+        workoutId: healthWorkoutId,
+        durationSec: enriched.durationSec,
+      });
       // What this heart looked like doing this work, for comparison against this account's own history
       // later. Fire and forget: it never blocks the attach.
       void recordHrSignature({ userId: uid, workout: enriched, samples });
-      const draft: SlotDraft = { uri: `health:${healthWorkoutId}`, health: snapshot };
+      const draft: SlotDraft = {
+        uri: `health:${healthWorkoutId}`,
+        health: snapshot,
+        healthWorkoutId,
+      };
       // A cumulative distance challenge shows a Distance field. Filling it in from the workout is
       // what puts 6.23 in front of them instead of an empty box they have to guess at; it stays
       // editable, so a vendor number is offered rather than forced.
@@ -1696,7 +1706,31 @@ function SubmitWorkoutInner() {
         building: false,
         fromLibrary: false,
       };
-      setDrafts((current) => ({ ...current, [pending.proofId]: { ...current[pending.proofId], ...draft } }));
+      setDrafts((current) => ({
+        ...current,
+        [pending.proofId]: {
+          ...current[pending.proofId],
+          ...draft,
+          uris: uniqueProofUrls([
+            ...(current[pending.proofId]?.uris ?? []).filter((uri) => !uri.startsWith('health:')),
+            fileUri,
+          ]),
+        },
+      }));
+      setExtras((current) => {
+        if (current.some((item) => item.uri === fileUri || item.id === `recap-${pending.healthWorkoutId}`)) {
+          return current;
+        }
+        return [
+          ...current,
+          {
+            id: `recap-${pending.healthWorkoutId}`,
+            uri: fileUri,
+            kind: 'photo' as const,
+            name: 'Workout',
+          },
+        ];
+      });
       if (!proof) {
         return;
       }
@@ -1959,7 +1993,7 @@ function SubmitWorkoutInner() {
 
   if (activeProof && (activeProof.method === 'photo' || activeProof.method === 'video' || activeProof.method === 'hr' || activeProof.method === 'distance')) {
     return (
-      <Screen padded={false} edges={TAB_ROOT_EDGES} keyboardAvoiding={false} style={{ backgroundColor: THEME.primary }}>
+      <View style={{ flex: 1, backgroundColor: THEME.primary }}>
         <ProofUploader
           key={activeProof.id}
           type={legacyTypeForProof(activeProof) ?? captureTypeForMethod(activeProof.method)}
@@ -1996,7 +2030,7 @@ function SubmitWorkoutInner() {
             closeCameraOverlay();
           }}
         />
-      </Screen>
+      </View>
     );
   }
 

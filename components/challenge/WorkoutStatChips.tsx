@@ -30,7 +30,8 @@ type Props = {
 /** What each chip shows when it is not being edited. */
 function chipLabel(key: ChipKey, fields: OcrSessionFields, unit: 'mi' | 'km'): string | null {
   if (key === 'durationSec') {
-    return formatHealthDuration(fields.durationSec);
+    const duration = formatHealthDuration(fields.durationSec);
+    return duration ? `Workout Time ${duration}` : null;
   }
   if (key === 'activeEnergyKcal') {
     const kcal = fields.activeEnergyKcal ?? fields.totalEnergyKcal;

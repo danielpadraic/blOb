@@ -23,7 +23,6 @@ import { AttachedLiftPreview } from '@/components/lift/AttachedLiftPreview';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import type { LiftSessionSummary } from '@/lib/lift/types';
-import { Input } from '@/components/ui/Input';
 import {
   KeyboardField,
   KeyboardFormContext,
@@ -40,13 +39,6 @@ import {
   slotAllowsMultipleStills,
   slotStillUris,
 } from '@/lib/checkin/slotStills';
-import {
-  CHECKIN_PROOF_CAPTION_MAX,
-  clampProofCaption,
-  proofCaptionCounter,
-  proofCaptionHelper,
-  proofCaptionPlaceholder,
-} from '@/lib/checkinShare';
 import { copy } from '@/lib/copy';
 import {
   ensureCameraPermission,
@@ -786,6 +778,21 @@ export function CheckinComposer({
                     justifyContent: 'center',
                   }}>
                   <Image source={{ uri: page.uri }} style={{ width: STRIP, height: STRIP }} contentFit="cover" />
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      paddingHorizontal: 3,
+                      paddingVertical: 2,
+                      backgroundColor: 'rgba(16,19,18,0.62)',
+                    }}>
+                    <AppText className="text-center text-[8px] font-bold" style={{ color: '#fff' }} numberOfLines={2}>
+                      {page.label}
+                    </AppText>
+                  </View>
                 </Pressable>
                 );
               })}
@@ -860,6 +867,21 @@ export function CheckinComposer({
                 ) : (
                   <Image source={{ uri: item.uri }} style={{ width: STRIP, height: STRIP }} contentFit="cover" />
                 )}
+                <View
+                  pointerEvents="none"
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    paddingHorizontal: 3,
+                    paddingVertical: 2,
+                    backgroundColor: 'rgba(16,19,18,0.62)',
+                  }}>
+                  <AppText className="text-center text-[8px] font-bold" style={{ color: '#fff' }} numberOfLines={1}>
+                    {item.name ?? 'Extra'}
+                  </AppText>
+                </View>
               </Pressable>
             ))}
             {nextProof ? (
@@ -915,45 +937,6 @@ export function CheckinComposer({
 
       {dueLine ? <View style={{ paddingHorizontal: 12, paddingTop: 8 }}>{dueLine}</View> : null}
       {accessory ? <View style={{ paddingHorizontal: 12, paddingTop: 8 }}>{accessory}</View> : null}
-
-      {proofs.some((proof) => slotStillUris(drafts[proof.id]).length > 0) ? (
-        <View style={{ paddingHorizontal: 12, paddingTop: 4 }}>
-          {proofs.map((proof) => {
-            if (slotStillUris(drafts[proof.id]).length === 0) {
-              return null;
-            }
-            const value = proofCaptions[proof.id] ?? '';
-            const counter = proofCaptionCounter(value);
-            const placeholder = proofCaptionPlaceholder(proof);
-            const helper = proofCaptionHelper(proof);
-            return (
-              <KeyboardField key={proof.id}>
-                <View style={{ paddingTop: 8 }}>
-                  {helper ? (
-                    <AppText
-                      className="mb-1 text-[12px] leading-4"
-                      style={{ color: THEME.textMuted }}>
-                      {helper}
-                    </AppText>
-                  ) : null}
-                  <Input
-                    grow
-                    growMaxLines={3}
-                    maxLength={CHECKIN_PROOF_CAPTION_MAX}
-                    placeholder={placeholder}
-                    value={value}
-                    onChangeText={(text) =>
-                      onProofCaptionChange?.(proof.id, clampProofCaption(text))
-                    }
-                    hint={counter ?? undefined}
-                    accessibilityLabel={placeholder}
-                  />
-                </View>
-              </KeyboardField>
-            );
-          })}
-        </View>
-      ) : null}
 
       {/* The wording matters: this rides along with the check-in, it does not stand in for the
           proof the challenge asked for. */}

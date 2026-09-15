@@ -83,7 +83,7 @@ export function proofStatChips(stats?: CheckinProofStats | null): ProofStatChip[
   const chips: ProofStatChip[] = [];
   const duration = formatHealthDuration(stats.duration_sec);
   if (duration) {
-    chips.push({ key: 'duration', label: duration });
+    chips.push({ key: 'duration', label: `Workout Time ${duration}` });
   }
   const calories = positive(stats.active_cal) ?? positive(stats.total_cal);
   if (calories != null) {

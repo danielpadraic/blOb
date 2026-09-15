@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AppState, Platform } from 'react-native';
+import { AppState } from 'react-native';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useLoggableChallenges, type LoggableChallenge } from '@/hooks/useLoggableChallenge';
@@ -17,6 +17,8 @@ import {
   markHealthWorkoutBeginNotified,
 } from '@/lib/health/remote';
 import { syncNewHealthWorkouts } from '@/lib/health/sync';
+import { workoutPromptTargets, type PromptCandidate } from '@/lib/health/workoutPromptTargets';
+import type { GateWorkout } from '@/lib/health/workoutProofGate';
 import { getHealthProvider, type HealthWorkout } from '@/services/health';
 import {
   readBeginNotifiedWorkoutIds,
@@ -38,6 +40,28 @@ function acceptsWorkout(challenge: LoggableChallenge): boolean {
   });
 }
 
+function toGateWorkout(workout: HealthWorkout): GateWorkout {
+  return {
+    id: workout.providerWorkoutId,
+    source: workout.source === 'health_connect' ? 'health_connect' : 'healthkit',
+    startedAt: workout.startedAt,
+    endedAt: workout.endedAt,
+    durationSec: workout.durationSec,
+    avgHrBpm: workout.hrAvg ?? null,
+  };
+}
+
+function asPromptCandidate(row: LoggableChallenge): PromptCandidate {
+  return {
+    challenge: row,
+    checkin: {
+      status: row.checkinPhase === 'submitted' ? 'submitted' : row.checkinPhase,
+      submitted_at: row.submittedThisPeriod ? '1' : null,
+      proof_parts: row.proofParts ?? null,
+    },
+  };
+}
+
 function windowFor(challenge: LoggableChallenge): { from: Date; to: Date } {
   return challengeHealthWindow({
     frequency: challenge.frequency,
@@ -57,18 +81,14 @@ export function useHealthLogPrompt() {
   const [workout, setWorkout] = useState<HealthWorkout | null>(null);
   const [targets, setTargets] = useState<PromptTarget[]>([]);
 
-  const available = Platform.OS === 'ios' && Boolean(getHealthProvider()?.isAvailable());
+  const available = Boolean(getHealthProvider()?.isAvailable());
 
   /**
-   * A workout is only worth offering to a challenge whose proof or task is fitness-shaped and that
-   * has no check-in yet this period. Without this filter the prompt took whichever challenge was
-   * first in the loggable list, which is how a pickleball session ended up being offered to Prayer.
+   * Fitness-shaped only — Prayer stays off the banner. A selfie already on today's 30-Day
+   * check-in must not drop the row; workoutPromptTargets decides whether the HR slot is still open.
    */
   const candidates = useMemo(
-    () =>
-      (loggable.data ?? []).filter(
-        (row) => (row.checkinPhase ?? 'none') === 'none' && acceptsWorkout(row),
-      ),
+    () => (loggable.data ?? []).filter((row) => acceptsWorkout(row)),
     [loggable.data],
   );
 
@@ -146,8 +166,17 @@ export function useHealthLogPrompt() {
       // that would take it — never a challenge that would not.
       const next = matches[0].workout;
       const offered = matches.filter((row) => row.workout.providerWorkoutId === next.providerWorkoutId);
+      const targets = workoutPromptTargets({
+        workouts: [toGateWorkout(next)],
+        candidates: offered.map((row) => asPromptCandidate(row.challenge)),
+      });
+      if (targets.length === 0) {
+        setWorkout(null);
+        setTargets([]);
+        return;
+      }
       setWorkout(next);
-      setTargets(offered.map((row) => ({ id: row.challenge.id, title: row.challenge.title ?? '' })));
+      setTargets(targets.map((row) => ({ id: row.challengeId, title: row.title })));
 
       const alreadyNotified =
         notifiedRemote.has(next.providerWorkoutId) || notifiedLocal.includes(next.providerWorkoutId);
@@ -161,7 +190,7 @@ export function useHealthLogPrompt() {
         // Local one-shot still stands.
       }
       await notifyForgotToBegin({
-        challengeId: offered[0].challenge.id,
+        challengeId: targets[0].challengeId,
         duration: formatHealthDuration(next.durationSec),
         activity: next.activityLabel,
       });

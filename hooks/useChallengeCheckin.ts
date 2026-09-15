@@ -32,6 +32,7 @@ import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
 import { getErrorMessage } from '@/utils/errors';
 import { reportAppError } from '@/lib/appErrors';
 import { checkedInForCurrentPeriod } from '@/lib/lobbyChallenge';
+import { mergeFeedMediaIntoParts, mergePeriodCheckinRows, periodCheckinIds } from '@/lib/checkin/periodMerge';
 import { signedProofUrl } from '@/utils/upload';
 
 const CHECKIN_COLUMNS =
@@ -80,6 +81,33 @@ function isMissingRelation(message: string): boolean {
   );
 }
 
+async function fetchPostsMediaForCheckins(checkinIds: string[]): Promise<string[]> {
+  if (checkinIds.length === 0) {
+    return [];
+  }
+  const result = await supabase
+    .from('posts')
+    .select('media_urls, created_at')
+    .in('checkin_id', checkinIds)
+    .order('created_at', { ascending: true });
+  if (result.error) {
+    return [];
+  }
+  const urls: string[] = [];
+  for (const row of result.data ?? []) {
+    const list = Array.isArray((row as { media_urls?: unknown }).media_urls)
+      ? ((row as { media_urls: unknown[] }).media_urls)
+      : [];
+    for (const item of list) {
+      const url = String(item ?? '').trim();
+      if (url) {
+        urls.push(url);
+      }
+    }
+  }
+  return urls;
+}
+
 async function fetchPeriodCheckin(
   challengeId: string,
   userId: string,
@@ -91,9 +119,7 @@ async function fetchPeriodCheckin(
     .eq('challenge_id', challengeId)
     .eq('user_id', userId)
     .eq('period_key', date)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .order('created_at', { ascending: true });
   if (result.error) {
     if (isMissingRelation(result.error.message)) {
       return null;
@@ -105,10 +131,16 @@ async function fetchPeriodCheckin(
     });
     throw new Error(getErrorMessage(result.error));
   }
-  if (!result.data) {
+  const rows = ((result.data ?? []) as Record<string, unknown>[]);
+  const merged = mergePeriodCheckinRows(rows);
+  if (!merged) {
     return null;
   }
-  return hydrateCheckin(result.data as Record<string, unknown>);
+  const feedUrls = await fetchPostsMediaForCheckins(periodCheckinIds(rows));
+  if (feedUrls.length > 0) {
+    merged.proof_parts = mergeFeedMediaIntoParts(parseProofParts(merged.proof_parts), feedUrls);
+  }
+  return hydrateCheckin(merged);
 }
 
 async function hydrateCheckin(data: Record<string, unknown>): Promise<ChallengeCheckin> {
@@ -227,34 +259,28 @@ export async function fetchCurrentPeriodCheckin(
   }
   const candidates = new Set(checkinPeriodKeyCandidates(challenge).map(normalizePeriodKey));
   const rows = (recent.data ?? []) as Record<string, unknown>[];
-  const open = rows.find(
-    (row) =>
-      candidates.has(normalizePeriodKey(row.period_key)) &&
-      String(row.status ?? '') !== 'submitted' &&
-      !row.submitted_at,
-  );
-  if (open) {
-    return hydrateCheckin(open);
-  }
-  const match =
-    rows.find((row) => candidates.has(normalizePeriodKey(row.period_key))) ??
-    rows.find((row) =>
-      isSubmittedToday(
-        {
-          status: typeof row.status === 'string' ? row.status : null,
-          submitted_at: typeof row.submitted_at === 'string' ? row.submitted_at : null,
-          period_key: row.period_key,
-        },
-        challenge,
-      ),
-    );
-  if (!match) {
+  const periodRows = rows.filter((row) => candidates.has(normalizePeriodKey(row.period_key)));
+  const merged = mergePeriodCheckinRows(periodRows.length > 0 ? periodRows : rows.filter((row) =>
+    isSubmittedToday(
+      {
+        status: typeof row.status === 'string' ? row.status : null,
+        submitted_at: typeof row.submitted_at === 'string' ? row.submitted_at : null,
+        period_key: row.period_key,
+      },
+      challenge,
+    ),
+  ));
+  if (!merged) {
     return null;
   }
-  if (allowsMultiCheckin(challenge) && isSubmittedCheckin(match)) {
+  if (allowsMultiCheckin(challenge) && isSubmittedCheckin(merged)) {
     return null;
   }
-  return hydrateCheckin(match);
+  const feedUrls = await fetchPostsMediaForCheckins(periodCheckinIds(periodRows.length > 0 ? periodRows : [merged]));
+  if (feedUrls.length > 0) {
+    merged.proof_parts = mergeFeedMediaIntoParts(parseProofParts(merged.proof_parts), feedUrls);
+  }
+  return hydrateCheckin(merged);
 }
 
 function phaseFromRow(row: ChallengeCheckin | null): CheckinPhase {

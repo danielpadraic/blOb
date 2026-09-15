@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   challengeRequiresElevatedHr,
+  periodWorkoutSlotOpen,
   workoutPromptTargets,
   workoutPromptTitle,
   type PromptCandidate,
@@ -83,15 +84,84 @@ describe('which challenges get offered after a Home post', () => {
     expect(workoutPromptTargets({ workouts: [], candidates: [candidate()], now: NOW })).toEqual([]);
   });
 
-  it('skips a challenge already checked in for this period', () => {
-    // Derived rather than hardcoded: the period key is computed from starts_at in the challenge's
-    // own timezone, so a literal date here would only be right by luck.
-    const done = candidate({}, {
-      status: 'submitted',
-      submitted_at: NOW.toISOString(),
-      period_key: checkinPeriodKey(challenge() as never, NOW),
-    });
+  it('still offers after a selfie when the HR / duration slot is empty', () => {
+    const thirty = candidate(
+      {
+        id: 'c-30',
+        title: '30-Day Consistency',
+        proofs: [
+          { id: 'pre', name: 'Post a pre-workout selfie.', method: 'photo' },
+          { id: 'post', name: 'Post a post-workout selfie.', method: 'photo' },
+          { id: 'hr', name: 'Heart rate', method: 'hr' },
+        ],
+      },
+      {
+        status: 'submitted',
+        submitted_at: NOW.toISOString(),
+        period_key: checkinPeriodKey(challenge() as never, NOW),
+        proof_parts: {
+          pre: { method: 'photo', url: 'https://cdn.example/pre.jpg' },
+        },
+      },
+    );
+    expect(workoutPromptTargets({ workouts, candidates: [thirty], now: NOW })).toHaveLength(1);
+    expect(periodWorkoutSlotOpen(thirty.challenge, thirty.checkin)).toBe(true);
+  });
+
+  it('skips a challenge whose HR / duration slot is already filled', () => {
+    const done = candidate(
+      {
+        proofs: [
+          { id: 'pre', name: 'Post a pre-workout selfie.', method: 'photo' },
+          { id: 'hr', name: 'Heart rate', method: 'hr' },
+        ],
+      },
+      {
+        status: 'submitted',
+        submitted_at: NOW.toISOString(),
+        period_key: checkinPeriodKey(challenge() as never, NOW),
+        proof_parts: {
+          hr: { method: 'hr', healthWorkoutId: 'hw-1' },
+        },
+      },
+    );
     expect(workoutPromptTargets({ workouts, candidates: [done], now: NOW })).toEqual([]);
+  });
+
+  it('skips when every required slot is already filled', () => {
+    const complete = candidate(
+      {
+        proofs: [
+          { id: 'pre', name: 'Post a pre-workout selfie.', method: 'photo' },
+          { id: 'post', name: 'Post a post-workout selfie.', method: 'photo' },
+          { id: 'hr', name: 'Heart rate', method: 'hr' },
+        ],
+      },
+      {
+        status: 'submitted',
+        submitted_at: NOW.toISOString(),
+        period_key: checkinPeriodKey(challenge() as never, NOW),
+        proof_parts: {
+          pre: { method: 'photo', url: 'https://cdn.example/pre.jpg' },
+          post: { method: 'photo', url: 'https://cdn.example/post.jpg' },
+          hr: { method: 'hr', healthWorkoutId: 'hw-1' },
+        },
+      },
+    );
+    expect(workoutPromptTargets({ workouts, candidates: [complete], now: NOW })).toEqual([]);
+  });
+
+  it('offers an Other session when duration clears 30 and HR was never sampled', () => {
+    const other = [session('other', { minutes: 32, avgHr: null })];
+    const thirty = candidate({
+      id: 'c-30',
+      title: '30-Day Consistency',
+      proofs: [
+        { id: 'pre', name: 'Post a pre-workout selfie.', method: 'photo' },
+        { id: 'hr', name: 'Heart rate', method: 'hr' },
+      ],
+    });
+    expect(workoutPromptTargets({ workouts: other, candidates: [thirty], now: NOW })).toHaveLength(1);
   });
 
   it('still offers a miles race after a log today', () => {
@@ -227,5 +297,33 @@ describe('the prompt heading', () => {
     expect(workoutPromptTitle([target, { ...target, challengeId: 'c-2', title: 'Heart Rate 30' }])).toBe(
       'Also count this toward these challenges?',
     );
+  });
+
+  it('names every offered title when two challenges still need the workout', () => {
+    const targets = workoutPromptTargets({
+      workouts: [session('run', { minutes: 32, avgHr: 140 })],
+      candidates: [
+        candidate({
+          id: 'c-30',
+          title: '30-Day Consistency',
+          proofs: [
+            { id: 'pre', name: 'Post a pre-workout selfie.', method: 'photo' },
+            { id: 'hr', name: 'Heart rate', method: 'hr' },
+          ],
+        }),
+        candidate({
+          id: 'c-128',
+          title: 'Run 128 Miles by January 1',
+          metrics: [{ id: 'm1', target: 128, name: 'miles', unit: 'mi' }],
+          cumulative_target: 128,
+          cumulative_metric: 'distance_m',
+        }),
+      ],
+      now: NOW,
+    });
+    expect(targets.map((row) => row.title)).toEqual([
+      '30-Day Consistency',
+      'Run 128 Miles by January 1',
+    ]);
   });
 });

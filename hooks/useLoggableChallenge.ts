@@ -53,6 +53,8 @@ export type LoggableChallenge = Pick<
   daysCompleted?: number;
   statusLine?: string;
   submittedThisPeriod?: boolean;
+  /** Current-period proof_parts. Used to keep Health offers open after a selfie. */
+  proofParts?: unknown;
 };
 
 type ParticipationRow = Pick<
@@ -152,6 +154,7 @@ export function useLoggableChallenges() {
                     parts,
                     phase === 'submitted' && remaining.length === 0 ? 'submitted' : phase,
                   ),
+            proofParts: parts ?? null,
             statusLine: loggableStatusLine({
               ends_at: challenge.ends_at,
               days_required: challenge.days_required,

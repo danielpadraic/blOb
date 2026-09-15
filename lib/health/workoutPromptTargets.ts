@@ -11,8 +11,13 @@
 import { isCorporateChallenge } from '@/lib/challengeExperience';
 import { usesPeriodCheckinGate } from '@/lib/loggable';
 import { challengeAcceptsWorkoutProof } from '@/lib/health/acceptsWorkout';
-import { resolveChallengeProofs } from '@/lib/challengeProofs';
-import { checkedInForCurrentPeriod } from '@/lib/lobbyChallenge';
+import {
+  parseProofParts,
+  partSatisfies,
+  resolveChallengeProofs,
+  type ChallengeProof,
+  type ChallengeProofPart,
+} from '@/lib/challengeProofs';
 import { hasChallengeEnded } from '@/lib/settlement';
 import {
   evaluateWorkoutProof,
@@ -69,7 +74,12 @@ export type PromptChallenge = {
 export type PromptCandidate = {
   challenge: PromptChallenge;
   /** This user's check-in row for the current period, when one exists. */
-  checkin?: { status?: string | null; submitted_at?: string | null; period_key?: unknown } | null;
+  checkin?: {
+    status?: string | null;
+    submitted_at?: string | null;
+    period_key?: unknown;
+    proof_parts?: unknown;
+  } | null;
 };
 
 export type PromptTarget = {
@@ -85,6 +95,55 @@ export type PromptTarget = {
 /** True when this challenge requires heart rate, which is what makes it an elevated-HR challenge. */
 export function challengeRequiresElevatedHr(challenge: PromptChallenge): boolean {
   return resolveChallengeProofs(challenge as never).some((proof) => proof.method === 'hr');
+}
+
+/** Duration / HR slots a workout can fill. Selfies are not this slot. */
+export function workoutProofSlots(challenge: PromptChallenge): ChallengeProof[] {
+  return resolveChallengeProofs(challenge as never).filter(
+    (proof) => proof.method === 'hr' || proof.method === 'distance',
+  );
+}
+
+function partForSlot(
+  proof: ChallengeProof,
+  parts: Record<string, ChallengeProofPart>,
+): ChallengeProofPart | undefined {
+  if (parts[proof.id]) {
+    return parts[proof.id];
+  }
+  const aliases =
+    proof.method === 'hr'
+      ? ['hr', 'hr_monitor']
+      : proof.method === 'distance'
+        ? ['distance']
+        : [];
+  for (const key of aliases) {
+    if (parts[key]) {
+      return parts[key];
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Offer this period-gated challenge when the duration/HR slot is still empty.
+ * A selfie already on the period check-in does not close the offer.
+ * Closed only when that workout slot is filled, or every required slot is filled.
+ */
+export function periodWorkoutSlotOpen(
+  challenge: PromptChallenge,
+  checkin?: PromptCandidate['checkin'],
+): boolean {
+  const proofs = resolveChallengeProofs(challenge as never).filter((proof) => proof.method !== 'honor');
+  const parts = parseProofParts(checkin?.proof_parts);
+  if (proofs.length > 0 && proofs.every((proof) => partSatisfies(proof, partForSlot(proof, parts)))) {
+    return false;
+  }
+  const workoutSlots = workoutProofSlots(challenge);
+  if (workoutSlots.length > 0) {
+    return workoutSlots.some((proof) => !partSatisfies(proof, partForSlot(proof, parts)));
+  }
+  return true;
 }
 
 /**
@@ -122,23 +181,38 @@ export function workoutPromptTargets(input: {
     if (!challengeAcceptsWorkoutProof(challenge as never)) {
       continue;
     }
-    // Already done for this period on a daily-stamp challenge. Quantity / points races stay open.
-    if (
-      usesPeriodCheckinGate(challenge as never) &&
-      checkedInForCurrentPeriod(candidate.checkin ?? null, challenge as never, now)
-    ) {
+    // Period-gated consistency: a selfie must not hide the banner. Only a filled HR/duration
+    // slot (or a fully complete period) drops the offer. Miles races stay open after a log.
+    if (usesPeriodCheckinGate(challenge as never) && !periodWorkoutSlotOpen(challenge, candidate.checkin)) {
       continue;
     }
 
-    const result = evaluateWorkoutProof({
+    const needsHr = challengeRequiresElevatedHr(challenge);
+    let result = evaluateWorkoutProof({
       workouts: input.workouts,
       rules: {
         minMinutes: challenge.min_minutes ?? null,
-        requiresElevatedHr: challengeRequiresElevatedHr(challenge),
+        requiresElevatedHr: needsHr,
       },
       hr: input.hr,
       now,
     });
+    // "Other" with no HR sample still counts for the offer when duration clears the floor.
+    // A known low average still fails the elevated-HR gate.
+    if (!result.ok && needsHr) {
+      const judgedLow = input.workouts.some((workout) => {
+        const avg = workout.avgHrBpm;
+        return avg != null && Number.isFinite(Number(avg));
+      });
+      if (!judgedLow) {
+        result = evaluateWorkoutProof({
+          workouts: input.workouts,
+          rules: { minMinutes: challenge.min_minutes ?? null, requiresElevatedHr: false },
+          hr: input.hr,
+          now,
+        });
+      }
+    }
     if (!result.ok) {
       continue;
     }
