@@ -6,6 +6,7 @@ import { mergeReactionListsByKey } from '@/lib/reactions';
 type FeedPostRow = {
   id?: string;
   author_id?: string | null;
+  author?: { display_name?: string | null; username?: string | null; avatar_url?: string | null; id?: string | null } | null;
   checkin_id?: string | null;
   created_at?: string | null;
   deleted_at?: string | null;
@@ -225,6 +226,16 @@ function mergeLiveFeedPost<T extends { id: string }>(post: T, row: FeedPostRow):
   }
   if (row.author_id && !(post as FeedPostRow).author_id) {
     assign('author_id', row.author_id, false);
+  }
+  if (row.author) {
+    const existing = (post as FeedPostRow).author;
+    const incomingName = String(row.author.display_name ?? row.author.username ?? '').trim();
+    const existingName = String(existing?.display_name ?? existing?.username ?? '').trim();
+    const incomingReal = incomingName && incomingName !== 'Member' && incomingName !== 'Someone';
+    const existingStub = !existingName || existingName === 'Member' || existingName === 'Someone';
+    if (incomingReal && existingStub) {
+      assign('author', row.author, false);
+    }
   }
   if (Array.isArray(row.comments) && row.comments.length > 0) {
     const merged = unionById((post as FeedPostRow).comments, row.comments);

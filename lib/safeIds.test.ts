@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { authorLabel, logMissingPublishAuthor, resolveLiveAuthor, safeUserId, seedLiveAuthor, sessionAuthor } from '@/lib/safeIds';
+import { authorLabel, liveAuthorNeedsHydrate, logMissingPublishAuthor, resolveLiveAuthor, safeUserId, seedLiveAuthor, sessionAuthor } from '@/lib/safeIds';
 
 describe('safeUserId', () => {
   it('does not throw when the user is missing', () => {
@@ -23,11 +23,44 @@ describe('resolveLiveAuthor', () => {
     expect(view.name).toBe('Someone');
   });
 
-  it('seeds a Member author so Live never reads .id off undefined', () => {
+  it('seeds Someone when the join is missing, never Member', () => {
     const seeded = seedLiveAuthor({ id: 'p9', author: undefined, author_id: 'u-9' });
     expect(seeded.author?.id).toBe('u-9');
-    expect(seeded.author?.display_name).toBe('Member');
-    expect(seedLiveAuthor({ id: 'p10', author: undefined }).author?.id).toBe('member:p10');
+    expect(seeded.author?.display_name).toBe('Someone');
+    expect(seedLiveAuthor({ id: 'p10', author: undefined }).author?.id).toBe('someone:p10');
+    expect(seedLiveAuthor({ id: 'p10', author: undefined }).author?.display_name).toBe('Someone');
+  });
+
+  it('uses the session profile when author_id is the viewer', () => {
+    const seeded = seedLiveAuthor(
+      { id: 'p11', author: undefined, author_id: 'u-host' },
+      { viewerId: 'u-host', viewer: { display_name: 'Daniel Harder', username: 'daniel', avatar_url: 'https://cdn/d.jpg' } },
+    );
+    expect(seeded.author).toEqual({
+      id: 'u-host',
+      username: 'daniel',
+      display_name: 'Daniel Harder',
+      avatar_url: 'https://cdn/d.jpg',
+    });
+  });
+
+  it('replaces a Member stub when the viewer is the author', () => {
+    const seeded = seedLiveAuthor(
+      { id: 'p12', author_id: 'u-host', author: { id: 'u-host', display_name: 'Member' } },
+      { viewerId: 'u-host', viewer: { display_name: 'Daniel Harder', username: 'daniel' } },
+    );
+    expect(seeded.author?.display_name).toBe('Daniel Harder');
+  });
+
+  it('flags Member / Someone stubs for a profiles join', () => {
+    expect(liveAuthorNeedsHydrate(undefined, 'u-9')).toBe(true);
+    expect(liveAuthorNeedsHydrate({ id: 'u-9', display_name: 'Member' }, 'u-9')).toBe(true);
+    expect(liveAuthorNeedsHydrate({ id: 'u-9', display_name: 'Someone', username: 'blob' }, 'u-9')).toBe(
+      true,
+    );
+    expect(liveAuthorNeedsHydrate({ id: 'u-9', display_name: 'Daniel Harder', username: 'daniel' }, 'u-9')).toBe(
+      false,
+    );
   });
 
   it('prefers author.id then author_id', () => {

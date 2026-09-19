@@ -29,6 +29,7 @@ import { liveComposerInset, liveComposerKeyboardOpen } from '@/lib/liveComposerI
 import { setLiveComposerKeyboardOpen } from '@/lib/liveComposerKeyboard';
 import { AppText } from '@/components/ui/AppText';
 import { Avatar } from '@/components/ui/Avatar';
+import { useProfile } from '@/hooks/useProfile';
 import { useEditPost } from '@/hooks/usePostEdit';
 import { useLiveThreadReads } from '@/hooks/useLiveThreadReads';
 import { useQueryClient } from '@tanstack/react-query';
@@ -198,6 +199,7 @@ export function LiveThread({
   }, [focused, keyboardOpen]);
   const social = useSocialSheetsOptional();
   const editPost = useEditPost();
+  const viewerProfile = useProfile(currentUserId);
   const listRef = useRef<FlatList<LiveThreadRow>>(null);
   const highlightedOnce = useRef<string | null>(null);
   const [replyTo, setReplyTo] = useState<LiveReplyTarget | null>(null);
@@ -238,7 +240,10 @@ export function LiveThread({
         prevRowsRef.current = EMPTY_LIVE_ROWS;
         return { rows: EMPTY_LIVE_ROWS, error: null as string | null };
       }
-      const seeded = seedLiveFeedPosts(sourcePosts);
+      const seeded = seedLiveFeedPosts(sourcePosts, {
+        viewerId: currentUserId,
+        viewer: viewerProfile.data,
+      });
       const built = buildLiveThreadRows(dedupeLivePostsByCheckinId(seeded));
       const withDays = stableDayBreak ? insertLiveDayBreaks(built, stableDayBreak) : built;
       const rows = reuseLiveThreadRows(prevRowsRef.current, withDays);
@@ -256,7 +261,7 @@ export function LiveThread({
       });
       return { rows: EMPTY_LIVE_ROWS, error: message };
     }
-  }, [sourcePosts, stableDayBreak]);
+  }, [currentUserId, sourcePosts, stableDayBreak, viewerProfile.data]);
   const rows = thread.rows;
   const buildError = thread.error;
 

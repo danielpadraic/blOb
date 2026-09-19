@@ -57,7 +57,7 @@ describe('sortLivePosts', () => {
 });
 
 describe('seedLiveFeedPosts / liveRowKey', () => {
-  it('fills a Member author and does not throw on missing id in the key helper', () => {
+  it('fills a Someone author and does not throw on missing id in the key helper', () => {
     const rows = seedLiveFeedPosts([
       { id: 'p1', author_id: 'u-1', content: 'hi', media_urls: null, comments: [null] },
       { id: '', content: 'drop me' },
@@ -65,7 +65,13 @@ describe('seedLiveFeedPosts / liveRowKey', () => {
     ]);
     expect(rows).toHaveLength(1);
     expect(rows[0].author?.id).toBe('u-1');
-    expect(rows[0].author?.display_name).toBe('Member');
+    expect(rows[0].author?.display_name).toBe('Someone');
+    expect(
+      seedLiveFeedPosts(
+        [{ id: 'p-host', author_id: 'u-host', content: 'excused', media_urls: null }],
+        { viewerId: 'u-host', viewer: { display_name: 'Daniel Harder', username: 'daniel' } },
+      )[0].author?.display_name,
+    ).toBe('Daniel Harder');
     expect(rows[0].media_urls).toEqual([]);
     expect(liveRowKey({ id: undefined, kind: 'post' }, 3)).toBe('live:post:');
     expect(liveRowKey(null, 0)).toBe('live:row:');

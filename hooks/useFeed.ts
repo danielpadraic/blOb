@@ -34,7 +34,7 @@ import { linkSessionToPost } from '@/lib/lift/share';
 import { buildLiftSnapshot } from '@/lib/lift/snapshot';
 import { rawFeedError } from '@/lib/feedError';
 import { fetchSilencedAuthorIds } from '@/lib/moderation';
-import { logMissingPublishAuthor, safeUserId, sessionAuthor } from '@/lib/safeIds';
+import { liveAuthorNeedsHydrate, logMissingPublishAuthor, safeUserId, sessionAuthor } from '@/lib/safeIds';
 import {
   dropCachedCircleId,
   isMissingCircleIdColumn,
@@ -663,7 +663,7 @@ async function hydrateAuthors(posts: PostWithMeta[]): Promise<PostWithMeta[]> {
   const ids = new Set<string>();
   for (const post of posts) {
     const authorId = String(post.author_id ?? '').trim();
-    if (!post.author && authorId) {
+    if (authorId && liveAuthorNeedsHydrate(post.author, authorId)) {
       ids.add(authorId);
     }
     if (post.wall_host_id && !post.wall_host) {
@@ -671,7 +671,7 @@ async function hydrateAuthors(posts: PostWithMeta[]): Promise<PostWithMeta[]> {
     }
     for (const comment of post.comments ?? []) {
       const commentAuthorId = String(comment.author_id ?? '').trim();
-      if (!comment.author && commentAuthorId) {
+      if (commentAuthorId && liveAuthorNeedsHydrate(comment.author, commentAuthorId)) {
         ids.add(commentAuthorId);
       }
     }
@@ -679,10 +679,10 @@ async function hydrateAuthors(posts: PostWithMeta[]): Promise<PostWithMeta[]> {
   if (ids.size === 0) {
     return posts.map((post) => ({
       ...post,
-      author: post.author ?? stubAuthor(post.author_id),
+      author: pickHydratedAuthor(post.author, post.author_id),
       comments: (post.comments ?? []).map((comment) => ({
         ...comment,
-        author: comment.author ?? stubAuthor(comment.author_id),
+        author: pickHydratedAuthor(comment.author, comment.author_id),
       })),
     }));
   }
@@ -694,10 +694,10 @@ async function hydrateAuthors(posts: PostWithMeta[]): Promise<PostWithMeta[]> {
   if (error || !data) {
     return posts.map((post) => ({
       ...post,
-      author: post.author ?? stubAuthor(post.author_id),
+      author: pickHydratedAuthor(post.author, post.author_id),
       comments: (post.comments ?? []).map((comment) => ({
         ...comment,
-        author: comment.author ?? stubAuthor(comment.author_id),
+        author: pickHydratedAuthor(comment.author, comment.author_id),
       })),
     }));
   }
@@ -710,12 +710,12 @@ async function hydrateAuthors(posts: PostWithMeta[]): Promise<PostWithMeta[]> {
   );
   return posts.map((post) => ({
     ...post,
-    author: post.author ?? byId.get(post.author_id) ?? stubAuthor(post.author_id),
+    author: pickHydratedAuthor(post.author, post.author_id, byId),
     wall_host: post.wall_host
       ?? (post.wall_host_id ? byId.get(post.wall_host_id) ?? post.wall_host ?? null : post.wall_host),
     comments: (post.comments ?? []).map((comment) => ({
       ...comment,
-      author: comment.author ?? byId.get(comment.author_id) ?? stubAuthor(comment.author_id),
+      author: pickHydratedAuthor(comment.author, comment.author_id, byId),
     })),
   }));
 }
@@ -1661,12 +1661,24 @@ export function usePost(postId?: string | null) {
   });
 }
 
+function pickHydratedAuthor(
+  author: PublicProfile | null | undefined,
+  authorId?: string | null,
+  byId?: Map<string, PublicProfile>,
+): PublicProfile | undefined {
+  const id = String(authorId ?? '').trim();
+  if (id && liveAuthorNeedsHydrate(author, id)) {
+    return byId?.get(id) ?? stubAuthor(id);
+  }
+  return author ?? (id ? byId?.get(id) ?? stubAuthor(id) : undefined);
+}
+
 function stubAuthor(authorId?: string | null): PublicProfile | undefined {
   const id = String(authorId ?? '').trim();
   if (!id) {
     return undefined;
   }
-  return asPublicProfile({ id, display_name: 'Member' });
+  return asPublicProfile({ id, display_name: 'Someone' });
 }
 
 function asPublicProfile(

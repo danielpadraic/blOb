@@ -2282,6 +2282,14 @@ export type Database = {
         };
         Returns: Record<string, unknown>;
       };
+      host_adjust_checkin_batch: {
+        Args: {
+          p_challenge_id: string;
+          p_action: string;
+          p_items: unknown;
+        };
+        Returns: Record<string, unknown>;
+      };
       is_official_ops: {
         Args: Record<string, never>;
         Returns: boolean;

@@ -10,37 +10,52 @@ import {
   type MenuAnchor,
 } from '@/components/challenge/ChallengeOverflowMenu';
 import { InlineComposer } from '@/components/feed/InlineComposer';
+import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
+import { StepperField } from '@/components/ui/Stepper';
 import { AppText } from '@/components/ui/AppText';
 import { HouseRemovePersonSheet } from '@/components/challenge/HouseRemovePersonSheet';
 import { useAuth } from '@/hooks/useAuth';
-import { useChallenge } from '@/hooks/useChallenge';
+import { useChallenge, useChallengeParticipants } from '@/hooks/useChallenge';
 import { useOfficialOps } from '@/hooks/useOfficialOps';
+import { useProfile } from '@/hooks/useProfile';
+import { seedChallengeLivePost } from '@/hooks/useFeed';
 import { copy } from '@/lib/copy';
 import {
   challengeIsEndedForAdjust,
   challengeIsOfficialLocked,
   challengeTracksMissesForExcuse,
+  challengeUsesConsistencyAdjustBoard,
+  hostAdjustActorName,
+  hostAdjustConfirmLine,
   hostAdjustErrorMessage,
   hostAdjustLiveBody,
   hostAdjustLivePostRow,
+  hostAdjustSkipLines,
+  parseHostAdjustBatchResult,
   parseHostAdjustDays,
   parseHostAdjustResult,
   participantCanBeAdjusted,
+  planHostAdjustBulk,
+  unionHostAdjustDays,
   viewerCanAdjustBoard,
   viewerCanHouseRemove,
   type HostAdjustAction,
+  type HostAdjustBulkPerson,
   type HostAdjustDay,
   type HostAdjustResult,
 } from '@/lib/hostAdjust';
 import { viewerCanEditBoardScore, viewerCanFriendlyHostAdd } from '@/lib/hostRigor';
 import { usesPointsBoard, usesQuantityScoring } from '@/lib/challengeExperience';
+import { liveListKey } from '@/lib/feedListKeys';
 import { liveComposeFromInline } from '@/lib/liveThread';
+import { sessionAuthor } from '@/lib/safeIds';
+import { fetchPublicProfilesByIds, personDisplayName } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 import { THEME } from '@/lib/theme';
-import type { ChallengeParticipantWithProfile } from '@/lib/types';
+import type { ChallengeParticipantWithProfile, PostWithMeta, PublicProfile } from '@/lib/types';
 import { firstRouteParam } from '@/lib/challengeLoad';
 import { getErrorMessage } from '@/utils/errors';
 
@@ -53,7 +68,10 @@ type HostAdjustContextValue = {
   canEditScore: boolean;
   isActor: boolean;
   showExcuse: boolean;
+  showBulkAdjust: boolean;
+  bulkDisabled: boolean;
   openRowMenu: (target: Target, anchor: MenuAnchor) => void;
+  openBulkAdjust: () => void;
 };
 
 const HostAdjustContext = createContext<HostAdjustContextValue>({
@@ -63,7 +81,10 @@ const HostAdjustContext = createContext<HostAdjustContextValue>({
   canEditScore: false,
   isActor: false,
   showExcuse: false,
+  showBulkAdjust: false,
+  bulkDisabled: true,
   openRowMenu: () => {},
+  openBulkAdjust: () => {},
 });
 
 export function useHostAdjustUi(): HostAdjustContextValue {
@@ -150,10 +171,27 @@ export function HostAdjustProvider({ children }: { children: ReactNode }) {
     action: HostAdjustAction;
     day?: HostAdjustDay;
   } | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const showBulkAdjust = Boolean(
+    challenge &&
+      challengeUsesConsistencyAdjustBoard(challenge) &&
+      (canAdjust ||
+        (challengeIsEndedForAdjust(challenge) &&
+          (officialOps ||
+            (user?.id &&
+              (challenge.created_by === user.id || Boolean(mods.data?.includes(user.id))))))),
+  );
+  const bulkDisabled = !canAdjust;
 
   const openRowMenu = useCallback((target: Target, anchor: MenuAnchor) => {
     setMenu({ ...target, anchor });
   }, []);
+  const openBulkAdjust = useCallback(() => {
+    if (bulkDisabled) {
+      return;
+    }
+    setBulkOpen(true);
+  }, [bulkDisabled]);
 
   const value = useMemo(
     () => ({
@@ -163,19 +201,36 @@ export function HostAdjustProvider({ children }: { children: ReactNode }) {
       canEditScore,
       isActor,
       showExcuse,
+      showBulkAdjust,
+      bulkDisabled,
       openRowMenu,
+      openBulkAdjust,
     }),
-    [canAdjust, canEditScore, canFriendlyRemove, canHouseRemove, isActor, openRowMenu, showExcuse],
+    [
+      bulkDisabled,
+      canAdjust,
+      canEditScore,
+      canFriendlyRemove,
+      canHouseRemove,
+      isActor,
+      openBulkAdjust,
+      openRowMenu,
+      showBulkAdjust,
+      showExcuse,
+    ],
   );
 
   return (
     <HostAdjustContext.Provider value={value}>
       {children}
-      {(canAdjust || canHouseRemove || canFriendlyRemove || canEditScore) && id && challenge ? (
+      {(canAdjust || canHouseRemove || canFriendlyRemove || canEditScore || showBulkAdjust) &&
+      id &&
+      challenge ? (
         <HostAdjustSheets
           challengeId={id}
           menu={menu}
           sheet={sheet}
+          bulkOpen={bulkOpen}
           showExcuse={showExcuse}
           canAdjust={canAdjust}
           canHouseRemove={canHouseRemove}
@@ -188,6 +243,7 @@ export function HostAdjustProvider({ children }: { children: ReactNode }) {
             setSheet(next);
           }}
           onCloseSheet={() => setSheet(null)}
+          onCloseBulk={() => setBulkOpen(false)}
         />
       ) : null}
     </HostAdjustContext.Provider>
@@ -206,10 +262,52 @@ function adjustSheetTitle(sheet: { action: HostAdjustAction; day?: HostAdjustDay
   return copy('board.countDayTitle', 'gentle', { n, name });
 }
 
+async function publishHostAdjustLive(input: {
+  queryClient: ReturnType<typeof useQueryClient>;
+  challengeId: string;
+  userId: string;
+  profile?: { display_name?: string | null; username?: string | null; avatar_url?: string | null } | null;
+  content: string;
+  mediaUrls?: string[];
+}) {
+  const author = sessionAuthor(input.profile, input.userId);
+  const payload = hostAdjustLivePostRow({
+    authorId: input.userId,
+    challengeId: input.challengeId,
+    content: input.content,
+    mediaUrls: input.mediaUrls,
+  });
+  const { data, error } = await supabase
+    .from('posts')
+    .insert(payload)
+    .select('id, author_id, challenge_id, content, media_urls, created_at')
+    .single();
+  if (error) {
+    console.warn('[blob:host-adjust] live note', error.message);
+  }
+  const row = (data ?? {
+    id: `optimistic-adjust-${Date.now()}`,
+    author_id: input.userId,
+    challenge_id: input.challengeId,
+    content: input.content,
+    media_urls: input.mediaUrls ?? [],
+    created_at: new Date().toISOString(),
+  }) as PostWithMeta;
+  seedChallengeLivePost(input.queryClient, input.challengeId, input.userId, {
+    ...row,
+    author: author ?? undefined,
+    comments: [],
+    reactions: [],
+  });
+  void input.queryClient.invalidateQueries({ queryKey: liveListKey(input.challengeId, input.userId) });
+  void input.queryClient.invalidateQueries({ queryKey: ['feed', input.challengeId] });
+}
+
 function HostAdjustSheets({
   challengeId,
   menu,
   sheet,
+  bulkOpen,
   showExcuse,
   canAdjust,
   canHouseRemove,
@@ -219,10 +317,12 @@ function HostAdjustSheets({
   onCloseMenu,
   onOpenSheet,
   onCloseSheet,
+  onCloseBulk,
 }: {
   challengeId: string;
   menu: (Target & { anchor: MenuAnchor }) | null;
   sheet: { target: Target; action: HostAdjustAction; day?: HostAdjustDay } | null;
+  bulkOpen: boolean;
   showExcuse: boolean;
   canAdjust: boolean;
   canHouseRemove: boolean;
@@ -232,10 +332,13 @@ function HostAdjustSheets({
   onCloseMenu: () => void;
   onOpenSheet: (next: { target: Target; action: HostAdjustAction; day?: HostAdjustDay }) => void;
   onCloseSheet: () => void;
+  onCloseBulk: () => void;
 }) {
   const queryClient = useQueryClient();
   const router = useRouter();
   const { user } = useAuth();
+  const profileQuery = useProfile(user?.id);
+  const actorName = hostAdjustActorName(profileQuery.data);
   const [noteStep, setNoteStep] = useState(false);
   const [houseRemove, setHouseRemove] = useState<Target | null>(null);
   const [scoreTarget, setScoreTarget] = useState<Target | null>(null);
@@ -290,20 +393,18 @@ function HostAdjustSheets({
         action: input.action,
         displayName,
         dayN: result.day_n ?? input.day?.day_n ?? null,
+        actorName,
         caption: input.caption,
       });
       if (user?.id) {
-        const { error: postError } = await supabase.from('posts').insert(
-          hostAdjustLivePostRow({
-            authorId: user.id,
-            challengeId,
-            content,
-            mediaUrls: input.mediaUrls,
-          }),
-        );
-        if (postError) {
-          console.warn('[blob:host-adjust] live note', postError.message);
-        }
+        await publishHostAdjustLive({
+          queryClient,
+          challengeId,
+          userId: user.id,
+          profile: profileQuery.data,
+          content,
+          mediaUrls: input.mediaUrls,
+        });
       }
       return result;
     },
@@ -312,6 +413,7 @@ function HostAdjustSheets({
       void queryClient.invalidateQueries({ queryKey: ['challenge-completions', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['period-misses', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['host-adjust-days', challengeId] });
+      void queryClient.invalidateQueries({ queryKey: ['live', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['feed', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
       onCloseSheet();
@@ -606,7 +708,478 @@ function HostAdjustSheets({
         </Pressable>
         </KeyboardAvoidingView>
       </ChromeOverlay>
+      <HostAdjustBulkSheet
+        visible={bulkOpen}
+        challengeId={challengeId}
+        showExcuse={showExcuse}
+        actorName={actorName}
+        actorProfile={profileQuery.data}
+        userId={user?.id}
+        onClose={onCloseBulk}
+      />
     </>
+  );
+}
+
+const SEARCH_PEOPLE_AT = 8;
+
+function HostAdjustBulkSheet({
+  visible,
+  challengeId,
+  showExcuse,
+  actorName,
+  actorProfile,
+  userId,
+  onClose,
+}: {
+  visible: boolean;
+  challengeId: string;
+  showExcuse: boolean;
+  actorName: string;
+  actorProfile?: { display_name?: string | null; username?: string | null; avatar_url?: string | null } | null;
+  userId?: string | null;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const router = useRouter();
+  const roster = useChallengeParticipants(challengeId);
+  const [action, setAction] = useState<HostAdjustAction>(showExcuse ? 'excuse_miss' : 'count_honor');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [search, setSearch] = useState('');
+  const [count, setCount] = useState(1);
+  const [pickedDays, setPickedDays] = useState<HostAdjustDay[]>([]);
+  const [step, setStep] = useState<'form' | 'confirm' | 'note'>('form');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!visible) {
+      setAction(showExcuse ? 'excuse_miss' : 'count_honor');
+      setSelectedIds([]);
+      setSearch('');
+      setCount(1);
+      setPickedDays([]);
+      setStep('form');
+      setError(null);
+    }
+  }, [showExcuse, visible]);
+
+  useEffect(() => {
+    if (!showExcuse && action === 'excuse_miss') {
+      setAction('count_honor');
+    }
+  }, [action, showExcuse]);
+
+  const people = useMemo(() => {
+    return (roster.data ?? []).filter((row) => participantCanBeAdjusted(row.status));
+  }, [roster.data]);
+  const idsKey = people.map((row) => row.user_id).join(',');
+  const profiles = useQuery({
+    queryKey: ['challenge-board-profiles', challengeId, idsKey],
+    enabled: visible && people.length > 0,
+    queryFn: () => fetchPublicProfilesByIds(people.map((row) => row.user_id)),
+  });
+  const profileById = useMemo(() => {
+    const map = new Map<string, PublicProfile>();
+    for (const profile of profiles.data ?? []) {
+      if (profile?.id) {
+        map.set(profile.id, profile);
+      }
+    }
+    return map;
+  }, [profiles.data]);
+
+  const rosterPeople = useMemo(() => {
+    return people.map((row) => {
+      const profile = profileById.get(row.user_id) ?? row.profile ?? null;
+      return {
+        userId: row.user_id,
+        displayName: personDisplayName(profile),
+        profile,
+      };
+    });
+  }, [people, profileById]);
+
+  const filteredPeople = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) {
+      return rosterPeople;
+    }
+    return rosterPeople.filter((row) => {
+      const handle = row.profile?.username?.trim().toLowerCase() ?? '';
+      return row.displayName.toLowerCase().includes(q) || handle.includes(q.replace(/^@/, ''));
+    });
+  }, [rosterPeople, search]);
+
+  const selectedPeople = rosterPeople.filter((row) => selectedIds.includes(row.userId));
+  const daysQuery = useQuery({
+    queryKey: ['host-adjust-days-bulk', challengeId, selectedIds.join(',')],
+    enabled: visible && selectedIds.length > 0,
+    queryFn: async () => {
+      const rows = await Promise.all(
+        selectedIds.map(async (id) => {
+          const { data, error: daysError } = await supabase.rpc('host_adjust_board_days', {
+            p_challenge_id: challengeId,
+            p_user_id: id,
+          });
+          if (daysError) {
+            throw new Error(hostAdjustErrorMessage(getErrorMessage(daysError)));
+          }
+          return [id, parseHostAdjustDays(data)] as const;
+        }),
+      );
+      return Object.fromEntries(rows);
+    },
+  });
+
+  const bulkPeople: HostAdjustBulkPerson[] = useMemo(
+    () =>
+      selectedPeople.map((row) => {
+        const days = daysQuery.data?.[row.userId];
+        return {
+          userId: row.userId,
+          displayName: days?.display_name || row.displayName,
+          openMisses: days?.misses_used ?? 0,
+          missed: days?.missed ?? [],
+          counted: days?.counted ?? [],
+        };
+      }),
+    [daysQuery.data, selectedPeople],
+  );
+
+  const plan = planHostAdjustBulk({
+    action,
+    people: bulkPeople,
+    count,
+    days: action === 'excuse_miss' ? [] : pickedDays,
+  });
+  const skipLines = hostAdjustSkipLines(action, plan.skip);
+  const maxN = useMemo(() => {
+    if (action === 'excuse_miss') {
+      return Math.max(1, ...bulkPeople.map((row) => row.openMisses), 1);
+    }
+    const key = action === 'remove_counted' ? 'counted' : 'missed';
+    return Math.max(1, ...bulkPeople.map((row) => row[key].length), 1);
+  }, [action, bulkPeople]);
+  const unionDays = action === 'remove_counted' ? unionHostAdjustDays(bulkPeople, 'counted') : unionHostAdjustDays(bulkPeople, 'missed');
+
+  useEffect(() => {
+    setCount((current) => Math.min(Math.max(current, 1), maxN));
+  }, [maxN]);
+
+  const mutate = useMutation({
+    mutationFn: async (input: { caption?: string; mediaUrls?: string[] }) => {
+      if (plan.apply.length === 0) {
+        throw new Error(copy('board.bulkNone'));
+      }
+      const items = plan.apply.flatMap((row) =>
+        row.days.map((day) => ({
+          user_id: row.userId,
+          period_start: day.period_start || new Date().toISOString(),
+        })),
+      );
+      const { data, error: batchError } = await supabase.rpc('host_adjust_checkin_batch', {
+        p_challenge_id: challengeId,
+        p_action: action,
+        p_items: items,
+      });
+      if (batchError) {
+        throw new Error(hostAdjustErrorMessage(getErrorMessage(batchError)));
+      }
+      const results = parseHostAdjustBatchResult(data);
+      const names = plan.apply.map((row) => row.displayName);
+      const content = hostAdjustLiveBody({
+        action,
+        names,
+        count: plan.applyCount,
+        actorName,
+        caption: input.caption,
+      });
+      if (userId) {
+        await publishHostAdjustLive({
+          queryClient,
+          challengeId,
+          userId,
+          profile: actorProfile,
+          content,
+          mediaUrls: input.mediaUrls,
+        });
+      }
+      return results;
+    },
+    onSuccess: (results) => {
+      for (const result of results) {
+        patchParticipant(queryClient, challengeId, result);
+      }
+      void queryClient.invalidateQueries({ queryKey: ['challenge-completions', challengeId] });
+      void queryClient.invalidateQueries({ queryKey: ['period-misses', challengeId] });
+      void queryClient.invalidateQueries({ queryKey: ['host-adjust-days', challengeId] });
+      void queryClient.invalidateQueries({ queryKey: ['live', challengeId] });
+      void queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
+      onClose();
+      router.setParams({ tab: 'feed' });
+    },
+    onError: (err) => {
+      setError(hostAdjustErrorMessage(getErrorMessage(err)));
+    },
+  });
+
+  function togglePerson(id: string) {
+    setSelectedIds((current) => (current.includes(id) ? current.filter((row) => row !== id) : [...current, id]));
+  }
+
+  function toggleDay(day: HostAdjustDay) {
+    const key = day.period_key || day.period_start;
+    setPickedDays((current) => {
+      const has = current.some((row) => (row.period_key || row.period_start) === key);
+      return has
+        ? current.filter((row) => (row.period_key || row.period_start) !== key)
+        : [...current, day];
+    });
+  }
+
+  const confirmNames = plan.apply.map((row) => row.displayName);
+  const confirmLine = hostAdjustConfirmLine(action, plan.applyCount, confirmNames);
+  const pending = mutate.isPending;
+
+  return (
+    <ChromeOverlay visible={visible} onClose={pending ? undefined : onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <Pressable
+          className="px-5 pb-10 pt-6"
+          style={{
+            backgroundColor: THEME.background,
+            borderTopLeftRadius: THEME.radiusLg,
+            borderTopRightRadius: THEME.radiusLg,
+            maxHeight: step === 'note' ? 640 : 620,
+          }}
+          onPress={(event) => event.stopPropagation()}>
+          <AppText className="text-2xl font-bold text-charcoal">{copy('board.adjustSeveral')}</AppText>
+          {error ? <AppText className="mt-3 text-sm text-coral-dark">{error}</AppText> : null}
+          {step === 'note' ? (
+            <>
+              <AppText className="mt-2 text-muted">{confirmLine}</AppText>
+              <View className="mt-4">
+                <InlineComposer
+                  pinned
+                  allowEmpty
+                  placeholder={copy('board.adjustNotePlaceholder')}
+                  submitLabel={copy('live.send')}
+                  submitting={pending}
+                  failTitle="Couldn’t update the Board."
+                  draftKey={`host-adjust-bulk:${challengeId}:${action}`}
+                  onSubmit={async (content) => {
+                    const split = liveComposeFromInline(content);
+                    await mutate.mutateAsync({ caption: split.text, mediaUrls: split.mediaUrls });
+                  }}
+                />
+              </View>
+              <View className="mt-3">
+                <Button
+                  title={copy('board.adjustSkipSend')}
+                  variant="ghost"
+                  disabled={pending}
+                  onPress={() => {
+                    mutate.mutate({ caption: '', mediaUrls: [] });
+                  }}
+                />
+              </View>
+            </>
+          ) : step === 'confirm' ? (
+            <>
+              <AppText className="mt-2 text-muted">{confirmLine}</AppText>
+              {skipLines.map((line) => (
+                <AppText key={line} className="mt-2 text-sm text-muted">
+                  {line}
+                </AppText>
+              ))}
+              {plan.apply.length === 0 ? (
+                <AppText className="mt-3 text-sm text-coral-dark">{copy('board.bulkNone')}</AppText>
+              ) : null}
+              <View className="mt-6 gap-3">
+                <Button
+                  title={
+                    action === 'excuse_miss'
+                      ? copy('board.excuseMisses')
+                      : action === 'remove_counted'
+                        ? copy('board.removeCountedDays')
+                        : copy('board.countDays')
+                  }
+                  size="lg"
+                  disabled={plan.apply.length === 0}
+                  onPress={() => setStep('note')}
+                />
+                <Button title={copy('board.adjustCancel')} variant="ghost" onPress={() => setStep('form')} />
+              </View>
+            </>
+          ) : (
+            <>
+              <View className="mt-4 flex-row flex-wrap" style={{ gap: 8 }}>
+                {(showExcuse
+                  ? (['excuse_miss', 'count_honor', 'remove_counted'] as HostAdjustAction[])
+                  : (['count_honor', 'remove_counted'] as HostAdjustAction[])
+                ).map((key) => {
+                  const selected = action === key;
+                  const label =
+                    key === 'excuse_miss'
+                      ? copy('board.excuseMisses')
+                      : key === 'remove_counted'
+                        ? copy('board.removeCountedDays')
+                        : copy('board.countDays');
+                  return (
+                    <Pressable
+                      key={key}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      onPress={() => {
+                        setAction(key);
+                        setPickedDays([]);
+                        setCount(1);
+                      }}
+                      style={{
+                        minHeight: 36,
+                        borderRadius: 999,
+                        paddingHorizontal: 14,
+                        justifyContent: 'center',
+                        backgroundColor: selected ? THEME.accentSoft : THEME.surface,
+                        borderWidth: 1,
+                        borderColor: selected ? THEME.accent : THEME.border,
+                      }}>
+                      <AppText
+                        className="text-[13px] font-bold"
+                        style={{ color: selected ? THEME.accent : THEME.textPrimary }}>
+                        {label}
+                      </AppText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <AppText className="mt-5 text-sm font-semibold text-charcoal">{copy('board.pickPeople')}</AppText>
+              {rosterPeople.length >= SEARCH_PEOPLE_AT ? (
+                <View className="mt-2">
+                  <Input
+                    label={copy('board.searchPeople')}
+                    value={search}
+                    onChangeText={setSearch}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+              ) : null}
+              {selectedPeople.length > 0 ? (
+                <View className="mt-2 flex-row flex-wrap" style={{ gap: 8 }}>
+                  {selectedPeople.map((row) => (
+                    <Pressable
+                      key={row.userId}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${row.displayName}`}
+                      onPress={() => togglePerson(row.userId)}
+                      style={{
+                        minHeight: 32,
+                        borderRadius: 999,
+                        paddingHorizontal: 12,
+                        justifyContent: 'center',
+                        backgroundColor: THEME.accentSoft,
+                      }}>
+                      <AppText className="text-[13px] font-bold" style={{ color: THEME.accent }}>
+                        {row.displayName} ×
+                      </AppText>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+              <ScrollView style={{ marginTop: 8, maxHeight: 160 }}>
+                {filteredPeople.map((row) => {
+                  const on = selectedIds.includes(row.userId);
+                  return (
+                    <Pressable
+                      key={row.userId}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                      onPress={() => togglePerson(row.userId)}
+                      className="flex-row items-center"
+                      style={{ minHeight: 44, gap: 10 }}>
+                      <Avatar uri={row.profile?.avatar_url} name={row.displayName} size={28} />
+                      <AppText
+                        className="text-[16px] font-semibold"
+                        style={{ color: on ? THEME.accent : THEME.textPrimary }}>
+                        {row.displayName}
+                      </AppText>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              {selectedIds.length > 0 ? (
+                <>
+                  <View className="mt-4">
+                    <StepperField
+                      label={
+                        action === 'excuse_miss'
+                          ? copy('board.excuseNMisses', 'gentle', { n: count })
+                          : action === 'remove_counted'
+                            ? copy('board.removeNCountedDays', 'gentle', { n: count })
+                            : copy('board.countNMissedDays', 'gentle', { n: count })
+                      }
+                      value={count}
+                      min={1}
+                      max={maxN}
+                      onChange={(next) => {
+                        setCount(next);
+                        setPickedDays([]);
+                      }}
+                    />
+                  </View>
+                  {action !== 'excuse_miss' && unionDays.length > 0 ? (
+                    <>
+                      <AppText className="mt-4 text-sm font-semibold text-charcoal">
+                        {copy('board.orPickDays')}
+                      </AppText>
+                      <ScrollView style={{ marginTop: 4, maxHeight: 120 }}>
+                        {unionDays.map((day) => {
+                          const key = day.period_key || day.period_start;
+                          const on = pickedDays.some((row) => (row.period_key || row.period_start) === key);
+                          return (
+                            <Pressable
+                              key={key}
+                              accessibilityRole="button"
+                              accessibilityState={{ selected: on }}
+                              onPress={() => toggleDay(day)}
+                              style={{ minHeight: 40, justifyContent: 'center' }}>
+                              <AppText
+                                className="text-[16px] font-semibold"
+                                style={{ color: on ? THEME.accent : THEME.textPrimary }}>
+                                Day {day.day_n}
+                                {on ? ' · Selected' : ''}
+                              </AppText>
+                            </Pressable>
+                          );
+                        })}
+                      </ScrollView>
+                    </>
+                  ) : null}
+                </>
+              ) : null}
+              {daysQuery.error ? (
+                <AppText className="mt-3 text-sm text-coral-dark">
+                  {hostAdjustErrorMessage(getErrorMessage(daysQuery.error))}
+                </AppText>
+              ) : null}
+              <View className="mt-5 gap-2">
+                <Button
+                  title={copy('board.adjustSeveral')}
+                  size="lg"
+                  disabled={selectedIds.length === 0 || daysQuery.isFetching}
+                  onPress={() => {
+                    setError(null);
+                    setStep('confirm');
+                  }}
+                />
+                <Button title={copy('board.adjustCancel')} variant="ghost" onPress={onClose} />
+              </View>
+            </>
+          )}
+        </Pressable>
+      </KeyboardAvoidingView>
+    </ChromeOverlay>
   );
 }
 
@@ -616,6 +1189,28 @@ function setDayOnSheet(
   day: HostAdjustDay,
 ) {
   open({ ...sheet, day });
+}
+
+export function BoardBulkAdjustButton() {
+  const { showBulkAdjust, bulkDisabled, openBulkAdjust } = useHostAdjustUi();
+  if (!showBulkAdjust) {
+    return null;
+  }
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={copy('board.adjustSeveral')}
+      accessibilityState={{ disabled: bulkDisabled }}
+      disabled={bulkDisabled}
+      onPress={openBulkAdjust}
+      style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 }}>
+      <AppText
+        className="text-[13px] font-bold"
+        style={{ color: bulkDisabled ? THEME.textMuted : THEME.accent }}>
+        {copy('board.adjustSeveral')}
+      </AppText>
+    </Pressable>
+  );
 }
 
 export function BoardAdjustButton({

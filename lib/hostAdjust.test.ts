@@ -6,10 +6,15 @@ import {
   challengeTracksMissesForExcuse,
   challengeUsesConsistencyAdjustBoard,
   HOST_ADJUST_HONOR_SOURCE,
+  formatHostAdjustPeople,
+  hostAdjustActorName,
+  hostAdjustConfirmLine,
   hostAdjustErrorMessage,
   hostAdjustLiveBody,
   hostAdjustLivePostRow,
+  hostAdjustSkipLines,
   participantCanBeAdjusted,
+  planHostAdjustBulk,
   viewerCanAdjustBoard,
 } from '@/lib/hostAdjust';
 
@@ -110,18 +115,22 @@ describe('host Board adjust gates', () => {
     expect(
       hostAdjustErrorMessage('23505 duplicate key value violates unique constraint "posts_system_kind_uidx"'),
     ).toBe('Couldn’t update the Board.');
+    expect(hostAdjustErrorMessage('Courtney: They don’t have a miss to excuse.')).toBe(
+      'Courtney — They don’t have a miss to excuse.',
+    );
   });
 });
 
 describe('host adjust Live note', () => {
-  it('uses the caption when the host typed one', () => {
+  it('appends the caption under the action sentence', () => {
     expect(
       hostAdjustLiveBody({
         action: 'excuse_miss',
         displayName: 'Josh',
+        actorName: 'Daniel Harder',
         caption: '  Weather delay.  ',
       }),
-    ).toBe('Weather delay.');
+    ).toBe('Daniel Harder excused a miss for Josh.\n\nWeather delay.');
   });
 
   it('prints Count / Excuse / Remove defaults', () => {
@@ -133,6 +142,91 @@ describe('host adjust Live note', () => {
     );
     expect(hostAdjustLiveBody({ action: 'remove_counted', displayName: 'Silas', dayN: 3 })).toBe(
       'Host removed Day 3 for Silas.',
+    );
+  });
+
+  it('names the actor and bulk people on one sentence', () => {
+    expect(
+      hostAdjustLiveBody({
+        action: 'excuse_miss',
+        displayName: 'Courtney',
+        actorName: 'Daniel Harder',
+      }),
+    ).toBe('Daniel Harder excused a miss for Courtney.');
+    expect(
+      hostAdjustLiveBody({
+        action: 'excuse_miss',
+        names: ['Courtney'],
+        count: 3,
+        actorName: 'Daniel Harder',
+      }),
+    ).toBe('Daniel Harder excused 3 misses for Courtney.');
+    expect(
+      hostAdjustLiveBody({
+        action: 'excuse_miss',
+        names: ['Courtney', 'Silas', 'Gloria'],
+        count: 3,
+        actorName: 'Daniel Harder',
+      }),
+    ).toBe('Daniel Harder excused 3 misses for Courtney, Silas, and Gloria.');
+    expect(
+      hostAdjustLiveBody({
+        action: 'count_honor',
+        names: ['Courtney', 'Silas'],
+        count: 2,
+        actorName: 'Daniel Harder',
+      }),
+    ).toBe('Daniel Harder counted 2 days for Courtney and Silas.');
+    expect(
+      hostAdjustLiveBody({
+        action: 'remove_counted',
+        names: ['Gloria'],
+        count: 1,
+        actorName: 'Daniel Harder',
+      }),
+    ).toBe('Daniel Harder removed a counted day for Gloria.');
+  });
+
+  it('plans the same N and names people who cannot take it', () => {
+    const courtney = {
+      userId: 'c',
+      displayName: 'Courtney',
+      openMisses: 3,
+      missed: [],
+      counted: [],
+    };
+    const silas = {
+      userId: 's',
+      displayName: 'Silas',
+      openMisses: 3,
+      missed: [],
+      counted: [],
+    };
+    const gloria = {
+      userId: 'g',
+      displayName: 'Gloria',
+      openMisses: 0,
+      missed: [],
+      counted: [],
+    };
+    const plan = planHostAdjustBulk({
+      action: 'excuse_miss',
+      people: [courtney, silas, gloria],
+      count: 3,
+    });
+    expect(plan.apply.map((row) => row.displayName)).toEqual(['Courtney', 'Silas']);
+    expect(plan.skip).toEqual([{ userId: 'g', displayName: 'Gloria', have: 0 }]);
+    expect(hostAdjustSkipLines('excuse_miss', plan.skip)).toEqual([
+      'Gloria has no open misses — they’ll be skipped.',
+    ]);
+    expect(hostAdjustConfirmLine('excuse_miss', 3, ['Courtney', 'Silas'])).toBe(
+      'Excuse 3 misses for Courtney and Silas?',
+    );
+    expect(formatHostAdjustPeople(['Courtney', 'Silas', 'Gloria'])).toBe(
+      'Courtney, Silas, and Gloria',
+    );
+    expect(hostAdjustActorName({ display_name: 'Daniel Harder', username: 'daniel' })).toBe(
+      'Daniel Harder',
     );
   });
 

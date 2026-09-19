@@ -2,7 +2,7 @@ import { format } from 'date-fns';
 
 import { findChallengesStack, type NavLike } from '@/lib/challengeNav';
 import { uniqueProofUrls } from '@/lib/challengeProofs';
-import { seedLiveAuthor } from '@/lib/safeIds';
+import { seedLiveAuthor, type SeedLiveAuthorOpts } from '@/lib/safeIds';
 import { checkinComposerPrefill } from '@/lib/checkin/captions';
 import { isCheckinCompleteStage, isCheckinPost, type CheckinPostLike } from '@/lib/checkinPost';
 import { liveCheckinKey } from '@/lib/liveFeedPatch';
@@ -154,12 +154,14 @@ function seedFingerprint(post: PostWithMeta): string {
     uniqueProofUrls(post.hidden_media_urls).join('\n'),
     JSON.stringify(asStats(post.checkin_stats)),
     String(post.author_id ?? ''),
+    String(post.author?.display_name ?? ''),
+    String(post.author?.avatar_url ?? ''),
     String(post.content ?? ''),
   ].join('|');
 }
 
 /** Fill author / media / stats so a bad Live row cannot throw on .id or .map. */
-export function seedLiveFeedPosts(posts: unknown): PostWithMeta[] {
+export function seedLiveFeedPosts(posts: unknown, viewer?: SeedLiveAuthorOpts): PostWithMeta[] {
   if (!Array.isArray(posts)) {
     return [];
   }
@@ -175,7 +177,7 @@ export function seedLiveFeedPosts(posts: unknown): PostWithMeta[] {
     }
     const fingerprint = seedFingerprint(post);
     const comments = Array.isArray(post.comments)
-      ? post.comments.filter((comment) => comment && comment.id).map((comment) => seedLiveAuthor(comment))
+      ? post.comments.filter((comment) => comment && comment.id).map((comment) => seedLiveAuthor(comment, viewer))
       : [];
     const cached = seededPostCache.get(raw);
     if (cached && cached.fingerprint === fingerprint) {
@@ -185,7 +187,7 @@ export function seedLiveFeedPosts(posts: unknown): PostWithMeta[] {
       out.push(cached.seeded);
       continue;
     }
-    const seeded = seedLiveAuthor({ ...post, id });
+    const seeded = seedLiveAuthor({ ...post, id }, viewer);
     const next = {
       ...seeded,
       id,

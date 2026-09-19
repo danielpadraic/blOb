@@ -163,26 +163,184 @@ export function parseHostAdjustDays(value: unknown): HostAdjustDays {
   };
 }
 
-/** Default Live line when the host skips a caption. Never a system_kind row. */
+export function hostAdjustActorName(profile?: {
+  display_name?: string | null;
+  username?: string | null;
+} | null): string {
+  return profile?.display_name?.trim() || profile?.username?.trim() || 'Host';
+}
+
+/** Courtney, Silas, and Gloria */
+export function formatHostAdjustPeople(names: readonly string[]): string {
+  const clean = names.map((name) => String(name ?? '').trim() || 'Someone');
+  if (clean.length === 0) {
+    return 'Someone';
+  }
+  if (clean.length === 1) {
+    return clean[0]!;
+  }
+  if (clean.length === 2) {
+    return `${clean[0]} and ${clean[1]}`;
+  }
+  return `${clean.slice(0, -1).join(', ')}, and ${clean[clean.length - 1]}`;
+}
+
+export type HostAdjustBulkPerson = {
+  userId: string;
+  displayName: string;
+  openMisses: number;
+  missed: HostAdjustDay[];
+  counted: HostAdjustDay[];
+};
+
+export type HostAdjustBulkPlan = {
+  apply: Array<{ userId: string; displayName: string; days: HostAdjustDay[] }>;
+  skip: Array<{ userId: string; displayName: string; have: number }>;
+  applyCount: number;
+};
+
+function emptyAdjustDay(): HostAdjustDay {
+  return { day_n: 0, period_key: '', period_start: new Date().toISOString() };
+}
+
+/** Who can take this N / these days. People short of N are skipped. */
+export function planHostAdjustBulk(input: {
+  action: HostAdjustAction;
+  people: HostAdjustBulkPerson[];
+  count: number;
+  days?: HostAdjustDay[] | null;
+}): HostAdjustBulkPlan {
+  const n = Math.max(Math.trunc(Number(input.count) || 1), 1);
+  const picked = (input.days ?? []).filter((day) => day.period_start || day.period_key);
+  const apply: HostAdjustBulkPlan['apply'] = [];
+  const skip: HostAdjustBulkPlan['skip'] = [];
+  for (const person of input.people) {
+    if (input.action === 'excuse_miss') {
+      if (person.openMisses >= n) {
+        apply.push({
+          userId: person.userId,
+          displayName: person.displayName,
+          days: Array.from({ length: n }, emptyAdjustDay),
+        });
+      } else {
+        skip.push({ userId: person.userId, displayName: person.displayName, have: person.openMisses });
+      }
+      continue;
+    }
+    const pool = input.action === 'remove_counted' ? person.counted : person.missed;
+    let days: HostAdjustDay[];
+    if (picked.length > 0) {
+      const keys = new Set(picked.map((day) => day.period_key || day.period_start));
+      days = pool.filter((day) => keys.has(day.period_key) || keys.has(day.period_start));
+      if (days.length >= picked.length && days.length > 0) {
+        apply.push({ userId: person.userId, displayName: person.displayName, days });
+      } else {
+        skip.push({ userId: person.userId, displayName: person.displayName, have: pool.length });
+      }
+      continue;
+    }
+    days = pool.slice(0, n);
+    if (days.length >= n) {
+      apply.push({ userId: person.userId, displayName: person.displayName, days });
+    } else {
+      skip.push({ userId: person.userId, displayName: person.displayName, have: pool.length });
+    }
+  }
+  return { apply, skip, applyCount: picked.length > 0 ? picked.length : n };
+}
+
+export function hostAdjustSkipLines(
+  action: HostAdjustAction,
+  skip: HostAdjustBulkPlan['skip'],
+): string[] {
+  return skip.map((row) => {
+    if (action === 'excuse_miss') {
+      if (row.have <= 0) {
+        return `${row.displayName} has no open misses — they’ll be skipped.`;
+      }
+      return `${row.displayName} only has ${row.have} open ${row.have === 1 ? 'miss' : 'misses'} — they’ll be skipped.`;
+    }
+    if (row.have <= 0) {
+      return `${row.displayName} has no days to change — they’ll be skipped.`;
+    }
+    return `${row.displayName} only has ${row.have} ${row.have === 1 ? 'day' : 'days'} to change — they’ll be skipped.`;
+  });
+}
+
+export function hostAdjustConfirmLine(
+  action: HostAdjustAction,
+  count: number,
+  names: readonly string[],
+): string {
+  const people = formatHostAdjustPeople(names);
+  const n = Math.max(Math.trunc(Number(count) || 1), 1);
+  if (action === 'excuse_miss') {
+    return n === 1 ? `Excuse 1 miss for ${people}?` : `Excuse ${n} misses for ${people}?`;
+  }
+  if (action === 'remove_counted') {
+    return n === 1
+      ? `Remove 1 counted day for ${people}?`
+      : `Remove ${n} counted days for ${people}?`;
+  }
+  return n === 1 ? `Count 1 missed day for ${people}?` : `Count ${n} missed days for ${people}?`;
+}
+
+export function unionHostAdjustDays(people: HostAdjustBulkPerson[], key: 'missed' | 'counted'): HostAdjustDay[] {
+  const map = new Map<string, HostAdjustDay>();
+  for (const person of people) {
+    for (const day of person[key]) {
+      const id = day.period_key || day.period_start;
+      if (id && !map.has(id)) {
+        map.set(id, day);
+      }
+    }
+  }
+  return [...map.values()].sort((a, b) => a.day_n - b.day_n || a.period_key.localeCompare(b.period_key));
+}
+
+/**
+ * Default Live sentence, then optional caption on the same post.
+ * Bulk: one person N>1, or many people, same N. Never one bubble per miss.
+ */
 export function hostAdjustLiveBody(input: {
   action: HostAdjustAction;
-  displayName: string;
+  displayName?: string;
+  names?: readonly string[];
+  count?: number | null;
   dayN?: number | null;
+  actorName?: string | null;
   caption?: string | null;
 }): string {
-  const caption = String(input.caption ?? '').trim();
-  if (caption) {
-    return caption;
-  }
-  const name = String(input.displayName ?? '').trim() || 'Someone';
+  const names = (input.names?.length ? [...input.names] : [input.displayName ?? 'Someone']).map(
+    (name) => String(name ?? '').trim() || 'Someone',
+  );
+  const people = formatHostAdjustPeople(names);
+  const actor = String(input.actorName ?? '').trim() || 'Host';
+  const n = Math.max(Math.trunc(Number(input.count ?? 1) || 1), 1);
   const day = Math.max(Math.trunc(Number(input.dayN) || 0), 0);
+  let sentence = '';
   if (input.action === 'excuse_miss') {
-    return `Host excused a miss for ${name}.`;
+    sentence =
+      n === 1 && names.length === 1
+        ? `${actor} excused a miss for ${people}.`
+        : `${actor} excused ${n} ${n === 1 ? 'miss' : 'misses'} for ${people}.`;
+  } else if (input.action === 'remove_counted') {
+    if (names.length === 1 && n === 1 && day > 0) {
+      sentence = `${actor} removed Day ${day} for ${people}.`;
+    } else if (names.length === 1 && n === 1) {
+      sentence = `${actor} removed a counted day for ${people}.`;
+    } else {
+      sentence = `${actor} removed ${n} counted ${n === 1 ? 'day' : 'days'} for ${people}.`;
+    }
+  } else if (names.length === 1 && n === 1 && day > 0) {
+    sentence = `${actor} counted Day ${day} for ${people}.`;
+  } else if (names.length === 1 && n === 1) {
+    sentence = `${actor} counted a day for ${people}.`;
+  } else {
+    sentence = `${actor} counted ${n} ${n === 1 ? 'day' : 'days'} for ${people}.`;
   }
-  if (input.action === 'remove_counted') {
-    return day > 0 ? `Host removed Day ${day} for ${name}.` : `Host removed a counted day for ${name}.`;
-  }
-  return day > 0 ? `Host counted Day ${day} for ${name}.` : `Host counted a day for ${name}.`;
+  const caption = String(input.caption ?? '').trim();
+  return caption ? `${sentence}\n\n${caption}` : sentence;
 }
 
 /**
@@ -224,8 +382,13 @@ export function parseHostAdjustResult(value: unknown): HostAdjustResult {
   };
 }
 
-export function hostAdjustErrorMessage(message: string): string {
-  const text = message.trim();
+export function parseHostAdjustBatchResult(value: unknown): HostAdjustResult[] {
+  const row = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const results = Array.isArray(row.results) ? row.results : Array.isArray(value) ? value : [];
+  return results.map((item) => parseHostAdjustResult(item));
+}
+
+function hostAdjustErrorCore(text: string): string {
   const lower = text.toLowerCase();
   if (
     lower.includes('don’t have a miss') ||
@@ -262,4 +425,13 @@ export function hostAdjustErrorMessage(message: string): string {
     return 'Couldn’t update the Board.';
   }
   return text;
+}
+
+export function hostAdjustErrorMessage(message: string): string {
+  const text = message.trim();
+  const named = text.match(/^([^:]{1,80}): (.+)$/);
+  if (named?.[1] && named[2] && !/^\d{5}/.test(named[1].trim())) {
+    return `${named[1].trim()} — ${hostAdjustErrorCore(named[2].trim())}`;
+  }
+  return hostAdjustErrorCore(text);
 }

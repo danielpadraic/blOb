@@ -6,7 +6,7 @@ import { MissBudgetLines } from '@/components/challenge/MissBudgetLines';
 import { FieldNoteLabel } from '@/components/challenge/FieldNote';
 import { SettlementSummary } from '@/components/challenge/SettlementSummary';
 import { ProfileLink } from '@/components/profile/ProfileLink';
-import { BoardAdjustButton, useHostAdjustUi } from '@/components/challenge/HostAdjustHost';
+import { BoardAdjustButton, BoardBulkAdjustButton, useHostAdjustUi } from '@/components/challenge/HostAdjustHost';
 import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { MascotState } from '@/components/mascot/MascotState';
 import { Avatar } from '@/components/ui/Avatar';
@@ -187,9 +187,12 @@ export function ChallengeBoard({
           textClassName="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
           Board
         </FieldNoteLabel>
-        {isOfficialChallenge(challenge) ? (
-          <ChallengeLifecycleStatus compact status={challenge.status} />
-        ) : null}
+        <View className="flex-row items-center" style={{ gap: 8 }}>
+          <BoardBulkAdjustButton />
+          {isOfficialChallenge(challenge) ? (
+            <ChallengeLifecycleStatus compact status={challenge.status} />
+          ) : null}
+        </View>
       </View>
 
       <AppText className="text-[13px] font-semibold" style={{ color: THEME.textMuted }}>
