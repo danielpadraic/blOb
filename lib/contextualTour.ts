@@ -1,4 +1,7 @@
 import type { TourPlacement } from '@/lib/tour';
+import { queryClient } from '@/lib/queryClient';
+import { supabase } from '@/lib/supabase';
+import { authStorage } from '@/lib/utils/secureStore';
 
 /** First-seen surfaces. Home first-run stays on tutorial_completed_at. */
 export type ContextualTourId = 'home-live-pills' | 'challenge-live' | 'lift';
@@ -18,6 +21,28 @@ function storageKey(userId: string): string {
   return `${STORAGE_PREFIX}${userId}`;
 }
 
+export function parseContextualToursSeen(value: unknown): Set<ContextualTourId> {
+  const next = new Set<ContextualTourId>();
+  const list = Array.isArray(value)
+    ? value
+    : value && typeof value === 'object'
+      ? Object.keys(value as Record<string, unknown>).filter((key) => (value as Record<string, unknown>)[key])
+      : [];
+  for (const id of list) {
+    if (id === 'home-live-pills' || id === 'challenge-live' || id === 'lift') {
+      next.add(id);
+    }
+  }
+  return next;
+}
+
+export function profileHasContextualTour(
+  profile: { contextual_tours_seen?: unknown } | null | undefined,
+  id: ContextualTourId,
+): boolean {
+  return parseContextualToursSeen(profile?.contextual_tours_seen).has(id);
+}
+
 function readLocal(userId: string): Set<ContextualTourId> {
   const cached = memory.get(userId);
   if (cached) {
@@ -27,17 +52,12 @@ function readLocal(userId: string): Set<ContextualTourId> {
   try {
     if (typeof localStorage !== 'undefined') {
       const raw = localStorage.getItem(storageKey(userId));
-      const parsed = raw ? (JSON.parse(raw) as unknown) : [];
-      if (Array.isArray(parsed)) {
-        for (const id of parsed) {
-          if (id === 'home-live-pills' || id === 'challenge-live' || id === 'lift') {
-            next.add(id);
-          }
-        }
+      for (const id of parseContextualToursSeen(raw ? JSON.parse(raw) : [])) {
+        next.add(id);
       }
     }
   } catch {
-    // In-memory is enough for this session.
+    // In-memory is enough for this session until hydrate finishes.
   }
   memory.set(userId, next);
   return next;
@@ -45,21 +65,69 @@ function readLocal(userId: string): Set<ContextualTourId> {
 
 function writeLocal(userId: string, seen: Set<ContextualTourId>) {
   memory.set(userId, seen);
+  const payload = JSON.stringify([...seen]);
   try {
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(storageKey(userId), JSON.stringify([...seen]));
+      localStorage.setItem(storageKey(userId), payload);
     }
   } catch {
     // Keep the session flag.
   }
+  void authStorage.setItem(storageKey(userId), payload).catch(() => undefined);
+}
+
+function patchProfileCache(userId: string, seen: Set<ContextualTourId>) {
+  const list = [...seen];
+  queryClient.setQueriesData({ queryKey: ['profile', userId] }, (current) => {
+    if (!current || typeof current !== 'object') {
+      return current;
+    }
+    return { ...current, contextual_tours_seen: list };
+  });
+}
+
+async function persistProfileSeen(userId: string, seen: Set<ContextualTourId>) {
+  patchProfileCache(userId, seen);
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ contextual_tours_seen: [...seen] })
+      .eq('id', userId);
+    if (error) {
+      return;
+    }
+  } catch {
+    // Local + memory still stand so this session does not loop.
+  }
+}
+
+/** Load SecureStore / localStorage into memory after a cold start. */
+export async function hydrateContextualTours(userId: string | null | undefined): Promise<void> {
+  if (!userId) {
+    return;
+  }
+  const merged = new Set(readLocal(userId));
+  try {
+    const raw = await authStorage.getItem(storageKey(userId));
+    for (const id of parseContextualToursSeen(raw ? JSON.parse(raw) : [])) {
+      merged.add(id);
+    }
+  } catch {
+    // Memory / web localStorage still apply.
+  }
+  memory.set(userId, merged);
 }
 
 export function wasContextualTourSeen(
   userId: string | null | undefined,
   id: ContextualTourId,
+  profile?: { contextual_tours_seen?: unknown } | null,
 ): boolean {
   if (!userId) {
     return false;
+  }
+  if (profileHasContextualTour(profile, id)) {
+    return true;
   }
   return readLocal(userId).has(id);
 }
@@ -71,6 +139,7 @@ export function markContextualTourSeen(userId: string | null | undefined, id: Co
   const seen = new Set(readLocal(userId));
   seen.add(id);
   writeLocal(userId, seen);
+  void persistProfileSeen(userId, seen);
 }
 
 /** Replay first-run may show Home Live pills again if a pill is on screen. */
@@ -81,6 +150,7 @@ export function clearHomeLivePillsTour(userId: string | null | undefined) {
   const seen = new Set(readLocal(userId));
   seen.delete('home-live-pills');
   writeLocal(userId, seen);
+  void persistProfileSeen(userId, seen);
 }
 
 export function resetContextualToursForTests() {

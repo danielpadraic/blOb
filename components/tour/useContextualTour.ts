@@ -1,7 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
+import { useProfile } from '@/hooks/useProfile';
 import { useTourOptional } from '@/components/tour/TourContext';
 import {
+  hydrateContextualTours,
   wasContextualTourSeen,
   type ContextualTourId,
   type ContextualTourStep,
@@ -15,16 +17,37 @@ export function useContextualTour(
   userId?: string | null,
 ) {
   const tour = useTourOptional();
+  const profile = useProfile(userId ?? undefined);
+  const [hydrated, setHydrated] = useState(false);
   const stepsRef = useRef(steps);
   stepsRef.current = steps;
   const requestContextual = tour?.requestContextual;
   const blocked = Boolean(tour?.active || tour?.createActive || tour?.contextual);
 
   useEffect(() => {
-    if (!enabled || !userId || !requestContextual || blocked) {
+    if (!userId) {
+      setHydrated(false);
       return;
     }
-    if (wasContextualTourSeen(userId, id)) {
+    let alive = true;
+    void hydrateContextualTours(userId).then(() => {
+      if (alive) {
+        setHydrated(true);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, [userId]);
+
+  useEffect(() => {
+    if (!enabled || !userId || !requestContextual || blocked || !hydrated) {
+      return;
+    }
+    if (profile.isLoading && !profile.data) {
+      return;
+    }
+    if (wasContextualTourSeen(userId, id, profile.data)) {
       return;
     }
     const next = stepsRef.current;
@@ -32,5 +55,5 @@ export function useContextualTour(
       return;
     }
     requestContextual({ id, steps: next, userId });
-  }, [blocked, enabled, id, requestContextual, userId]);
+  }, [blocked, enabled, hydrated, id, profile.data, profile.isLoading, requestContextual, userId]);
 }

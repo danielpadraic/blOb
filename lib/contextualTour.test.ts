@@ -10,6 +10,8 @@ import {
   liftSessionHasInterval,
   liftSessionTourSteps,
   markContextualTourSeen,
+  parseContextualToursSeen,
+  profileHasContextualTour,
   resetContextualToursForTests,
   wasContextualTourSeen,
 } from '@/lib/contextualTour';
@@ -28,6 +30,14 @@ describe('contextual first-seen flags', () => {
     expect(wasContextualTourSeen('user-1', 'challenge-live')).toBe(true);
     expect(wasContextualTourSeen('user-1', 'lift')).toBe(true);
     expect(wasContextualTourSeen('user-2', 'lift')).toBe(false);
+  });
+
+  it('treats a profile column as already seen, even before local hydrate', () => {
+    expect(
+      wasContextualTourSeen('user-1', 'challenge-live', { contextual_tours_seen: ['challenge-live'] }),
+    ).toBe(true);
+    expect(profileHasContextualTour({ contextual_tours_seen: ['lift'] }, 'lift')).toBe(true);
+    expect(parseContextualToursSeen(['challenge-live', 'nope'])).toEqual(new Set(['challenge-live']));
   });
 
   it('clears only the Home Live pills flag on replay', () => {

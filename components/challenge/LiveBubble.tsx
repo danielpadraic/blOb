@@ -235,7 +235,7 @@ export const LiveBubble = memo(function LiveBubble({
         {...(canSwipeReply ? pan.panHandlers : null)}
         style={{
           flexDirection: 'row',
-          alignItems: 'flex-end',
+          alignItems: 'flex-start',
           gap: 8,
           maxWidth: '86%',
           alignSelf: alignEnd ? 'flex-end' : 'flex-start',
@@ -250,56 +250,55 @@ export const LiveBubble = memo(function LiveBubble({
         <View
           style={{
             flexShrink: 1,
+            flexGrow: 1,
             minWidth: 0,
             maxWidth: '100%',
             alignItems: alignEnd ? 'flex-end' : 'flex-start',
           }}>
-          {checkin ? null : (
-            <View
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              minHeight: 28,
+              gap: 8,
+              marginBottom: 4,
+              maxWidth: '100%',
+              alignSelf: alignEnd ? 'flex-end' : 'flex-start',
+            }}>
+            <AppText
+              className="text-[13px] font-semibold"
               style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                minHeight: 28,
-                gap: 6,
-                marginBottom: 4,
-                maxWidth: '100%',
-                alignSelf: alignEnd ? 'flex-end' : 'stretch',
+                color: THEME.textMuted,
+                flexShrink: 1,
+                minWidth: 0,
               }}>
-              {alignEnd ? null : (
-                <AppText
-                  className="text-[13px] font-semibold"
-                  numberOfLines={1}
-                  style={{ color: THEME.textMuted, flexShrink: 1, minWidth: 0 }}>
-                  {name}
-                </AppText>
-              )}
-              {removed ? null : time ? (
-                <AppText className="text-[11px]" numberOfLines={1} style={{ color: THEME.textMuted, flexShrink: 0 }}>
-                  {time}
-                  {post.edited_at || comment?.edited_at ? ` · ${copy('comment.edited')}` : ''}
-                </AppText>
-              ) : null}
-              <View style={{ flex: 1, minWidth: 8 }} />
-              {comment && social ? (
-                <Pressable
-                  ref={moreRef}
-                  collapsable={false}
-                  accessibilityRole="button"
-                  accessibilityLabel="Comment menu"
-                  onPress={openCommentMenu}
-                  hitSlop={8}
-                  style={{
-                    flexShrink: 0,
-                    minWidth: 32,
-                    minHeight: 32,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}>
-                  <Glyph name={GLYPH.more} color={THEME.textMuted} size={14} />
-                </Pressable>
-              ) : null}
-            </View>
-          )}
+              {name}
+            </AppText>
+            {removed ? null : time ? (
+              <AppText className="text-[11px]" style={{ color: THEME.textMuted, flexShrink: 0 }}>
+                {time}
+                {post.edited_at || comment?.edited_at ? ` · ${copy('comment.edited')}` : ''}
+              </AppText>
+            ) : null}
+            {comment && social ? (
+              <Pressable
+                ref={moreRef}
+                collapsable={false}
+                accessibilityRole="button"
+                accessibilityLabel="Comment menu"
+                onPress={openCommentMenu}
+                hitSlop={8}
+                style={{
+                  flexShrink: 0,
+                  minWidth: 32,
+                  minHeight: 32,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                <Glyph name={GLYPH.more} color={THEME.textMuted} size={14} />
+              </Pressable>
+            ) : null}
+          </View>
           {quote && !checkin && !removed ? <LiveQuoteChip quote={quote} mine={alignEnd} /> : null}
           {removed ? (
             <View
@@ -377,7 +376,7 @@ export const LiveBubble = memo(function LiveBubble({
                   {headline}
                 </AppText>
                 {caption && !liftSessionId ? (
-                  <AppText className="mt-0.5 text-[13px]" style={{ color: THEME.textMuted }} numberOfLines={2}>
+                  <AppText className="mt-0.5 text-[13px]" style={{ color: THEME.textMuted }}>
                     {caption}
                   </AppText>
                 ) : null}
@@ -398,16 +397,7 @@ export const LiveBubble = memo(function LiveBubble({
                 <View style={{ marginTop: 4, minHeight: visuals.length > 0 ? 26 : 0 }}>
                   <CheckinProofStatsRow stats={post.checkin_stats} align={alignEnd ? 'right' : 'left'} />
                 </View>
-                {time || post.edited_at ? (
-                  <View className="mt-0.5 flex-row items-center" style={{ gap: 6 }}>
-                    {time ? (
-                      <AppText className="text-[11px]" style={{ color: THEME.textMuted }}>
-                        {time}
-                      </AppText>
-                    ) : null}
-                    <EditedMark editedAt={post.edited_at} onPress={onHistory} />
-                  </View>
-                ) : null}
+                <EditedMark editedAt={post.edited_at} onPress={onHistory} />
               </View>
               </Pressable>
               <View
@@ -467,7 +457,7 @@ export const LiveBubble = memo(function LiveBubble({
                 borderBottomLeftRadius: mine ? 18 : 6,
                 borderWidth: mine ? 0 : 1,
                 borderColor: THEME.border,
-                overflow: 'hidden',
+                overflow: 'visible',
                 paddingBottom: hasPill ? LIVE_BUBBLE_PILL_INSET : 0,
                 maxWidth: '100%',
                 ...(Platform.OS === 'web' ? ({ userSelect: 'none' } as object) : null),

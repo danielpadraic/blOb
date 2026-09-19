@@ -349,6 +349,8 @@ export interface Profile {
   tos_version?: string | null;
   privacy_version?: string | null;
   tutorial_completed_at?: string | null;
+  /** First-seen coaches: home-live-pills, challenge-live, lift. Not the Home first-run tour. */
+  contextual_tours_seen?: string[] | null;
   create_tour_opt_out_at?: string | null;
   official_pitch_dismissed_challenge_id?: string | null;
   date_of_birth?: string | null;
@@ -1085,6 +1087,7 @@ export type ProfileUpdate = Partial<
     | 'interests_dismissed_home_at'
     | 'interests_skipped_all_at'
     | 'interests_nudge_at'
+    | 'contextual_tours_seen'
     | 'declared_region'
     | 'home_state'
     | 'phone'
