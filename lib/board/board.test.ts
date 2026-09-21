@@ -130,6 +130,14 @@ describe('points board ranking', () => {
     expect(pointsRank(view.people, 'a')).toBe(2);
     expect(pointsLeader(view.people)?.userId).toBe('b');
     expect(pointsLeader(view.people)?.name).toBe('Bea');
+    const laneProof = buildBoard({
+      status: 'live',
+      participants: [
+        { user_id: '01', points: 26000, status: 'joined', display_name: 'Test Rookie 01' },
+        { user_id: '09', points: 13000, status: 'joined', display_name: 'Test Veteran 09' },
+      ],
+    });
+    expect(rankBoardRows(laneProof.people, 'points').map((row) => row.userId)).toEqual(['01', '09']);
   });
 
   it('has no challenge leader until someone scores', () => {
