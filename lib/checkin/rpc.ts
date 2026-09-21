@@ -56,6 +56,8 @@ export type SaveCheckinProofInput = {
    * Left unset for camera stills, which no renderer owns.
    */
   cardVersion?: number | null;
+  /** Host / moderator proxy: the participant this proof belongs to. */
+  forUserId?: string | null;
 };
 
 function partWithCaption(part: ChallengeProofPart, caption?: string | null): ChallengeProofPart {
@@ -131,6 +133,7 @@ export function parseChallengeCheckin(row: Record<string, unknown>): ChallengeCh
     route_preview_url: (row.route_preview_url as string | null) ?? null,
     created_at: String(row.created_at ?? new Date().toISOString()),
     updated_at: (row.updated_at as string | null) ?? null,
+    logged_by: (row.logged_by as string | null) ?? null,
   };
 }
 
@@ -297,6 +300,7 @@ export async function saveCheckinProofWithClient(
     p_notes: input.notes ?? null,
     p_extra_media: input.extraMedia ?? null,
     p_clear_proof: clearProof,
+    p_for_user_id: input.forUserId?.trim() || null,
   })) as { data: unknown; error: { message?: string; code?: string; details?: string } | null };
   if (error) {
     throw new Error(mapCheckinRpcError(error, 'save'));
@@ -321,9 +325,11 @@ export async function saveCheckinMetricValuesWithClient(
 export async function submitCheckinWithClient(
   client: CheckinRpcClient,
   challengeId: string,
+  forUserId?: string | null,
 ): Promise<ChallengeCheckin | null> {
   const { data, error } = (await client.rpc('submit_checkin', {
     p_challenge_id: challengeId,
+    p_for_user_id: forUserId?.trim() || null,
   })) as { data: unknown; error: { message?: string; code?: string; details?: string } | null };
   if (error) {
     throw new Error(mapCheckinRpcError(error, 'submit'));

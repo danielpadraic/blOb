@@ -47,7 +47,11 @@ import {
   type HostAdjustDay,
   type HostAdjustResult,
 } from '@/lib/hostAdjust';
+import { fetchChallengeModeratorIds, proxyCheckinBlockedReason, viewerCanProxyCheckin } from '@/lib/challengeMods';
+import { fetchCurrentPeriodCheckin } from '@/hooks/useChallengeCheckin';
+import { checkinPeriodComplete } from '@/lib/loggable';
 import { viewerCanEditBoardScore, viewerCanFriendlyHostAdd } from '@/lib/hostRigor';
+import { checkinSubmitHref } from '@/lib/routes';
 import { usesPointsBoard, usesQuantityScoring } from '@/lib/challengeExperience';
 import { liveListKey } from '@/lib/feedListKeys';
 import { liveComposeFromInline } from '@/lib/liveThread';
@@ -66,10 +70,12 @@ type HostAdjustContextValue = {
   canHouseRemove: boolean;
   canFriendlyRemove: boolean;
   canEditScore: boolean;
+  canProxy: boolean;
   isActor: boolean;
   showExcuse: boolean;
   showBulkAdjust: boolean;
   bulkDisabled: boolean;
+  moderatorIds: string[];
   openRowMenu: (target: Target, anchor: MenuAnchor) => void;
   openBulkAdjust: () => void;
 };
@@ -79,10 +85,12 @@ const HostAdjustContext = createContext<HostAdjustContextValue>({
   canHouseRemove: false,
   canFriendlyRemove: false,
   canEditScore: false,
+  canProxy: false,
   isActor: false,
   showExcuse: false,
   showBulkAdjust: false,
   bulkDisabled: true,
+  moderatorIds: [],
   openRowMenu: () => {},
   openBulkAdjust: () => {},
 });
@@ -91,17 +99,6 @@ export function useHostAdjustUi(): HostAdjustContextValue {
   return useContext(HostAdjustContext);
 }
 
-async function fetchModeratorIds(challengeId: string, viewerId: string): Promise<string[]> {
-  const { data, error } = await supabase
-    .from('challenge_moderators')
-    .select('user_id')
-    .eq('challenge_id', challengeId)
-    .eq('user_id', viewerId);
-  if (error) {
-    return [];
-  }
-  return (data ?? []).map((row) => String((row as { user_id: string }).user_id));
-}
 
 function patchParticipant(
   queryClient: ReturnType<typeof useQueryClient>,
@@ -137,32 +134,40 @@ export function HostAdjustProvider({ children }: { children: ReactNode }) {
   const challengeQuery = useChallenge(id);
   const challenge = challengeQuery.data ?? null;
   const mods = useQuery({
-    queryKey: ['challenge-moderators', id, user?.id],
-    enabled: Boolean(id && user?.id && challenge?.created_by !== user?.id && !officialOps),
-    queryFn: () => fetchModeratorIds(id!, user!.id),
+    queryKey: ['challenge-moderators', id],
+    enabled: Boolean(id && user?.id),
+    queryFn: () => fetchChallengeModeratorIds(id!),
   });
+  const moderatorIds = mods.data ?? [];
   const isActor = Boolean(
     officialOps ||
       (user?.id &&
         challenge &&
-        !challengeIsOfficialLocked(challenge) &&
         !challengeIsEndedForAdjust(challenge) &&
-        (challenge.created_by === user.id || Boolean(mods.data?.includes(user.id)))),
+        (challenge.created_by === user.id || moderatorIds.includes(user.id))),
   );
-  const canAdjust = viewerCanAdjustBoard(challenge, user?.id, mods.data, officialOps);
+  const canAdjust = viewerCanAdjustBoard(challenge, user?.id, moderatorIds, officialOps);
   const canHouseRemove = viewerCanHouseRemove(challenge, officialOps);
   const canFriendlyRemove = viewerCanFriendlyHostAdd({
     challenge,
     viewerId: user?.id,
+    moderatorIds,
     officialOps: false,
   });
   const canEditScore =
     viewerCanEditBoardScore({
       challenge,
       viewerId: user?.id,
+      moderatorIds,
       officialOps,
     }) &&
     Boolean(challenge && (usesPointsBoard(challenge) || usesQuantityScoring(challenge)));
+  const canProxy = viewerCanProxyCheckin({
+    challenge,
+    viewerId: user?.id,
+    moderatorIds,
+    officialOps,
+  });
   const showExcuse = challengeTracksMissesForExcuse(challenge);
 
   const [menu, setMenu] = useState<(Target & { anchor: MenuAnchor }) | null>(null);
@@ -178,8 +183,7 @@ export function HostAdjustProvider({ children }: { children: ReactNode }) {
       (canAdjust ||
         (challengeIsEndedForAdjust(challenge) &&
           (officialOps ||
-            (user?.id &&
-              (challenge.created_by === user.id || Boolean(mods.data?.includes(user.id))))))),
+            (user?.id && (challenge.created_by === user.id || moderatorIds.includes(user.id)))))),
   );
   const bulkDisabled = !canAdjust;
 
@@ -199,10 +203,12 @@ export function HostAdjustProvider({ children }: { children: ReactNode }) {
       canHouseRemove,
       canFriendlyRemove,
       canEditScore,
+      canProxy,
       isActor,
       showExcuse,
       showBulkAdjust,
       bulkDisabled,
+      moderatorIds,
       openRowMenu,
       openBulkAdjust,
     }),
@@ -212,7 +218,9 @@ export function HostAdjustProvider({ children }: { children: ReactNode }) {
       canEditScore,
       canFriendlyRemove,
       canHouseRemove,
+      canProxy,
       isActor,
+      moderatorIds,
       openBulkAdjust,
       openRowMenu,
       showBulkAdjust,
@@ -223,7 +231,7 @@ export function HostAdjustProvider({ children }: { children: ReactNode }) {
   return (
     <HostAdjustContext.Provider value={value}>
       {children}
-      {(canAdjust || canHouseRemove || canFriendlyRemove || canEditScore || showBulkAdjust) &&
+      {(canAdjust || canHouseRemove || canFriendlyRemove || canEditScore || canProxy || showBulkAdjust) &&
       id &&
       challenge ? (
         <HostAdjustSheets
@@ -236,6 +244,9 @@ export function HostAdjustProvider({ children }: { children: ReactNode }) {
           canHouseRemove={canHouseRemove}
           canFriendlyRemove={canFriendlyRemove}
           canEditScore={canEditScore}
+          canProxy={canProxy}
+          moderatorIds={moderatorIds}
+          officialOps={officialOps}
           houseDisabled={challengeIsEndedForAdjust(challenge)}
           onCloseMenu={() => setMenu(null)}
           onOpenSheet={(next) => {
@@ -313,6 +324,9 @@ function HostAdjustSheets({
   canHouseRemove,
   canFriendlyRemove,
   canEditScore,
+  canProxy,
+  moderatorIds,
+  officialOps,
   houseDisabled,
   onCloseMenu,
   onOpenSheet,
@@ -328,6 +342,9 @@ function HostAdjustSheets({
   canHouseRemove: boolean;
   canFriendlyRemove: boolean;
   canEditScore: boolean;
+  canProxy: boolean;
+  moderatorIds: string[];
+  officialOps: boolean;
   houseDisabled: boolean;
   onCloseMenu: () => void;
   onOpenSheet: (next: { target: Target; action: HostAdjustAction; day?: HostAdjustDay }) => void;
@@ -337,6 +354,8 @@ function HostAdjustSheets({
   const queryClient = useQueryClient();
   const router = useRouter();
   const { user } = useAuth();
+  const challengeQuery = useChallenge(challengeId);
+  const roster = useChallengeParticipants(challengeId);
   const profileQuery = useProfile(user?.id);
   const actorName = hostAdjustActorName(profileQuery.data);
   const [noteStep, setNoteStep] = useState(false);
@@ -421,8 +440,46 @@ function HostAdjustSheets({
     },
   });
 
+  const proxyTarget = menu
+    ? (roster.data ?? []).find((row) => row.user_id === menu.userId)
+    : null;
+  const targetPeriod = useQuery({
+    queryKey: ['challenge-checkin', challengeId, menu?.userId, 'proxy-gate'],
+    enabled: Boolean(challengeId && menu?.userId && canProxy),
+    queryFn: () => fetchCurrentPeriodCheckin(challengeId, menu!.userId, challengeQuery.data),
+  });
+  const proxyBlocked = menu
+    ? proxyCheckinBlockedReason({
+        challenge: challengeQuery.data,
+        viewerId: user?.id,
+        moderatorIds,
+        officialOps,
+        participantStatus: proxyTarget?.status,
+        eliminatedAt: proxyTarget?.eliminated_at,
+        periodComplete: checkinPeriodComplete(challengeQuery.data, {
+          checkinPhase: targetPeriod.data?.status === 'submitted' ? 'submitted' : targetPeriod.data?.status,
+        }),
+      })
+    : null;
+
   const actions: ChallengeOverflowAction[] = menu
     ? [
+        ...(canProxy
+          ? [
+              {
+                key: 'proxy-checkin',
+                label: proxyBlocked ?? copy('board.checkInFor', 'gentle', { name: menu.displayName }),
+                disabled: Boolean(proxyBlocked),
+                onPress: () => {
+                  if (proxyBlocked) {
+                    return;
+                  }
+                  onCloseMenu();
+                  router.push(checkinSubmitHref(challengeId, { for: menu.userId }) as never);
+                },
+              },
+            ]
+          : []),
         ...(canAdjust
           ? [
               {
@@ -1222,8 +1279,12 @@ export function BoardAdjustButton({
   displayName: string;
   status?: string | null;
 }) {
-  const { canAdjust, canHouseRemove, canFriendlyRemove, canEditScore, openRowMenu } = useHostAdjustUi();
-  if ((!canAdjust && !canHouseRemove && !canFriendlyRemove && !canEditScore) || !participantCanBeAdjusted(status)) {
+  const { canAdjust, canHouseRemove, canFriendlyRemove, canEditScore, canProxy, openRowMenu } =
+    useHostAdjustUi();
+  if (
+    (!canAdjust && !canHouseRemove && !canFriendlyRemove && !canEditScore && !canProxy) ||
+    !participantCanBeAdjusted(status)
+  ) {
     return null;
   }
   return (

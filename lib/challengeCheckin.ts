@@ -26,6 +26,7 @@ export type ChallengeCheckin = {
   route_preview_url?: string | null;
   created_at: string;
   updated_at?: string | null;
+  logged_by?: string | null;
 };
 
 export function asCheckinStatus(value: unknown): CheckinStatus | null {

@@ -42,8 +42,16 @@ import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useChallenge, useChallengeParticipants, useMyParticipation } from '@/hooks/useChallenge';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile, useUpdateProfile } from '@/hooks/useProfile';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePeriodCheckin, useSaveCheckinProof, useSubmitCheckin, useCheckinHistory } from '@/hooks/useChallengeCheckin';
+import { useOfficialOps } from '@/hooks/useOfficialOps';
+import {
+  fetchChallengeModeratorIds,
+  proxyCheckinBlockedReason,
+  proxyCheckinLiveBody,
+  viewerCanProxyCheckin,
+} from '@/lib/challengeMods';
+import { personDisplayName } from '@/lib/social';
 import { isHomeSocialFeedKey, seedChallengeLivePost } from '@/hooks/useFeed';
 import { rememberSentLiveCheckin } from '@/lib/liveLanding';
 import { runPostSendOcr } from '@/lib/health/runPostSendOcr';
@@ -152,6 +160,7 @@ import { allowsMultiCheckin, checkinPeriodComplete } from '@/lib/loggable';
 import { hasChallengeStarted, isClosedForLogs, loggingOpensHelper } from '@/lib/settlement';
 import { supabase } from '@/lib/supabase';
 import type { MentionDoc } from '@/lib/mentions';
+import type { ChallengeCheckin } from '@/lib/challengeCheckin';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { firstRouteParam } from '@/lib/challengeLoad';
 import { isChallengeRouteId } from '@/lib/challengeTimezone';
@@ -300,16 +309,17 @@ function closeCheckinToChallenge(
 }
 
 export default function SubmitWorkoutScreen() {
-  const params = useLocalSearchParams<{ id?: string; from?: string; tab?: string }>();
+  const params = useLocalSearchParams<{ id?: string; from?: string; tab?: string; for?: string }>();
   const id = firstRouteParam(params.id);
   const router = useRouter();
   const pathname = usePathname();
   const navFocused = useIsFocused();
+  const forUserId = firstRouteParam(params.for);
   return (
     <View key={id || 'submit'} style={{ flex: 1 }}>
       <CheckinSafeBoundary
         onBack={() => closeCheckinToChallenge(router, id, { from: firstRouteParam(params.from), tab: firstRouteParam(params.tab) })}
-        href={id ? String(checkinSubmitHref(id)) : pathname}
+        href={id ? String(checkinSubmitHref(id, { for: forUserId })) : pathname}
         id={id || null}
         focused={checkinCameraFocused({ navFocused, pathname })}>
         <SubmitWorkoutInner />
@@ -319,9 +329,10 @@ export default function SubmitWorkoutScreen() {
 }
 
 function SubmitWorkoutInner() {
-  const params = useLocalSearchParams<{ id: string; from?: string; done?: string; tab?: string }>();
+  const params = useLocalSearchParams<{ id: string; from?: string; done?: string; tab?: string; for?: string }>();
   const rawId = firstRouteParam(params.id);
   const id = isChallengeRouteId(rawId) ? rawId : '';
+  const forParam = firstRouteParam(params.for);
   const router = useRouter();
   const pathname = usePathname();
   const navFocused = useIsFocused();
@@ -392,14 +403,24 @@ function SubmitWorkoutInner() {
   const { participation, isLoading: participationLoading } = useMyParticipation(id);
   const { user } = useAuth();
   const uid = safeUserId(user);
+  const officialOps = useOfficialOps().data === true;
+  const mods = useQuery({
+    queryKey: ['challenge-moderators', id],
+    enabled: Boolean(id && uid),
+    queryFn: () => fetchChallengeModeratorIds(id),
+  });
+  const moderatorIds = mods.data ?? [];
+  const proxyForId = forParam && forParam !== uid ? forParam : '';
+  const isProxy = Boolean(proxyForId);
+  const subjectId = isProxy ? proxyForId : uid;
   const { profile } = useMyProfile();
   const updateProfile = useUpdateProfile();
   const distanceUnit = athleteDistanceUnit(profile?.weight_unit);
   const sessionDistance = distanceProofIsSessionLog(challengeQuery.data);
-  const checkinQuery = usePeriodCheckin(id, challengeQuery.data);
-  const historyQuery = useCheckinHistory(id, Boolean(challengeQuery.data));
+  const checkinQuery = usePeriodCheckin(id, challengeQuery.data, isProxy ? proxyForId : undefined);
+  const historyQuery = useCheckinHistory(id, Boolean(challengeQuery.data), isProxy ? proxyForId : undefined);
   const saveProof = useSaveCheckinProof(id);
-  const submitCheckin = useSubmitCheckin(id);
+  const submitCheckin = useSubmitCheckin(id, isProxy ? proxyForId : undefined);
   const queryClient = useQueryClient();
   const wavePublishedRef = useRef(false);
 
@@ -445,15 +466,37 @@ function SubmitWorkoutInner() {
   }, []);
 
   const challenge = challengeQuery.data;
+  const canProxy = viewerCanProxyCheckin({
+    challenge,
+    viewerId: uid,
+    moderatorIds,
+    officialOps,
+  });
+  const subjectRow = roster.data?.find((row) => row.user_id === subjectId) ?? null;
+  const proxyName = personDisplayName(subjectRow?.profile);
+  const actorName = personDisplayName(profile);
+  const proxyBlocked = isProxy
+    ? !canProxy
+      ? 'Only the host can check in for someone.'
+      : proxyCheckinBlockedReason({
+          challenge,
+          viewerId: uid,
+          moderatorIds,
+          officialOps,
+          participantStatus: subjectRow?.status,
+          eliminatedAt: subjectRow?.eliminated_at,
+          periodComplete: checkinPeriodComplete(challenge, { checkinPhase: checkinQuery.data?.phase }),
+        })
+    : null;
 
   useEffect(() => {
-    if (!id || !challenge || !checkinQuery.isFetched) {
+    if (!id || !challenge || !checkinQuery.isFetched || isProxy) {
       return;
     }
     if (checkinPeriodComplete(challenge, { checkinPhase: checkinQuery.data?.phase })) {
       router.replace(challengeDetailHref(id, 'lobby', null, { tab: 'overview' }) as never);
     }
-  }, [challenge, checkinQuery.data?.phase, checkinQuery.isFetched, id, router]);
+  }, [challenge, checkinQuery.data?.phase, checkinQuery.isFetched, id, isProxy, router]);
   /**
    * Challenges with no stored proofs get theirs synthesized, and makeProof mints a fresh id each
    * call. Recomputing per render changed every proof.id, remounting the note field on each
@@ -1027,6 +1070,7 @@ function SubmitWorkoutInner() {
       cardVersion: isRenderedWorkoutCard(draft) ? WORKOUT_CARD_VERSION : null,
       caption: checkinComposerPrefill(clampProofCaption(proofCaptions[proof.id] ?? draft?.caption ?? '')),
       notes,
+      ...(isProxy ? { forUserId: proxyForId } : null),
     };
     try {
       return await saveProof.mutateAsync(payload);
@@ -1139,6 +1183,7 @@ function SubmitWorkoutInner() {
     await saveProof.mutateAsync({
       challengeId: id,
       extraMedia: remote,
+      ...(isProxy ? { forUserId: proxyForId } : null),
     });
   }
 
@@ -1167,7 +1212,12 @@ function SubmitWorkoutInner() {
       return;
     }
     try {
-      await saveProof.mutateAsync({ challengeId: id, proof, clearProof: true });
+      await saveProof.mutateAsync({
+        challengeId: id,
+        proof,
+        clearProof: true,
+        ...(isProxy ? { forUserId: proxyForId } : null),
+      });
     } catch (caught) {
       setError(getErrorMessage(caught));
     }
@@ -1243,7 +1293,7 @@ function SubmitWorkoutInner() {
     }
     try {
       const body = checkinPostBody(caption.text);
-      let saved = checkinQuery.data ?? null;
+      let saved: ChallengeCheckin | null = checkinQuery.data ?? null;
       let savedParts = { ...(checkinQuery.data?.proof_parts ?? {}) };
       for (const proof of proofSteps) {
         if (proof.method === 'honor') {
@@ -1316,6 +1366,7 @@ function SubmitWorkoutInner() {
           challengeId: id,
           notes: body,
           extraMedia: extraUrls,
+          ...(isProxy ? { forUserId: proxyForId } : null),
         });
       } catch (extraSaveError) {
         logCheckinPhase('save', 'extra-soft-fail', getErrorMessage(extraSaveError));
@@ -1348,7 +1399,7 @@ function SubmitWorkoutInner() {
           }
           try {
             await saveWorkoutSession({
-              userId: uid,
+              userId: subjectId || uid,
               challengeId: id,
               checkinId,
               health,
@@ -1409,16 +1460,29 @@ function SubmitWorkoutInner() {
                 await persistLiftSnapshotOnPost(postId, liftDraft);
               }
             }
-            const author = sessionAuthor(profile, uid);
+            const author = sessionAuthor(
+              isProxy ? subjectRow?.profile ?? { id: subjectId, username: '', display_name: proxyName, avatar_url: null } : profile,
+              subjectId,
+            );
+            const liveBody = isProxy
+              ? proxyCheckinLiveBody({
+                  actorName,
+                  participantName: proxyName,
+                  caption: caption.text,
+                })
+              : body;
             if (author && postId) {
-              seedChallengeLivePost(queryClient, id, uid ?? undefined, {
+              seedChallengeLivePost(queryClient, id, subjectId ?? undefined, {
                 id: postId,
                 author_id: author.id,
                 author,
                 challenge_id: id,
-                content: body,
+                content: liveBody,
                 media_urls: mediaUrls,
-                checkin_stats: checkinStats,
+                checkin_stats: {
+                  ...(checkinStats && typeof checkinStats === 'object' ? checkinStats : {}),
+                  ...(isProxy ? { logged_by: uid, logged_by_name: actorName } : null),
+                },
                 source: 'checkin',
                 checkin_id: checkinId,
                 checkin_stage: readyNow ? 'complete' : 'started',
@@ -1809,7 +1873,7 @@ function SubmitWorkoutInner() {
     );
   }
 
-  if (challenge?.is_callout && !participation) {
+  if (challenge?.is_callout && !participation && !isProxy) {
     return (
       <Screen padded={false} edges={['left', 'right', 'bottom']}>
         <MascotState
@@ -1823,7 +1887,21 @@ function SubmitWorkoutInner() {
     );
   }
 
-  if (!challenge || !participation) {
+  if (isProxy && proxyBlocked) {
+    return (
+      <Screen padded={false} edges={['left', 'right', 'bottom']}>
+        <MascotState
+          kind="empty"
+          title={proxyBlocked === 'They already dropped.' ? copy('board.alreadyDropped') : proxyBlocked}
+          body={proxyBlocked}
+          actionLabel="Back to challenge"
+          onAction={() => leaveCheckin()}
+        />
+      </Screen>
+    );
+  }
+
+  if (!challenge || (!isProxy && !participation) || (isProxy && !subjectRow)) {
     return (
       <Screen padded={false} edges={['left', 'right', 'bottom']}>
         <MascotState
@@ -1837,7 +1915,7 @@ function SubmitWorkoutInner() {
     );
   }
 
-  if (Boolean(participation.eliminated_at)) {
+  if (!isProxy && Boolean(participation?.eliminated_at)) {
     return (
       <Screen padded={false} edges={['left', 'right', 'bottom']}>
         <MascotState
@@ -1865,7 +1943,7 @@ function SubmitWorkoutInner() {
     );
   }
 
-  if (isClosedForLogs({ ...challenge, eliminated: Boolean(participation.eliminated_at) })) {
+  if (isClosedForLogs({ ...challenge, eliminated: Boolean((isProxy ? subjectRow : participation)?.eliminated_at) })) {
     return (
       <Screen padded={false} edges={['left', 'right', 'bottom']}>
         <MascotState
@@ -2157,6 +2235,7 @@ function SubmitWorkoutInner() {
           setProofCaptions((current) => ({ ...current, [proofId]: text }))
         }
         lobbyName={challengeDisplayTitle(challenge)}
+        proxyForName={isProxy ? proxyName : null}
         lobbyLocked={lobbyLocked}
         shareHome={shareHome}
         onShareHomeChange={(home) => setSharePrefs((current) => ({ ...current, home }))}

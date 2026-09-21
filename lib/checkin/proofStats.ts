@@ -39,6 +39,9 @@ export type CheckinProofStats = {
    * timestamps, so it says how the effort moved and not where or when.
    */
   hr_series?: number[] | null;
+  /** Host or moderator who logged this check-in for the participant. */
+  logged_by?: string | null;
+  logged_by_name?: string | null;
 };
 
 export type ProofStatChip = { key: string; label: string };

@@ -129,6 +129,8 @@ type CheckinComposerProps = {
    */
   proofHero?: Record<string, (size: { width: number; height: number }) => ReactNode>;
   dueLine?: ReactNode;
+  /** Host / moderator proxy: show “Checking in for {name}” instead of the actor’s own check-in. */
+  proxyForName?: string | null;
 };
 
 export function CheckinComposer({
@@ -167,6 +169,7 @@ export function CheckinComposer({
   onRemoveLift,
   accessory,
   dueLine,
+  proxyForName,
 }: CheckinComposerProps) {
   const fieldRef = useRef<MentionFieldHandle>(null);
   const pagerRef = useRef<FlatList<ReviewPage>>(null);
@@ -623,6 +626,18 @@ export function CheckinComposer({
           scrollY.current = event.nativeEvent.contentOffset.y;
         }}
         scrollEventThrottle={16}>
+      {proxyForName ? (
+        <View
+          style={{
+            paddingTop: Math.max(insets.top, 8) + THEME.playerCloseSize + 8,
+            paddingHorizontal: 16,
+            paddingBottom: 10,
+          }}>
+          <AppText className="text-[17px] font-bold" style={{ color: THEME.textPrimary }}>
+            {copy('mods.checkingInFor', 'gentle', { name: proxyForName })}
+          </AppText>
+        </View>
+      ) : null}
       <View style={{ height: heroHeight, backgroundColor: THEME.primary }}>
         {pages.length > 0 ? (
           <FlatList

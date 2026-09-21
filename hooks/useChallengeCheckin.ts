@@ -36,7 +36,7 @@ import { mergeFeedMediaIntoParts, mergePeriodCheckinRows, periodCheckinIds } fro
 import { signedProofUrl } from '@/utils/upload';
 
 const CHECKIN_COLUMNS =
-  'id, user_id, challenge_id, period_key, status, proof_parts, pre_selfie_url, post_selfie_url, hr_monitor_url, notes, health_workout_id, workout_submission_id, started_at, submitted_at, created_at, updated_at';
+  'id, user_id, challenge_id, period_key, status, proof_parts, pre_selfie_url, post_selfie_url, hr_monitor_url, notes, health_workout_id, workout_submission_id, started_at, submitted_at, created_at, updated_at, logged_by';
 
 type PeriodChallenge = CheckinPeriodChallenge & {
   frequency?: string | null;
@@ -224,12 +224,17 @@ export async function fetchCheckinHistory(
   }>;
 }
 
-export function useCheckinHistory(challengeId: string | undefined, enabled = true) {
+export function useCheckinHistory(
+  challengeId: string | undefined,
+  enabled = true,
+  subjectUserId?: string | null,
+) {
   const { user } = useAuth();
+  const userId = subjectUserId?.trim() || user?.id;
   return useQuery({
-    queryKey: ['checkin-history', challengeId, user?.id],
-    enabled: Boolean(challengeId && user?.id && enabled),
-    queryFn: () => fetchCheckinHistory(challengeId!, user!.id),
+    queryKey: ['checkin-history', challengeId, userId],
+    enabled: Boolean(challengeId && userId && enabled),
+    queryFn: () => fetchCheckinHistory(challengeId!, userId!),
   });
 }
 
@@ -354,17 +359,19 @@ export function useSubmittedCheckinCount(
 export function usePeriodCheckin(
   challengeId: string | undefined,
   challenge?: PeriodChallenge | null,
+  subjectUserId?: string | null,
 ) {
   const { user } = useAuth();
+  const userId = subjectUserId?.trim() || user?.id;
   const date = periodKeyFor(challenge);
   const official = Boolean(challenge && isOfficialSeriesChallenge(challenge));
 
   return useQuery({
-    queryKey: [...checkinQueryKey(challengeId, user?.id), challengeClockTz(challenge), date],
-    enabled: Boolean(challengeId && user?.id),
+    queryKey: [...checkinQueryKey(challengeId, userId), challengeClockTz(challenge), date],
+    enabled: Boolean(challengeId && userId),
     refetchInterval: official ? 30_000 : false,
     queryFn: async (): Promise<ChallengeCheckinView> => {
-      const row = await fetchCurrentPeriodCheckin(challengeId!, user!.id, challenge, date);
+      const row = await fetchCurrentPeriodCheckin(challengeId!, userId!, challenge, date);
       return asView(row);
     },
   });
@@ -380,7 +387,7 @@ export function useSaveCheckinProof(challengeId: string | undefined) {
       if (!challengeId || !user?.id) {
         return;
       }
-      writeCheckinCache(queryClient, challengeId, user.id, row);
+      writeCheckinCache(queryClient, challengeId, row.user_id || user.id, row);
       void queryClient.invalidateQueries({
         predicate: (query) => isHomeSocialFeedKey(query.queryKey),
       });
@@ -410,12 +417,12 @@ export function useSaveCheckinProof(challengeId: string | undefined) {
   });
 }
 
-export function useSubmitCheckin(challengeId: string | undefined) {
+export function useSubmitCheckin(challengeId: string | undefined, forUserId?: string | null) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: () => submitCheckin(challengeId!),
+    mutationFn: () => submitCheckin(challengeId!, forUserId),
     onSuccess: (row) => {
       if (row?.id) {
         void cancelCheckoutReminder(row.id);
@@ -424,11 +431,12 @@ export function useSubmitCheckin(challengeId: string | undefined) {
         return;
       }
       if (row && user?.id) {
+        const subjectId = row.user_id || forUserId?.trim() || user.id;
         const cachedChallenge = queryClient.getQueryData<Challenge>(['challenge', challengeId]);
         if (allowsMultiCheckin(cachedChallenge)) {
-          queryClient.setQueriesData({ queryKey: checkinQueryKey(challengeId, user.id) }, asView(null));
+          queryClient.setQueriesData({ queryKey: checkinQueryKey(challengeId, subjectId) }, asView(null));
         } else {
-          writeCheckinCache(queryClient, challengeId, user.id, row);
+          writeCheckinCache(queryClient, challengeId, subjectId, row);
         }
         const bumpPoints =
           usesPointsBoard(cachedChallenge) && !usesComparablePointsScoring(cachedChallenge);
@@ -437,7 +445,7 @@ export function useSubmitCheckin(challengeId: string | undefined) {
           ['challenge-participants', challengeId],
           (current) =>
             (current ?? []).map((item) =>
-              item.user_id === user.id
+              item.user_id === subjectId
                 ? {
                     ...item,
                     days_completed: incrementDaysCompleted(Number(item.days_completed) || 0, false),

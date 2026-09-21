@@ -5,6 +5,7 @@ import { uniqueProofUrls } from '@/lib/challengeProofs';
 import { seedLiveAuthor, type SeedLiveAuthorOpts } from '@/lib/safeIds';
 import { checkinComposerPrefill } from '@/lib/checkin/captions';
 import { isCheckinCompleteStage, isCheckinPost, type CheckinPostLike } from '@/lib/checkinPost';
+import { splitProxyCheckinContent } from '@/lib/challengeMods';
 import { liveCheckinKey } from '@/lib/liveFeedPatch';
 import {
   applyStackedReaction,
@@ -218,8 +219,12 @@ export function liveCheckinLabel(post: CheckinPostLike): 'Check-in' | 'Check-in 
   return isCheckinCompleteStage(post.checkin_stage) ? 'Check-in Complete' : 'Check-in';
 }
 
-/** Stage chip on the proof thumb. Never an invented activity sentence. */
+/** Stage chip on the proof thumb. Proxy check-ins keep the actor sentence. */
 export function liveCheckinHeadline(post: CheckinPostLike & { content?: string | null }): string {
+  const proxy = splitProxyCheckinContent(post.content);
+  if (proxy.sentence) {
+    return proxy.sentence;
+  }
   return liveCheckinLabel(post);
 }
 

@@ -65,6 +65,7 @@ import { getErrorMessage } from '@/utils/errors';
 import { displayUrl, mediaKind } from '@/utils/media';
 import { directedWallHost } from '@/lib/profileWall';
 import { formatFeedTime } from '@/utils/format';
+import { loggedByNameFromStats, proxyLoggedByLine } from '@/lib/challengeMods';
 import { authorLabel, safeUserId } from '@/lib/safeIds';
 
 const BODY_COLLAPSE_LINES = 4;
@@ -464,6 +465,11 @@ function PostCardInner({
             }
             onToggle={() => setExpanded((value) => !value)}
           />
+        ) : null}
+        {checkin && loggedByNameFromStats(post.checkin_stats) ? (
+          <AppText className="mt-1 text-[12px] leading-4" style={{ color: THEME.textMuted }}>
+            {proxyLoggedByLine(loggedByNameFromStats(post.checkin_stats))}
+          </AppText>
         ) : null}
         {/* Fitness stats only, from the stored numbers. The caption above stays user text. */}
         {checkin ? (

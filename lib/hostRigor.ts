@@ -169,6 +169,25 @@ export function challengeIsSettledForRigor(status?: string | null): boolean {
   return ENDED.has(String(status ?? '').toLowerCase());
 }
 
+export function viewerIsChallengeStaff(input: {
+  challenge?: { created_by?: string | null } | null;
+  viewerId?: string | null;
+  moderatorIds?: readonly string[] | null;
+  officialOps?: boolean | null;
+}): boolean {
+  if (input.officialOps) {
+    return true;
+  }
+  const viewerId = input.viewerId?.trim();
+  if (!viewerId || !input.challenge) {
+    return false;
+  }
+  if (input.challenge.created_by === viewerId) {
+    return true;
+  }
+  return Boolean(input.moderatorIds?.includes(viewerId));
+}
+
 export function viewerCanUseHostBoardTools(input: {
   challenge?: {
     created_by?: string | null;
@@ -179,6 +198,7 @@ export function viewerCanUseHostBoardTools(input: {
     host_budget?: number | null;
   } | null;
   viewerId?: string | null;
+  moderatorIds?: readonly string[] | null;
   officialOps?: boolean | null;
 }): boolean {
   const challenge = input.challenge;
@@ -188,7 +208,7 @@ export function viewerCanUseHostBoardTools(input: {
   if (input.officialOps) {
     return true;
   }
-  if (!input.viewerId || challenge.created_by !== input.viewerId) {
+  if (!viewerIsChallengeStaff(input)) {
     return false;
   }
   return hostRigorOf(challenge) !== 'strict';
@@ -201,6 +221,7 @@ export function viewerCanFriendlyHostAdd(input: {
     status?: string | null;
   } | null;
   viewerId?: string | null;
+  moderatorIds?: readonly string[] | null;
   officialOps?: boolean | null;
 }): boolean {
   const challenge = input.challenge;
@@ -210,7 +231,7 @@ export function viewerCanFriendlyHostAdd(input: {
   if (input.officialOps) {
     return true;
   }
-  return Boolean(input.viewerId && challenge.created_by === input.viewerId && hostRigorOf(challenge) === 'friendly');
+  return viewerIsChallengeStaff(input) && hostRigorOf(challenge) === 'friendly';
 }
 
 export function viewerCanNormalHostAdjust(input: {
@@ -220,6 +241,7 @@ export function viewerCanNormalHostAdjust(input: {
     status?: string | null;
   } | null;
   viewerId?: string | null;
+  moderatorIds?: readonly string[] | null;
   officialOps?: boolean | null;
 }): boolean {
   const challenge = input.challenge;
@@ -229,7 +251,7 @@ export function viewerCanNormalHostAdjust(input: {
   if (input.officialOps) {
     return true;
   }
-  if (!input.viewerId || challenge.created_by !== input.viewerId) {
+  if (!viewerIsChallengeStaff(input)) {
     return false;
   }
   const rigor = hostRigorOf(challenge);
@@ -243,6 +265,7 @@ export function viewerCanEditBoardScore(input: {
     status?: string | null;
   } | null;
   viewerId?: string | null;
+  moderatorIds?: readonly string[] | null;
   officialOps?: boolean | null;
 }): boolean {
   return viewerCanFriendlyHostAdd(input);

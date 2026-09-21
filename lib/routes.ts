@@ -186,16 +186,25 @@ export function checkinPickerHref(
 /** Check In / Begin / Continue only. Literal path — object `{ pathname, params }` breaks Safari. Never `/capture`. */
 export function checkinSubmitHref(
   id: string,
-  extra?: { from?: 'multi'; done?: string[] | string | null },
+  extra?: { from?: 'multi'; done?: string[] | string | null; for?: string | null },
 ): Href {
   const path = `/challenges/${String(id ?? '').trim()}/submit`;
-  if (extra?.from !== 'multi') {
-    return path as Href;
+  const params = new URLSearchParams();
+  if (extra?.from === 'multi') {
+    params.set('from', 'multi');
+    const done = (Array.isArray(extra.done) ? extra.done : extra.done ? [extra.done] : [])
+      .map((value) => String(value ?? '').trim())
+      .filter(Boolean);
+    if (done.length > 0) {
+      params.set('done', done.join(','));
+    }
   }
-  const done = (Array.isArray(extra.done) ? extra.done : extra.done ? [extra.done] : [])
-    .map((value) => String(value ?? '').trim())
-    .filter(Boolean);
-  return done.length > 0 ? (`${path}?from=multi&done=${done.join(',')}` as Href) : (`${path}?from=multi` as Href);
+  const forUser = String(extra?.for ?? '').trim();
+  if (forUser) {
+    params.set('for', forUser);
+  }
+  const query = params.toString();
+  return (query ? `${path}?${query}` : path) as Href;
 }
 
 const CHALLENGE_RETRY_SKIP = new Set(['new', 'create', 'callout', 'u']);

@@ -171,6 +171,16 @@ describe('liveCheckinHeadline', () => {
     ).toBe('Check-in Complete');
   });
 
+  it('names the actor on a proxy check-in', () => {
+    expect(
+      liveCheckinHeadline({
+        source: 'checkin',
+        checkin_stage: 'complete',
+        content: 'Courtney checked in for Silas.\n\nlegs',
+      }),
+    ).toBe('Courtney checked in for Silas.');
+  });
+
   it('keeps the stage chip when the caption is the athlete’s own words', () => {
     expect(
       liveCheckinHeadline({ source: 'checkin', checkin_stage: 'started', content: 'leg day' }),

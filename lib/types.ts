@@ -1321,6 +1321,7 @@ export type Database = {
           scoring_version: number | null;
           created_at: string;
           updated_at: string;
+          logged_by: string | null;
         },
         Partial<{
           user_id: string;
@@ -1333,6 +1334,7 @@ export type Database = {
           status: 'in_progress' | 'ready' | 'submitted';
           proof_parts: Record<string, unknown>;
           submitted_at: string | null;
+          logged_by: string | null;
         }>,
         [
           Relationship<'challenge_checkins_user_id_fkey', 'user_id', 'profiles', 'id'>,
@@ -2262,11 +2264,20 @@ export type Database = {
           p_notes?: string | null;
           p_extra_media?: string[] | null;
           p_clear_proof?: boolean;
+          p_for_user_id?: string | null;
         };
         Returns: Record<string, unknown>;
       };
       submit_checkin: {
-        Args: { p_challenge_id: string };
+        Args: { p_challenge_id: string; p_for_user_id?: string | null };
+        Returns: Record<string, unknown>;
+      };
+      appoint_challenge_moderator: {
+        Args: { p_challenge_id: string; p_user_id: string };
+        Returns: Record<string, unknown>;
+      };
+      remove_challenge_moderator: {
+        Args: { p_challenge_id: string; p_user_id: string };
         Returns: Record<string, unknown>;
       };
       host_adjust_board_days: {

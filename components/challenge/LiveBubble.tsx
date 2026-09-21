@@ -19,6 +19,7 @@ import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import { useUpdateComment } from '@/hooks/useCommentEdit';
 import { isLiveComment } from '@/lib/commentEdit';
+import { loggedByNameFromStats, proxyLoggedByLine, splitProxyCheckinContent } from '@/lib/challengeMods';
 import { checkinCardCaption } from '@/lib/checkinPost';
 import { copy } from '@/lib/copy';
 import { isWorkoutCardSlide, workoutSlideForPost } from '@/lib/health/postWorkoutCard';
@@ -101,10 +102,14 @@ export const LiveBubble = memo(function LiveBubble({
   const { width: windowW } = useWindowDimensions();
   const reservedProofH = liveInlineFrameHeight(liveInlineSeedWidth(Math.max(windowW, 160)));
   const time = formatLiveClock(post.created_at);
+  const proxy = splitProxyCheckinContent(post.content);
   const caption = checkin
-    ? checkinCardCaption(post.content, null, post.edited_at)
+    ? proxy.sentence
+      ? proxy.caption
+      : checkinCardCaption(post.content, null, post.edited_at)
     : liveChatText(post.content, post.media_urls);
   const headline = liveCheckinHeadline(post);
+  const loggedBy = loggedByNameFromStats(post.checkin_stats);
   const liftSessionId = post.lift_session_id ? String(post.lift_session_id) : null;
   const workout = useMemo(
     () =>
@@ -378,6 +383,11 @@ export const LiveBubble = memo(function LiveBubble({
                 {caption && !liftSessionId ? (
                   <AppText className="mt-0.5 text-[13px]" style={{ color: THEME.textMuted }}>
                     {caption}
+                  </AppText>
+                ) : null}
+                {loggedBy ? (
+                  <AppText className="mt-0.5 text-[11px]" style={{ color: THEME.textMuted }}>
+                    {proxyLoggedByLine(loggedBy)}
                   </AppText>
                 ) : null}
                 {/* A lift attached to this check-in reads as its own card, not as a wall of text. */}

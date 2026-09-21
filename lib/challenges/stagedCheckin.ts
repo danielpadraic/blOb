@@ -68,10 +68,10 @@ export async function saveCheckinMetricValues(challengeId: string, values: Recor
   await saveCheckinMetricValuesWithClient(supabase as never, challengeId, values);
 }
 
-export async function submitCheckin(challengeId: string) {
+export async function submitCheckin(challengeId: string, forUserId?: string | null) {
   try {
     logCheckinPhase('submit', 'start');
-    const parsed = await submitCheckinWithClient(supabase as never, challengeId);
+    const parsed = await submitCheckinWithClient(supabase as never, challengeId, forUserId);
     logCheckinPhase('submit', parsed?.id ? 'ok' : 'empty');
     requestPushAfterValue();
     return parsed;

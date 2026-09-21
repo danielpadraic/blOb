@@ -133,4 +133,43 @@ describe('host rigor', () => {
       }),
     ).toBe(false);
   });
+
+  it('lets a listed moderator use the same Board tools as the host', () => {
+    const live = { created_by: 'host', status: 'live', host_rigor: 'normal' };
+    expect(
+      viewerCanUseHostBoardTools({
+        challenge: live,
+        viewerId: 'courtney',
+        moderatorIds: ['courtney'],
+      }),
+    ).toBe(true);
+    expect(
+      viewerCanNormalHostAdjust({
+        challenge: live,
+        viewerId: 'courtney',
+        moderatorIds: ['courtney'],
+      }),
+    ).toBe(true);
+    expect(
+      viewerCanFriendlyHostAdd({
+        challenge: { ...live, host_rigor: 'friendly' },
+        viewerId: 'courtney',
+        moderatorIds: ['courtney'],
+      }),
+    ).toBe(true);
+    expect(
+      viewerCanFriendlyHostAdd({
+        challenge: live,
+        viewerId: 'courtney',
+        moderatorIds: ['courtney'],
+      }),
+    ).toBe(false);
+    expect(
+      viewerCanUseHostBoardTools({
+        challenge: { ...live, host_rigor: 'strict' },
+        viewerId: 'courtney',
+        moderatorIds: ['courtney'],
+      }),
+    ).toBe(false);
+  });
 });

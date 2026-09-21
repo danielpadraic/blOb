@@ -24,6 +24,7 @@ import { HostRoundPromptChip } from '@/components/challenge/HostRoundPromptChip'
 import { PeriodCheckinDue } from '@/components/challenge/PeriodCheckinDue';
 import { ChallengeHeroCard } from '@/components/challenge/ChallengeHeroCard';
 import { ChallengeInvitesCard } from '@/components/challenge/ChallengeInvitesCard';
+import { ChallengeModeratorsCard } from '@/components/challenge/ChallengeModeratorsCard';
 import { ChallengeLeaderboard } from '@/components/challenge/ChallengeLeaderboard';
 import { ChallengePrizeLine } from '@/components/challenge/ChallengePrizeLine';
 import { ChallengeResultCard } from '@/components/challenge/ChallengeResultCard';
@@ -1617,6 +1618,13 @@ export default function ChallengeDetailScreen() {
             onInvitePerson={openInvite}
           />
         ) : null}
+
+        {wasCancelled ? null : (
+          <ChallengeModeratorsCard
+            challenge={challenge}
+            participantIds={(roster.data ?? []).map((row) => row.user_id)}
+          />
+        )}
 
         <View className="mt-5">
           {challenge.status === 'settled' || challenge.status === 'cancelled' ? null : isHost &&
