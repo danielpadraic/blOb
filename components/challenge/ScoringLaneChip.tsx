@@ -11,17 +11,18 @@ type ScoringLaneChipProps = {
   laneId?: string | null;
   canAssign: boolean;
   busy?: boolean;
+  compact?: boolean;
   onAssign: (laneId: string) => void;
 };
 
-export function ScoringLaneChip({ lanes, laneId, canAssign, busy, onAssign }: ScoringLaneChipProps) {
+export function ScoringLaneChip({ lanes, laneId, canAssign, busy, compact, onAssign }: ScoringLaneChipProps) {
   const [open, setOpen] = useState(false);
   if (lanes.length < 1) {
     return null;
   }
   const current = lanes.find((lane) => lane.id === laneId);
-  const label = current?.label.trim() || 'Needs a side';
   const needsSide = !current;
+  const label = current?.label.trim() || (compact ? '—' : 'Needs a side');
 
   function choose(id: string) {
     setOpen(false);
@@ -42,8 +43,8 @@ export function ScoringLaneChip({ lanes, laneId, canAssign, busy, onAssign }: Sc
           }
         }}
         style={{
-          minHeight: 28,
-          paddingHorizontal: 10,
+          minHeight: compact ? (canAssign ? 44 : 22) : 28,
+          paddingHorizontal: compact ? 6 : 10,
           borderRadius: 999,
           borderWidth: 1,
           borderColor: needsSide ? THEME.border : THEME.accent,
@@ -52,7 +53,8 @@ export function ScoringLaneChip({ lanes, laneId, canAssign, busy, onAssign }: Sc
           opacity: busy ? 0.55 : 1,
         }}>
         <AppText
-          className="text-[12px] font-semibold"
+          className={compact ? 'text-[11px] font-semibold' : 'text-[12px] font-semibold'}
+          numberOfLines={1}
           style={{ color: needsSide ? THEME.textMuted : THEME.accent }}>
           {label}
         </AppText>

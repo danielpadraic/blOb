@@ -14,15 +14,24 @@ import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
 import { Card } from '@/components/ui/Card';
 import {
+  BOARD_ADJUST_COL,
+  BOARD_AVATAR,
+  BOARD_RANK_COL,
+  BOARD_ROW_MIN,
+  BOARD_ROW_MIN_COMPACT,
+  boardColumnWidth,
   boardCompletersCount,
   boardEmptyCopy,
+  boardMedalColor,
+  boardMedalTone,
   boardQuantityProgress,
   boardRowTag,
-  boardScoreLabel,
   boardSettledCopy,
   buildBoard,
+  formatBoardPoints,
   quantityBoardHeaderLine,
   rankBoardRows,
+  shortBoardHeader,
 } from '@/lib/board';
 import { usesQuantityScoring, usesPointsBoard, usesComparablePointsScoring } from '@/lib/challengeExperience';
 import {
@@ -30,13 +39,14 @@ import {
   comparablePointsFromChallenge,
   formatComparableBoardCell,
   participantNeedsScoringLane,
+  shortComparableBoardLabel,
 } from '@/lib/comparablePoints';
 import { useSetScoringLane } from '@/hooks/useChallenge';
 import { storedDurationDays } from '@/lib/challengeGoal';
 import { challengeTargetCount } from '@/lib/challenges';
 import { copy } from '@/lib/copy';
 import { isOfficialChallenge } from '@/lib/official';
-import { THEME } from '@/lib/theme';
+import { flexChildMin, THEME } from '@/lib/theme';
 import type { Challenge, ChallengeParticipantWithProfile, ChallengeSettlementView } from '@/lib/types';
 
 type ChallengeBoardProps = {
@@ -49,8 +59,16 @@ type ChallengeBoardProps = {
   variant?: 'full' | 'compact';
   showReceipt?: boolean;
   onOpenReceipt?: () => void;
+  onOpenBoard?: () => void;
   error?: string | null;
   missesUsed?: number;
+};
+
+type GridCol = {
+  key: string;
+  label: string;
+  width: number;
+  flex?: number;
 };
 
 export function ChallengeBoard({
@@ -63,10 +81,12 @@ export function ChallengeBoard({
   variant = 'full',
   showReceipt = false,
   onOpenReceipt,
+  onOpenBoard,
   error,
   missesUsed = 0,
 }: ChallengeBoardProps) {
   const [receiptOpen, setReceiptOpen] = useState(showReceipt);
+  const compact = variant === 'compact';
   const quantityBoard = usesQuantityScoring(challenge);
   const view = useMemo(
     () =>
@@ -113,7 +133,7 @@ export function ChallengeBoard({
   );
   const settledCopy = boardSettledCopy(view);
   const openReceipt = receiptOpen || showReceipt;
-  const { isActor } = useHostAdjustUi();
+  const { isActor, canAdjust, canHouseRemove, canFriendlyRemove, canEditScore, canProxy } = useHostAdjustUi();
   const setLane = useSetScoringLane(challenge.id);
   const pointsBoard = usesPointsBoard(challenge);
   const comparableConfig = usesComparablePointsScoring(challenge)
@@ -122,7 +142,11 @@ export function ChallengeBoard({
   const scoringLanes = comparableConfig?.lanes ?? [];
   const canAssignLane = Boolean(isActor && scoringLanes.length > 0 && !view.settled);
   const comparableColumns = comparableConfig ? comparableBoardColumns(comparableConfig) : [];
-  const quantityOrPoints = quantityBoard || pointsBoard;
+  const consistencyBoard = !quantityBoard && !pointsBoard;
+  const showAdjustCol =
+    !view.settled &&
+    consistencyBoard &&
+    (canAdjust || canHouseRemove || canFriendlyRemove || canEditScore || canProxy);
   const requiredDays = storedDurationDays(challenge) ?? challengeTargetCount(challenge);
   const progressByUser = useMemo(() => {
     const map = new Map<string, ReturnType<typeof boardQuantityProgress>>();
@@ -169,6 +193,105 @@ export function ChallengeBoard({
       ),
     [pointsBoard, quantityBoard, rankedPeople],
   );
+  const participantById = useMemo(() => {
+    const map = new Map<string, ChallengeParticipantWithProfile>();
+    for (const row of roster ?? []) {
+      map.set(row.user_id, row);
+    }
+    return map;
+  }, [roster]);
+
+  const grid = useMemo(() => {
+    const cols: GridCol[] = [
+      { key: 'rank', label: '#', width: BOARD_RANK_COL },
+      { key: 'player', label: 'Player', width: 0, flex: 1 },
+    ];
+    const widthOf = (samples: string[], min?: number) =>
+      boardColumnWidth(samples, { compact, min: min ?? (compact ? 26 : 28) });
+
+    if (scoringLanes.length) {
+      const sideSamples = [
+        'Side',
+        ...scoringLanes.map((lane) => lane.label.trim() || '—'),
+        '—',
+      ];
+      cols.push({ key: 'side', label: 'Side', width: widthOf(sideSamples, compact ? 36 : 44) });
+    }
+
+    if (comparableColumns.length) {
+      for (const column of comparableColumns) {
+        const header = shortComparableBoardLabel(column.label);
+        const samples = [
+          header,
+          ...rows.map((row) => {
+            const participant = participantById.get(row.userId);
+            return formatComparableBoardCell(column, participant?.metric_totals ?? null);
+          }),
+        ];
+        cols.push({ key: column.key, label: header, width: widthOf(samples, 32) });
+      }
+      const ptsSamples = [
+        'Pts',
+        ...rows.map((row) => {
+          const participant = participantById.get(row.userId);
+          return participantNeedsScoringLane(comparableConfig, participant?.scoring_lane)
+            ? 'Needs a side'
+            : formatBoardPoints(row.points);
+        }),
+      ];
+      cols.push({
+        key: 'pts',
+        label: 'Pts',
+        width: widthOf(ptsSamples, ptsSamples.includes('Needs a side') ? 68 : 36),
+      });
+    } else if (pointsBoard) {
+      const ptsSamples = ['Pts', ...rows.map((row) => formatBoardPoints(row.points))];
+      cols.push({ key: 'pts', label: 'Pts', width: widthOf(ptsSamples, 36) });
+    } else if (quantityBoard) {
+      const unit =
+        [...progressByUser.values()].find((item) => item?.unit)?.unit ||
+        shortBoardHeader('Progress');
+      const header = shortBoardHeader(unit);
+      const samples = [
+        header,
+        ...rows.map((row) => progressByUser.get(row.userId)?.label?.trim() || '0'),
+      ];
+      cols.push({ key: 'progress', label: header, width: widthOf(samples, 56) });
+    } else {
+      const daysSamples = [
+        'Days',
+        ...rows.map((row) => `${Number(row.days) || 0} / ${requiredDays}`),
+      ];
+      const statusSamples = [
+        'Status',
+        ...rows.map((row) =>
+          boardRowTag(row, view.settled, {
+            quantityDone: false,
+          }),
+        ),
+      ];
+      cols.push({ key: 'days', label: 'Days', width: widthOf(daysSamples, 40) });
+      cols.push({ key: 'status', label: 'Status', width: widthOf(statusSamples, 48) });
+    }
+
+    if (showAdjustCol) {
+      cols.push({ key: 'adjust', label: '', width: BOARD_ADJUST_COL });
+    }
+    return cols;
+  }, [
+    compact,
+    comparableColumns,
+    comparableConfig,
+    participantById,
+    pointsBoard,
+    progressByUser,
+    quantityBoard,
+    requiredDays,
+    rows,
+    scoringLanes,
+    showAdjustCol,
+    view.settled,
+  ]);
 
   function toggleReceipt() {
     if (onOpenReceipt) {
@@ -178,19 +301,102 @@ export function ChallengeBoard({
     setReceiptOpen((current) => !current);
   }
 
-  if (variant === 'compact') {
+  const table = view.empty ? (
+    <MascotState kind="empty" compact title={boardEmptyCopy(view)} />
+  ) : (
+    <View style={{ marginHorizontal: compact ? 0 : -4 }}>
+      <BoardHeaderRow cols={grid} compact={compact} />
+      {rows.map((row) => {
+        const participant = participantById.get(row.userId);
+        const needsLane = participantNeedsScoringLane(comparableConfig, participant?.scoring_lane);
+        const dropped = row.bucket === 'dropped';
+        const displayRank = row.rank == null || needsLane || dropped ? null : row.rank;
+        const cells = grid
+          .filter((col) => col.key !== 'rank' && col.key !== 'player' && col.key !== 'side' && col.key !== 'adjust')
+          .map((col) => {
+            if (col.key === 'pts') {
+              return needsLane ? 'Needs a side' : formatBoardPoints(row.points);
+            }
+            if (col.key === 'days') {
+              return `${Number(row.days) || 0} / ${requiredDays}`;
+            }
+            if (col.key === 'status') {
+              return boardRowTag(row, view.settled, {
+                quantityDone: quantityBoard ? Boolean(progressByUser.get(row.userId)?.done) : false,
+              });
+            }
+            if (col.key === 'progress') {
+              const progress = progressByUser.get(row.userId);
+              return progress?.label?.trim() || (progress && progress.target > 0 ? `${progress.logged} / ${progress.target} ${progress.unit}`.trim() : '0');
+            }
+            const metric = comparableColumns.find((column) => column.key === col.key);
+            if (metric) {
+              return formatComparableBoardCell(metric, participant?.metric_totals ?? null);
+            }
+            return '';
+          });
+        return (
+          <BoardRankRow
+            key={row.userId}
+            cols={grid}
+            compact={compact}
+            rank={displayRank == null ? '—' : String(displayRank)}
+            medal={dropped || needsLane ? null : boardMedalTone(displayRank)}
+            name={row.name}
+            you={row.you}
+            username={row.username}
+            userId={row.userId}
+            avatarUrl={row.avatarUrl}
+            muted={dropped}
+            cells={cells}
+            side={
+              scoringLanes.length ? (
+                <ScoringLaneChip
+                  lanes={scoringLanes}
+                  laneId={participant?.scoring_lane}
+                  canAssign={canAssignLane}
+                  compact
+                  busy={setLane.isPending}
+                  onAssign={(laneId) => setLane.mutate({ userId: row.userId, laneId })}
+                />
+              ) : null
+            }
+            showAdjust={showAdjustCol}
+            participantStatus={participant?.status}
+          />
+        );
+      })}
+    </View>
+  );
+
+  if (compact) {
     return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Open board"
-        onPress={onOpenReceipt}
-        style={{ minHeight: 44 }}>
-        <View style={{ gap: 6 }}>
-          <AppText className="text-[13px] font-semibold" style={{ color: THEME.textMuted }}>
-            {headerLine}
+      <Card className="gap-2" style={{ padding: 12 }}>
+        <AppText className="text-[12px] font-semibold" style={{ color: THEME.textMuted }}>
+          {headerLine}
+        </AppText>
+        {error ? (
+          <AppText className="text-sm leading-5 text-coral-dark">
+            Couldn’t load the board.{' '}
+            {error.includes('network') || error.includes('offline')
+              ? 'You’re offline. It will update when you’re back.'
+              : 'Try again.'}
           </AppText>
-        </View>
-      </Pressable>
+        ) : (
+          table
+        )}
+        {onOpenBoard ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open board"
+            onPress={onOpenBoard}
+            style={{ minHeight: 44, justifyContent: 'center' }}>
+            <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
+              View board
+            </AppText>
+          </Pressable>
+        ) : null}
+      </Card>
     );
   }
 
@@ -213,11 +419,6 @@ export function ChallengeBoard({
       <AppText className="text-[13px] font-semibold" style={{ color: THEME.textMuted }}>
         {headerLine}
       </AppText>
-      {isActor && quantityOrPoints ? (
-        <AppText className="text-[12px] leading-5" style={{ color: THEME.textMuted }}>
-          {copy('board.adjustMilesHidden')}
-        </AppText>
-      ) : null}
       {quantityBoard ? null : <MissBudgetLines challenge={challenge} used={missesUsed} />}
 
       {view.settled ? (
@@ -263,68 +464,8 @@ export function ChallengeBoard({
             ? 'You’re offline. It will update when you’re back.'
             : 'Try again.'}
         </AppText>
-      ) : null}
-
-      {view.empty ? (
-        <MascotState kind="empty" compact title={boardEmptyCopy(view)} />
       ) : (
-        <View className="gap-1">
-          {rows.map((row) => {
-            const participant = (roster ?? []).find((item) => item.user_id === row.userId);
-            const needsLane = participantNeedsScoringLane(comparableConfig, participant?.scoring_lane);
-            return (
-            <BoardRankRow
-              key={row.userId}
-              rank={row.rank == null || needsLane ? '—' : String(row.rank)}
-              name={row.name}
-              you={row.you}
-              username={row.username}
-              userId={row.userId}
-              avatarUrl={row.avatarUrl}
-              laneChip={
-                scoringLanes.length ? (
-                  <ScoringLaneChip
-                    lanes={scoringLanes}
-                    laneId={participant?.scoring_lane}
-                    canAssign={canAssignLane}
-                    busy={setLane.isPending}
-                    onAssign={(laneId) => setLane.mutate({ userId: row.userId, laneId })}
-                  />
-                ) : null
-              }
-              detail={
-                comparableColumns.length
-                  ? comparableColumns
-                      .map((column) => {
-                        const totals = participant?.metric_totals ?? null;
-                        return `${column.label} ${formatComparableBoardCell(column, totals)}`;
-                      })
-                      .join(' · ')
-                  : undefined
-              }
-              score={
-                needsLane
-                  ? 'Needs a side'
-                  : quantityBoard
-                    ? progressByUser.get(row.userId)?.label?.trim() || '0'
-                    : pointsBoard
-                      ? `${boardScoreLabel(row, { pointsBoard: true, requiredDays })}${
-                          comparableColumns.length ? ' pts' : ''
-                        }`
-                      : `${Number(row.days) || 0} / ${requiredDays}`
-              }
-              status={boardRowTag(row, view.settled, {
-                quantityDone: quantityBoard ? Boolean(progressByUser.get(row.userId)?.done) : false,
-              })}
-              muted={row.bucket === 'dropped'}
-              payout={view.settled ? row.payout : null}
-              currency={challenge.currency}
-              showAdjust={!view.settled}
-              participantStatus={participant?.status}
-            />
-            );
-          })}
-        </View>
+        table
       )}
 
       {view.settled && openReceipt && settlement ? (
@@ -396,96 +537,160 @@ function boardRowPlayerName(name: string, username: string | null | undefined, y
   return you ? `${base} (You)` : base;
 }
 
+function BoardHeaderRow({ cols, compact }: { cols: GridCol[]; compact: boolean }) {
+  return (
+    <View className="flex-row items-center" style={{ minHeight: compact ? 28 : 32, gap: 3 }}>
+      {cols.map((col) => (
+        <View
+          key={col.key}
+          style={
+            col.flex
+              ? { flex: col.flex, ...flexChildMin() }
+              : { width: col.width, flexShrink: 0 }
+          }>
+          <AppText
+            className={compact ? 'text-[10px] font-semibold' : 'text-[11px] font-semibold'}
+            numberOfLines={1}
+            style={{
+              color: THEME.textMuted,
+              textAlign: col.key === 'player' || col.key === 'side' ? 'left' : 'right',
+              fontVariant: col.key === 'player' ? undefined : ['tabular-nums'],
+            }}>
+            {col.label}
+          </AppText>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function BoardRankRow({
+  cols,
+  compact,
   rank,
+  medal,
   name,
   you,
   username,
   userId,
   avatarUrl,
-  laneChip,
-  score,
-  detail,
-  status,
+  side,
+  cells,
   muted,
-  payout,
-  currency,
   showAdjust,
   participantStatus,
 }: {
+  cols: GridCol[];
+  compact: boolean;
   rank: string;
+  medal: ReturnType<typeof boardMedalTone>;
   name: string;
   you?: boolean;
   username: string | null;
   userId: string;
   avatarUrl: string | null;
-  laneChip?: ReactNode;
-  score: string;
-  detail?: string;
-  status: string;
+  side?: ReactNode;
+  cells: string[];
   muted?: boolean;
-  payout?: number | null;
-  currency?: string | null;
   showAdjust?: boolean;
   participantStatus?: string | null;
 }) {
   const ink = muted ? THEME.textMuted : THEME.textPrimary;
   const label = boardRowPlayerName(name, username, you);
   const avatarName = label.replace(/ \(You\)$/, '');
-  const scoreText = String(score ?? '').trim() || '0';
+  const rowMin = compact ? BOARD_ROW_MIN_COMPACT : BOARD_ROW_MIN;
+  const nameSize = compact ? 12 : 13;
+  const numSize = compact ? 11 : 12;
+  const medalFill = boardMedalColor(medal);
+  const dataCols = cols.filter(
+    (col) => col.key !== 'rank' && col.key !== 'player' && col.key !== 'side' && col.key !== 'adjust',
+  );
+
   return (
-    <View className="flex-row items-center" style={{ minHeight: 52 }}>
-      <AppText
-        className="text-center text-[13px] font-extrabold"
-        style={{ color: ink, width: 24, flexShrink: 0, fontVariant: ['tabular-nums'] }}>
-        {rank}
-      </AppText>
+    <View className="flex-row items-center" style={{ minHeight: rowMin, gap: 3 }}>
+      <View
+        style={{
+          width: BOARD_RANK_COL,
+          flexShrink: 0,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+        {medalFill && rank !== '—' ? (
+          <View
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: 11,
+              backgroundColor: medalFill,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+            <AppText
+              className="text-center text-[11px] font-extrabold"
+              style={{ color: THEME.textPrimary, fontVariant: ['tabular-nums'] }}>
+              {rank}
+            </AppText>
+          </View>
+        ) : (
+          <AppText
+            className="text-center text-[12px] font-extrabold"
+            style={{ color: ink, fontVariant: ['tabular-nums'] }}>
+            {rank}
+          </AppText>
+        )}
+      </View>
+
       <ProfileLink
         username={username}
         userId={userId}
         fill
-        style={{ flex: 1, minWidth: 0, minHeight: 52 }}>
-        <View className="flex-row items-center" style={{ flex: 1, minWidth: 0, minHeight: 52, gap: 10 }}>
-          <View style={{ width: 36, flexShrink: 0 }}>
-            <Avatar uri={avatarUrl} name={avatarName} size={36} />
+        style={{ flex: 1, minWidth: 0, minHeight: rowMin }}>
+        <View
+          className="flex-row items-center"
+          style={{ flex: 1, minWidth: 0, minHeight: rowMin, gap: 6 }}>
+          <View style={{ width: BOARD_AVATAR, flexShrink: 0 }}>
+            <Avatar uri={avatarUrl} name={avatarName} size={BOARD_AVATAR} />
           </View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <AppText className="text-[15px] font-semibold" style={{ color: ink }} numberOfLines={1}>
-              {label}
-            </AppText>
-            {detail ? (
-              <AppText className="text-[11px] leading-4" numberOfLines={2} style={{ color: THEME.textMuted }}>
-                {detail}
-              </AppText>
-            ) : null}
+          <View style={flexChildMin()}>
             <AppText
-              className="text-[12px] font-semibold"
+              className="font-semibold"
               numberOfLines={1}
-              style={{ color: muted ? THEME.textMuted : THEME.accent }}>
-              {status}
+              style={{ color: ink, fontSize: nameSize }}>
+              {label}
             </AppText>
           </View>
         </View>
       </ProfileLink>
-      {laneChip ? <View style={{ flexShrink: 0, marginLeft: 6 }}>{laneChip}</View> : null}
-      <View className="items-end" style={{ flexShrink: 0, marginLeft: 8 }}>
-        <AppText
-          className="text-[15px] font-extrabold"
-          style={{ color: ink, fontVariant: ['tabular-nums'] }}>
-          {scoreText}
-        </AppText>
-        {payout != null && Number(payout) > 0 ? (
-          <StakeAmount
-            amount={payout}
-            currency={currency}
-            size={12}
-            zeroAsNumber
-            textClassName="text-[12px] font-bold text-charcoal"
-          />
-        ) : null}
-      </View>
+
+      {cols.some((col) => col.key === 'side') ? (
+        <View
+          style={{
+            width: cols.find((col) => col.key === 'side')?.width ?? 44,
+            flexShrink: 0,
+            alignItems: 'flex-start',
+          }}>
+          {side}
+        </View>
+      ) : null}
+
+      {dataCols.map((col, index) => (
+        <View key={col.key} style={{ width: col.width, flexShrink: 0 }}>
+          <AppText
+            className="font-semibold"
+            numberOfLines={1}
+            style={{
+              color: cells[index] === 'Needs a side' ? THEME.textMuted : ink,
+              fontSize: cells[index] === 'Needs a side' ? 10 : numSize,
+              textAlign: 'right',
+              fontVariant: ['tabular-nums'],
+            }}>
+            {cells[index] || '0'}
+          </AppText>
+        </View>
+      ))}
+
       {showAdjust ? (
-        <View style={{ flexShrink: 0 }}>
+        <View style={{ width: BOARD_ADJUST_COL, flexShrink: 0, alignItems: 'center' }}>
           <BoardAdjustButton userId={userId} displayName={avatarName} status={participantStatus} />
         </View>
       ) : null}

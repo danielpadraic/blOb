@@ -1350,16 +1350,21 @@ export default function ChallengeDetailScreen() {
         </View>
         ) : null}
         {pageTab === 'overview' && !isCalloutObserver ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="View board"
-            onPress={() => setPageTab('board')}
-            className="mt-3"
-            style={{ minHeight: 44, justifyContent: 'center' }}>
-            <AppText className="text-[15px] font-semibold" style={{ color: THEME.accent }}>
-              View board
-            </AppText>
-          </Pressable>
+          <View className="mt-3">
+            <ChallengeLeaderboard
+              variant="compact"
+              challenge={challenge}
+              roster={boardRoster}
+              completedUserIds={completions.data ?? new Set()}
+              joined={isJoined}
+              viewerId={user?.id}
+              settlement={moneyPhase === 'settled' ? receipt : null}
+              showReceipt={false}
+              onOpenBoard={() => setPageTab('board')}
+              error={roster.error instanceof Error ? roster.error.message : null}
+              missesUsed={periodMisses.data ?? 0}
+            />
+          </View>
         ) : null}
 
         {moneyPhase === 'ended' && !receipt ? (

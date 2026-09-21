@@ -26,3 +26,15 @@ export {
   type BoardView,
 } from './model';
 export { boardQuantityProgress } from './quantity';
+export {
+  BOARD_ADJUST_COL,
+  BOARD_AVATAR,
+  BOARD_RANK_COL,
+  BOARD_ROW_MIN,
+  BOARD_ROW_MIN_COMPACT,
+  boardColumnWidth,
+  boardMedalColor,
+  boardMedalTone,
+  formatBoardPoints,
+  shortBoardHeader,
+} from './columns';

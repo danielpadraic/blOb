@@ -1090,13 +1090,28 @@ export function comparableBoardColumns(config: ComparablePointsConfig): Comparab
     }));
 }
 
+export function shortComparableBoardLabel(label: string): string {
+  const raw = String(label ?? '').trim();
+  const key = raw.toLowerCase();
+  if (key === 'presentations' || key === 'presentation') {
+    return 'Pres';
+  }
+  if (key === 'points' || key === 'pts') {
+    return 'Pts';
+  }
+  if (key === 'annual premium' || key === 'annualized premium') {
+    return 'AP';
+  }
+  return raw;
+}
+
 export function formatComparableBoardCell(
   column: ComparableBoardColumn,
   totals: Record<string, number> | null | undefined,
 ): string {
   const amount = asQty(totals?.[column.key]);
   if (column.money) {
-    return formatMoneyAmount(amount);
+    return formatMoneySentenceAmount(amount);
   }
   return formatQty(amount);
 }

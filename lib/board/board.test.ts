@@ -4,16 +4,19 @@ import {
   assertsNoBucksWord,
   boardCompletersCount,
   boardEmptyCopy,
+  boardMedalTone,
   boardQuantityProgress,
   boardRowTag,
   boardScoreLabel,
   boardScoreOf,
   boardSettledCopy,
   buildBoard,
+  formatBoardPoints,
   pointsLeader,
   pointsRank,
   quantityBoardHeaderLine,
   rankBoardRows,
+  shortBoardHeader,
 } from '@/lib/board';
 import { checkinPointValue } from '@/lib/challengePoints';
 import { challengeGoalLabel } from '@/lib/challengeGoal';
@@ -289,5 +292,33 @@ describe('quantity Board (Run 128 miles)', () => {
     expect(challengeGoalLabel(RUN_128, { distanceMetersCompleted: 0, metricTotals: {}, unit: 'mi' })).toBe(
       '0 / 128 mi',
     );
+  });
+});
+
+describe('board row chrome', () => {
+  it('shares medals on tied ranks and never writes pts on the cell', () => {
+    const view = buildBoard({
+      status: 'live',
+      prizePool: 0,
+      participants: [
+        { user_id: '01', points: 26000, status: 'joined', display_name: 'Test One' },
+        { user_id: '03', points: 26000, status: 'joined', display_name: 'Test Three' },
+        { user_id: '09', points: 13000, status: 'joined', display_name: 'Test Nine' },
+        { user_id: '05', points: 0, status: 'joined', display_name: 'Test Five' },
+      ],
+    });
+    const rows = rankBoardRows(view.people, 'points');
+    expect(rows.map((row) => [row.userId, row.rank])).toEqual([
+      ['01', 1],
+      ['03', 1],
+      ['09', 3],
+      ['05', 4],
+    ]);
+    expect(boardMedalTone(1)).toBe('gold');
+    expect(boardMedalTone(3)).toBe('bronze');
+    expect(boardMedalTone(4)).toBeNull();
+    expect(formatBoardPoints(26000)).toBe('26,000');
+    expect(shortBoardHeader('Presentations')).toBe('Pres');
+    expect(shortBoardHeader('miles')).toBe('mi');
   });
 });

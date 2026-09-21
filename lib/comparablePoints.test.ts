@@ -9,6 +9,7 @@ import {
   emptyActivity,
   emptyComparablePointsConfig,
   extrasKeepAddingFor,
+  formatComparableBoardCell,
   formatMoneyAmount,
   formatMoneySentenceAmount,
   inferInputKind,
@@ -148,6 +149,12 @@ describe('comparable points config', () => {
       'Rookies score Dials (with Presentations) and AP. Veterans score AP only.',
     );
     expect(formatMoneySentenceAmount(13_000)).toBe('$13,000');
+    expect(
+      formatComparableBoardCell({ key: 'act-ap', label: 'AP', money: true }, { 'act-ap': 6500 }),
+    ).toBe('$6,500');
+    expect(
+      formatComparableBoardCell({ key: 'act-dials', label: 'Dials', money: false }, { 'act-dials': 3500 }),
+    ).toBe('3500');
   });
 });
 

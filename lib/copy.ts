@@ -616,7 +616,6 @@ const STRINGS = {
   'board.countDayConfirm': 'Count Day {n} for {name}? This is an honor check-in.',
   'board.excuseMissConfirm': 'Excuse one miss for {name}?',
   'board.removeDayConfirm': 'Remove Day {n} for {name}?',
-  'board.adjustMilesHidden': 'Count/Excuse/Remove is for consistency Boards only, not miles or points.',
   'board.adjustSeveral': 'Adjust several',
   'board.excuseMisses': 'Excuse misses',
   'board.countDays': 'Count days',

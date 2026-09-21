@@ -65,8 +65,8 @@ export function pointsRank(people: BoardPerson[], viewerId?: string | null): num
   if (!viewerId) {
     return null;
   }
-  const index = pointsStandings(people).findIndex((row) => row.userId === viewerId);
-  return index >= 0 ? index + 1 : null;
+  const you = rankBoardRows(people, 'points').find((row) => row.userId === viewerId && row.rank != null);
+  return you?.rank ?? null;
 }
 
 export function pointsLeader(people: BoardPerson[]): BoardPerson | null {
@@ -280,12 +280,22 @@ export function rankBoardRows(
     const bAt = b.eliminatedAt ? Date.parse(b.eliminatedAt) : 0;
     return aAt - bAt || a.name.localeCompare(b.name);
   });
-  return [
-    ...inPlay.map((row, index) => ({
+  let lastRank = 1;
+  const rankedIn: BoardRankedRow[] = inPlay.map((row, index) => {
+    const score = boardScoreOf(row, mode);
+    if (index === 0) {
+      lastRank = 1;
+    } else if (boardScoreOf(inPlay[index - 1], mode) !== score) {
+      lastRank = index + 1;
+    }
+    return {
       ...row,
-      rank: index + 1,
-      score: boardScoreOf(row, mode),
-    })),
+      rank: lastRank,
+      score,
+    };
+  });
+  return [
+    ...rankedIn,
     ...out.map((row) => ({
       ...row,
       rank: null,

@@ -16,6 +16,9 @@ export const THEME = {
   circle: '#C4784A',
   circleSoft: '#F6EDE4',
   gold: '#D7A62F',
+  medalGold: '#C9A227',
+  medalSilver: '#A8B0B8',
+  medalBronze: '#B87333',
   /** Callout family — gold, not Official dark and not peer mint. */
   callout: '#D7A62F',
   calloutSoft: '#F6EFD4',
