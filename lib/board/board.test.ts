@@ -6,6 +6,8 @@ import {
   boardEmptyCopy,
   boardMedalTone,
   boardMedalWash,
+  boardPhoneFixedReserve,
+  boardStatKind,
   initialExpandedBoardIds,
   boardQuantityProgress,
   boardRowTag,
@@ -357,5 +359,25 @@ describe('board row chrome', () => {
       ),
     ).toEqual(['01', '03', '06']);
     expect(initialExpandedBoardIds([{ userId: '01', rank: 1 }], 'other')).toEqual([]);
+  });
+
+  it('locks the phone grid so Test Rookie 01 and 26,000 share one line', () => {
+    expect(boardPhoneFixedReserve({ hasSide: true, hasChevron: true })).toBe(220);
+    expect(360 - 220).toBeGreaterThanOrEqual(100);
+    expect(boardStatKind('Dials')).toBe('dials');
+    expect(boardStatKind('Calls')).toBe('dials');
+    expect(boardStatKind('Phone')).toBe('dials');
+    expect(boardStatKind('Presentations')).toBe('pres');
+    expect(boardStatKind('Pres')).toBe('pres');
+    expect(boardStatKind('AP')).toBe('ap');
+    expect(boardStatKind('Annual Premium')).toBe('ap');
+    expect(boardStatKind('Production')).toBe('ap');
+    expect(boardStatKind('Closed tickets', true)).toBe('ap');
+    expect(boardStatKind('Days')).toBeNull();
+    expect(boardStatKind('Miles')).toBeNull();
+    expect(shortLaneMarkLabel('Rookie')).toBe('Rookie');
+    expect(shortLaneMarkLabel('Veteran')).toBe('Veteran');
+    expect(formatBoardPoints(26000)).toBe('26,000');
+    expect(formatBoardNestedQty(3500)).toBe('3,500');
   });
 });

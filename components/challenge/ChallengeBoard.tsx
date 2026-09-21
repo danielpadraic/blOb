@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Pressable, View } from 'react-native';
+import { Image, Pressable, View } from 'react-native';
 
 import { ChallengeLifecycleStatus } from '@/components/challenge/ChallengeLifecycleStatus';
 import { MissBudgetLines } from '@/components/challenge/MissBudgetLines';
@@ -18,7 +18,10 @@ import {
   BOARD_ADJUST_COL,
   BOARD_AVATAR,
   BOARD_CHEVRON_COL,
+  BOARD_GAP,
   BOARD_MEDAL,
+  BOARD_NAME_GAP,
+  BOARD_PTS_COL,
   BOARD_RANK_COL,
   BOARD_ROW_MIN,
   BOARD_ROW_MIN_COMPACT,
@@ -26,10 +29,11 @@ import {
   boardColumnWidth,
   boardCompletersCount,
   boardEmptyCopy,
-  boardMedalColor,
   boardMedalTone,
   boardMedalWash,
+  boardStatKind,
   boardQuantityProgress,
+  type BoardStatKind,
   initialExpandedBoardIds,
   boardRowTag,
   boardSettledCopy,
@@ -44,11 +48,12 @@ import { usesQuantityScoring, usesPointsBoard, usesComparablePointsScoring } fro
 import {
   comparableBoardColumns,
   comparablePointsFromChallenge,
-  formatMoneySentenceAmount,
+  formatComparableBoardCell,
   participantNeedsScoringLane,
   shortComparableBoardLabel,
   type ComparableBoardColumn,
 } from '@/lib/comparablePoints';
+import { boardMedalSource, boardStatSource } from '@/lib/board/art';
 import { useSetScoringLane } from '@/hooks/useChallenge';
 import { storedDurationDays } from '@/lib/challengeGoal';
 import { challengeTargetCount } from '@/lib/challenges';
@@ -73,7 +78,7 @@ type ChallengeBoardProps = {
   missesUsed?: number;
 };
 
-type NestedLine = { label: string; value: string };
+type NestedLine = { label: string; value: string; icon?: BoardStatKind | null };
 
 export function ChallengeBoard({
   challenge,
@@ -234,7 +239,7 @@ export function ChallengeBoard({
       const participant = participantById.get(row.userId);
       const needsLane = participantNeedsScoringLane(comparableConfig, participant?.scoring_lane);
       if (needsLane) {
-        return 'Needs a side';
+        return '—';
       }
       if (quantityBoard) {
         return progressByUser.get(row.userId)?.label?.trim() || '42.1 / 128 mi';
@@ -244,11 +249,14 @@ export function ChallengeBoard({
       }
       return formatBoardPoints(row.points);
     });
-    return boardColumnWidth([scoreHeader, ...samples], {
-      compact,
-      min: 44,
-      max: 88,
-    });
+    if (quantityBoard) {
+      return boardColumnWidth([scoreHeader, ...samples], {
+        compact,
+        min: BOARD_PTS_COL,
+        max: 110,
+      });
+    }
+    return BOARD_PTS_COL;
   }, [
     compact,
     comparableConfig,
@@ -319,7 +327,7 @@ export function ChallengeBoard({
         const displayRank = row.rank == null || needsLane || dropped ? null : row.rank;
         const progress = progressByUser.get(row.userId);
         const score = needsLane
-          ? 'Needs a side'
+          ? '—'
           : quantityBoard
             ? progress?.label?.trim() ||
               (progress && progress.target > 0
@@ -525,14 +533,18 @@ function nestedLines(input: {
     return input.comparableColumns.map((column) => ({
       label: shortComparableBoardLabel(column.label),
       value: column.money
-        ? formatMoneySentenceAmount(Number(input.totals?.[column.key]) || 0)
+        ? formatComparableBoardCell(column, input.totals)
         : formatBoardNestedQty(Number(input.totals?.[column.key]) || 0),
+      icon: boardStatKind(column.label, column.money),
     }));
   }
   if (input.quantityBoard) {
     const unit = input.progress?.unit ? ` ${input.progress.unit}` : '';
     const logged = input.progress?.logged ?? 0;
     const goal = input.progress?.target ?? 0;
+    if (goal <= 0 && logged <= 0) {
+      return [];
+    }
     return [
       { label: 'Logged', value: `${formatBoardNestedQty(logged)}${unit}`.trim() },
       { label: 'Goal', value: `${formatBoardNestedQty(goal)}${unit}`.trim() },
@@ -656,26 +668,26 @@ function BoardHeaderRow({
         paddingVertical: 6,
         borderBottomWidth: 1,
         borderBottomColor: THEME.border,
-        gap: 6,
       }}>
       <AppText
         className="text-center text-[10px] font-semibold"
-        style={{ width: BOARD_RANK_COL, flexShrink: 0, ...labelStyle }}>
+        style={{ width: BOARD_RANK_COL, flexShrink: 0, marginRight: BOARD_GAP, ...labelStyle }}>
         #
       </AppText>
-      <AppText className="text-[10px] font-semibold" style={{ flex: 1, ...flexChildMin(), ...labelStyle }}>
+      <View style={{ width: BOARD_AVATAR, flexShrink: 0, marginRight: BOARD_NAME_GAP }} />
+      <AppText className="text-[10px] font-semibold" style={{ flex: 1, ...flexChildMin(), marginRight: BOARD_GAP, ...labelStyle }}>
         PLAYER
       </AppText>
       {hasSide ? (
         <AppText
           className="text-[10px] font-semibold"
-          style={{ width: BOARD_SIDE_COL, flexShrink: 0, ...labelStyle }}>
+          style={{ width: BOARD_SIDE_COL, flexShrink: 0, marginRight: BOARD_GAP, ...labelStyle }}>
           SIDE
         </AppText>
       ) : null}
       <AppText
         className="text-[10px] font-semibold"
-        style={{ width: scoreWidth, flexShrink: 0, textAlign: 'right', ...labelStyle }}>
+        style={{ width: Math.max(BOARD_PTS_COL, scoreWidth), flexShrink: 0, textAlign: 'right', ...labelStyle }}>
         {scoreHeader.toUpperCase()}
       </AppText>
       {hasChevron ? <View style={{ width: BOARD_CHEVRON_COL, flexShrink: 0 }} /> : null}
@@ -729,9 +741,8 @@ function BoardRankRow({
   const label = boardRowPlayerName(name, username, you);
   const avatarName = label.replace(/ \(You\)$/, '');
   const rowMin = compact ? BOARD_ROW_MIN_COMPACT : BOARD_ROW_MIN;
-  const nameSize = compact ? 13 : 14;
-  const numSize = compact ? 12 : 13;
-  const medalFill = boardMedalColor(medal);
+  const ptsWidth = Math.max(BOARD_PTS_COL, scoreWidth);
+  const medalArt = rank !== '—' ? boardMedalSource(medal) : null;
   const wash = boardMedalWash(medal);
 
   return (
@@ -752,32 +763,23 @@ function BoardRankRow({
           paddingVertical: compact ? 6 : 8,
           flexDirection: 'row',
           alignItems: 'center',
-          gap: 6,
         }}>
         <View
           style={{
             width: BOARD_RANK_COL,
+            marginRight: BOARD_GAP,
             flexShrink: 0,
             alignItems: 'center',
             justifyContent: 'center',
             overflow: 'visible',
           }}>
-          {medalFill && rank !== '—' ? (
-            <View
-              style={{
-                width: BOARD_MEDAL,
-                height: BOARD_MEDAL,
-                borderRadius: BOARD_MEDAL / 2,
-                backgroundColor: medalFill,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-              <AppText
-                className="text-center text-[10px] font-extrabold"
-                style={{ color: THEME.textPrimary, fontVariant: ['tabular-nums'] }}>
-                {rank}
-              </AppText>
-            </View>
+          {medalArt ? (
+            <Image
+              source={medalArt}
+              accessibilityLabel={`Rank ${rank}`}
+              style={{ width: BOARD_MEDAL, height: BOARD_MEDAL }}
+              resizeMode="contain"
+            />
           ) : (
             <AppText
               className="text-center text-[12px] font-extrabold"
@@ -790,35 +792,45 @@ function BoardRankRow({
         <ProfileLink
           username={username}
           userId={userId}
+          style={{ width: BOARD_AVATAR, flexShrink: 0, marginRight: BOARD_NAME_GAP }}>
+          <Avatar uri={avatarUrl} name={avatarName} size={BOARD_AVATAR} />
+        </ProfileLink>
+
+        <ProfileLink
+          username={username}
+          userId={userId}
           fill
-          style={{ flex: 1, minWidth: 0, minHeight: rowMin }}>
-          <View className="flex-row items-center" style={{ flex: 1, minWidth: 0, gap: 6 }}>
-            <View style={{ width: BOARD_AVATAR, flexShrink: 0 }}>
-              <Avatar uri={avatarUrl} name={avatarName} size={BOARD_AVATAR} />
-            </View>
-            <View style={flexChildMin()}>
-              <AppText
-                className="font-semibold"
-                numberOfLines={1}
-                style={{ color: ink, fontSize: nameSize }}>
-                {label}
-              </AppText>
-            </View>
-          </View>
+          style={{ flex: 1, minWidth: 0, marginRight: BOARD_GAP }}>
+          <AppText
+            className="font-semibold"
+            numberOfLines={1}
+            style={{ color: ink, fontSize: 13, fontWeight: '600' }}>
+            {label}
+          </AppText>
         </ProfileLink>
 
         {hasSide ? (
-          <View style={{ width: BOARD_SIDE_COL, flexShrink: 0, justifyContent: 'center' }}>{side}</View>
+          <View
+            style={{
+              width: BOARD_SIDE_COL,
+              flexShrink: 0,
+              marginRight: BOARD_GAP,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+            {side}
+          </View>
         ) : null}
 
         <AppText
           className="font-semibold"
           numberOfLines={1}
           style={{
-            width: scoreWidth,
+            width: ptsWidth,
+            minWidth: BOARD_PTS_COL,
             flexShrink: 0,
-            color: score === 'Needs a side' ? THEME.textMuted : ink,
-            fontSize: score === 'Needs a side' ? 10 : numSize,
+            color: ink,
+            fontSize: 12,
             textAlign: 'right',
             fontVariant: ['tabular-nums'],
           }}>
@@ -833,7 +845,7 @@ function BoardRankRow({
               alignItems: 'center',
               justifyContent: 'center',
             }}>
-            <AppText className="text-[16px] font-semibold" style={{ color: THEME.textMuted }}>
+            <AppText className="text-[14px] font-semibold" style={{ color: THEME.textMuted }}>
               {expanded ? '▾' : '▸'}
             </AppText>
           </View>
@@ -848,11 +860,11 @@ function BoardRankRow({
 
       {expanded && nested.length > 0 ? (
         <View
-          className="flex-row flex-wrap"
+          className="flex-row"
           style={{
             paddingBottom: 10,
             paddingTop: 2,
-            paddingLeft: BOARD_RANK_COL + 6,
+            paddingLeft: BOARD_RANK_COL + BOARD_GAP + BOARD_AVATAR + BOARD_NAME_GAP,
             paddingRight: canExpand ? BOARD_CHEVRON_COL : 4,
           }}>
           {nested.map((line, index) => (
@@ -860,24 +872,50 @@ function BoardRankRow({
               key={line.label}
               style={{
                 flex: 1,
-                minWidth: nested.length > 3 ? '33%' : undefined,
                 alignItems: 'center',
                 paddingVertical: 4,
                 borderLeftWidth: index === 0 ? 0 : 1,
                 borderLeftColor: THEME.border,
               }}>
+              <BoardStatGlyph kind={line.icon} label={line.label} />
               <AppText
                 className="text-[12px] font-semibold"
                 style={{ color: ink, fontVariant: ['tabular-nums'] }}>
                 {line.value}
               </AppText>
-              <AppText className="text-[11px] leading-4" style={{ color: THEME.textMuted }}>
+              <AppText className="text-[10px] leading-3" style={{ color: THEME.textMuted }}>
                 {line.label}
               </AppText>
             </View>
           ))}
         </View>
       ) : null}
+    </View>
+  );
+}
+
+function BoardStatGlyph({ kind, label }: { kind?: BoardStatKind | null; label: string }) {
+  const source = boardStatSource(kind ?? null);
+  if (source) {
+    return <Image source={source} style={{ width: 22, height: 22 }} resizeMode="contain" />;
+  }
+  const letter = String(label ?? '')
+    .trim()
+    .charAt(0)
+    .toUpperCase() || '·';
+  return (
+    <View
+      style={{
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        backgroundColor: THEME.accentSoft,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>
+      <AppText className="text-[10px] font-bold" style={{ color: THEME.accent, includeFontPadding: false }}>
+        {letter}
+      </AppText>
     </View>
   );
 }

@@ -1,13 +1,51 @@
 import { THEME } from '@/lib/theme';
 
-export const BOARD_RANK_COL = 26;
+/** Phone ~360–390 lock. Fixed first, name last. */
+export const BOARD_RANK_COL = 28;
 export const BOARD_AVATAR = 28;
 export const BOARD_ADJUST_COL = 44;
-export const BOARD_CHEVRON_COL = 44;
-export const BOARD_SIDE_COL = 80;
-export const BOARD_MEDAL = 22;
+export const BOARD_CHEVRON_COL = 22;
+export const BOARD_SIDE_COL = 62;
+export const BOARD_PTS_COL = 54;
+export const BOARD_MEDAL = 28;
+export const BOARD_GAP = 6;
+export const BOARD_NAME_GAP = 8;
 export const BOARD_ROW_MIN = 48;
 export const BOARD_ROW_MIN_COMPACT = 44;
+
+export type BoardStatKind = 'dials' | 'pres' | 'ap';
+
+/** Map nest icons by activity label. Unknown names get a letter circle, not clip-art. */
+export function boardStatKind(label: string, money?: boolean): BoardStatKind | null {
+  const hay = String(label ?? '')
+    .trim()
+    .toLowerCase();
+  if (/\b(dials?|calls?|phone)\b/.test(hay)) {
+    return 'dials';
+  }
+  if (/\b(pres|presentations?)\b/.test(hay)) {
+    return 'pres';
+  }
+  if (money || /\b(ap|premium|production)\b/.test(hay) || hay.includes('$')) {
+    return 'ap';
+  }
+  return null;
+}
+
+/** Fixed columns on a phone row (name is the only flex child). */
+export function boardPhoneFixedReserve(opts: { hasSide: boolean; hasChevron: boolean; hasAdjust?: boolean }): number {
+  let n = BOARD_RANK_COL + BOARD_GAP + BOARD_AVATAR + BOARD_NAME_GAP + BOARD_GAP + BOARD_PTS_COL;
+  if (opts.hasSide) {
+    n += BOARD_GAP + BOARD_SIDE_COL;
+  }
+  if (opts.hasChevron) {
+    n += BOARD_CHEVRON_COL;
+  }
+  if (opts.hasAdjust) {
+    n += BOARD_ADJUST_COL;
+  }
+  return n;
+}
 
 export type BoardMedalTone = 'gold' | 'silver' | 'bronze';
 

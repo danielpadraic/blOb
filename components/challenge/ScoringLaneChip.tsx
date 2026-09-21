@@ -47,7 +47,7 @@ export function ScoringLaneChip({
     <View
       style={{
         height: mark ? 20 : 28,
-        paddingHorizontal: mark ? 6 : 10,
+        paddingHorizontal: mark ? 8 : 10,
         borderRadius: 999,
         borderWidth: 1,
         borderColor: needsSide ? THEME.border : THEME.accent,
@@ -59,7 +59,14 @@ export function ScoringLaneChip({
       <AppText
         className={mark ? 'text-[10px] font-bold' : 'text-[12px] font-semibold'}
         numberOfLines={1}
-        style={{ color: needsSide ? THEME.textMuted : mark ? THEME.accent : THEME.accent }}>
+        style={{
+          color: needsSide ? THEME.textMuted : THEME.accent,
+          fontSize: mark ? 10 : 12,
+          lineHeight: mark ? 12 : 16,
+          fontWeight: mark ? '700' : '600',
+          textAlign: 'center',
+          includeFontPadding: false,
+        }}>
         {label}
       </AppText>
     </View>
@@ -76,14 +83,14 @@ export function ScoringLaneChip({
             setOpen(true);
           }
         }}
-        hitSlop={mark ? 8 : 0}
+        hitSlop={mark ? { top: 12, bottom: 12, left: 8, right: 8 } : 0}
         style={
           mark
             ? {
-                minHeight: canAssign ? 44 : 20,
-                minWidth: canAssign ? 44 : undefined,
+                height: 20,
+                width: '100%',
                 justifyContent: 'center',
-                alignItems: 'flex-start',
+                alignItems: 'center',
               }
             : undefined
         }>
