@@ -1,8 +1,12 @@
+import { useState } from 'react';
 import { Pressable, Switch, View } from 'react-native';
 
+import { ScoringIconPicker } from '@/components/challenge/ScoringIconPicker';
 import { Chip, ChipRow } from '@/components/ui/Chip';
+import { ScoringIcon } from '@/components/ui/ScoringIcon';
 import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
+import { resolveScoringIconKey } from '@/lib/scoringIcons';
 import { COLORS } from '@/lib/constants';
 import {
   ACTIVITY_UNIT_PRESETS,
@@ -43,9 +47,17 @@ export function ActivityCard({
   onPatchQualifier: (id: string, label: string) => void;
   onRemoveQualifier: (id: string) => void;
 }) {
+  const [iconOpen, setIconOpen] = useState(false);
+  const [multiplierIconOpen, setMultiplierIconOpen] = useState(false);
   const unitIsPreset = (ACTIVITY_UNIT_PRESETS as readonly string[]).includes(activity.unit);
   const inputKind = inferInputKind(activity.unit, activity.input_kind);
   const extrasOn = extrasKeepAddingFor(activity, { extras_keep_adding: extrasKeepAdding });
+  const iconKey = resolveScoringIconKey({
+    icon_key: activity.icon_key,
+    name: activity.name,
+    unit: activity.unit,
+    input_kind: inputKind,
+  });
 
   return (
     <View
@@ -73,12 +85,39 @@ export function ActivityCard({
         ) : null}
       </View>
 
-      <Input
-        label="Name"
-        placeholder={index === 0 ? 'e.g. walks' : 'e.g. tickets'}
-        value={activity.name}
-        onChangeText={(name) => onChange({ name })}
-        maxLength={40}
+      <View className="flex-row items-start" style={{ gap: 10 }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Choose scoring icon"
+          onPress={() => setIconOpen(true)}
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: THEME.accent,
+            backgroundColor: THEME.accentSoft,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginTop: 22,
+          }}>
+          <ScoringIcon iconKey={iconKey} size={28} />
+        </Pressable>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Input
+            label="Name"
+            placeholder={index === 0 ? 'e.g. walks' : 'e.g. tickets'}
+            value={activity.name}
+            onChangeText={(name) => onChange({ name })}
+            maxLength={40}
+          />
+        </View>
+      </View>
+      <ScoringIconPicker
+        visible={iconOpen}
+        selected={iconKey}
+        onSelect={(next) => onChange({ icon_key: next })}
+        onClose={() => setIconOpen(false)}
       />
 
       <View className="gap-2">
@@ -180,13 +219,51 @@ export function ActivityCard({
             borderRadius: 14,
             padding: 12,
           }}>
-          <Input
-            label="Scales with"
-            placeholder="e.g. demos"
-            value={activity.multiplier.label ?? ''}
-            onChangeText={(label) =>
-              onChange({ multiplier: { ...activity.multiplier, label } })
+          <View className="flex-row items-start" style={{ gap: 10 }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Choose multiplier icon"
+              onPress={() => setMultiplierIconOpen(true)}
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: THEME.border,
+                backgroundColor: THEME.surface,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginTop: 22,
+              }}>
+              <ScoringIcon
+                iconKey={resolveScoringIconKey({
+                  icon_key: activity.multiplier.icon_key,
+                  name: activity.multiplier.label,
+                })}
+                size={28}
+              />
+            </Pressable>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Input
+                label="Scales with"
+                placeholder="e.g. demos"
+                value={activity.multiplier.label ?? ''}
+                onChangeText={(label) =>
+                  onChange({ multiplier: { ...activity.multiplier, label } })
+                }
+              />
+            </View>
+          </View>
+          <ScoringIconPicker
+            visible={multiplierIconOpen}
+            selected={resolveScoringIconKey({
+              icon_key: activity.multiplier.icon_key,
+              name: activity.multiplier.label,
+            })}
+            onSelect={(next) =>
+              onChange({ multiplier: { ...activity.multiplier, icon_key: next } })
             }
+            onClose={() => setMultiplierIconOpen(false)}
           />
           <AppText className="text-xs leading-5 text-muted">
             Collected on each log as its own number. Counts past the last tier do not raise the percent.

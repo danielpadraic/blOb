@@ -6,7 +6,9 @@ import { ChallengePrizeLine } from '@/components/challenge/ChallengePrizeLine';
 import { FieldNoteLabel } from '@/components/challenge/FieldNote';
 import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { Card } from '@/components/ui/Card';
+import { ScoringIcon } from '@/components/ui/ScoringIcon';
 import { AppText } from '@/components/ui/AppText';
+import { resolveScoringIconKey } from '@/lib/scoringIcons';
 import { signupProofLines } from '@/lib/challengeProofs';
 import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
 import { challengeGoalLabel } from '@/lib/challengeGoal';
@@ -178,11 +180,23 @@ export function CreateReviewPreview({
             {comparable.activities
               .filter((item) => item.name.trim().length > 0)
               .map((item) => (
-                <AppText key={item.id} className="text-[14px] leading-5 text-charcoal">
-                  {item.name.trim()} · {activityQtyLabel(item)}
-                  {item.multiplier.enabled ? ` · ${item.multiplier.label?.trim() || 'Multiplier'}` : ''}
-                  {item.qualifiers.enabled ? ' · Qualifiers' : ''}
-                </AppText>
+                <View key={item.id} className="flex-row items-center" style={{ gap: 8 }}>
+                  <ScoringIcon
+                    iconKey={resolveScoringIconKey({
+                      icon_key: item.icon_key,
+                      name: item.name,
+                      unit: item.unit,
+                      input_kind: item.input_kind,
+                    })}
+                    size={22}
+                    label={item.name.trim()}
+                  />
+                  <AppText className="text-[14px] leading-5 text-charcoal">
+                    {item.name.trim()} · {activityQtyLabel(item)}
+                    {item.multiplier.enabled ? ` · ${item.multiplier.label?.trim() || 'Multiplier'}` : ''}
+                    {item.qualifiers.enabled ? ' · Qualifiers' : ''}
+                  </AppText>
+                </View>
               ))}
             {comparableLogPreviewLines(comparable)
               .filter((line) => !comparable.activities.some((item) => line.startsWith(item.name.trim())))

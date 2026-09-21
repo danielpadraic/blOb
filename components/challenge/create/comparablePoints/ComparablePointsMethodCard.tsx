@@ -1,7 +1,9 @@
 import { Switch, View } from 'react-native';
 
 import { Card } from '@/components/ui/Card';
+import { ScoringIcon } from '@/components/ui/ScoringIcon';
 import { AppText } from '@/components/ui/AppText';
+import { resolveScoringIconKey } from '@/lib/scoringIcons';
 import { COLORS } from '@/lib/constants';
 import {
   activityQtyLabel,
@@ -50,6 +52,16 @@ export function ComparablePointsMethodCard({
         <View className="mt-3 gap-2">
           {activities.map((activity) => (
             <View key={activity.id} className="flex-row flex-wrap items-center gap-2">
+              <ScoringIcon
+                iconKey={resolveScoringIconKey({
+                  icon_key: activity.icon_key,
+                  name: activity.name,
+                  unit: activity.unit,
+                  input_kind: activity.input_kind,
+                })}
+                size={22}
+                label={activity.name.trim()}
+              />
               <AppText className="min-w-0 flex-shrink text-[14px] leading-5 text-charcoal">
                 {activity.name.trim()}
                 {' · '}

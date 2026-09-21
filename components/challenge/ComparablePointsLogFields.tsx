@@ -1,6 +1,7 @@
 import { View } from 'react-native';
 
 import { Chip, ChipRow } from '@/components/ui/Chip';
+import { ScoringIcon } from '@/components/ui/ScoringIcon';
 import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
 import {
@@ -85,8 +86,12 @@ export function ComparablePointsLogFields({
         const money = inferInputKind(field.unit, field.inputKind) === 'money';
         const unit = field.unit && !money ? ` (${field.unit})` : '';
         return (
+          <View key={field.key} className="flex-row items-start" style={{ gap: 10 }}>
+            <View style={{ marginTop: 22 }}>
+              <ScoringIcon iconKey={field.iconKey} size={28} label={field.label} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
           <Input
-            key={field.key}
             label={`${field.label}${money ? ' ($)' : unit}`}
             placeholder="0"
             keyboardType={field.inputKind === 'count' ? 'number-pad' : 'decimal-pad'}
@@ -98,6 +103,8 @@ export function ComparablePointsLogFields({
             editable={!disabled}
             hint={money && draft.metrics[field.key] ? `Stores ${parseMoneyInput(draft.metrics[field.key])}` : undefined}
           />
+            </View>
+          </View>
         );
       })}
       <AppText className="text-[12px] leading-4" style={{ color: THEME.textMuted }}>

@@ -7,7 +7,9 @@ import { FieldNoteLabel } from '@/components/challenge/FieldNote';
 import { SettlementSummary } from '@/components/challenge/SettlementSummary';
 import { ProfileLink } from '@/components/profile/ProfileLink';
 import { BoardAdjustButton, BoardBulkAdjustButton, useHostAdjustUi } from '@/components/challenge/HostAdjustHost';
+import { RankMedal } from '@/components/challenge/RankMedal';
 import { ScoringLaneChip } from '@/components/challenge/ScoringLaneChip';
+import { ScoringIcon } from '@/components/ui/ScoringIcon';
 import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { MascotState } from '@/components/mascot/MascotState';
@@ -26,7 +28,6 @@ import {
   boardColumnWidth,
   boardCompletersCount,
   boardEmptyCopy,
-  boardMedalColor,
   boardMedalTone,
   boardMedalWash,
   boardQuantityProgress,
@@ -73,7 +74,7 @@ type ChallengeBoardProps = {
   missesUsed?: number;
 };
 
-type NestedLine = { label: string; value: string };
+type NestedLine = { label: string; value: string; iconKey?: string };
 
 export function ChallengeBoard({
   challenge,
@@ -527,6 +528,7 @@ function nestedLines(input: {
       value: column.money
         ? formatMoneySentenceAmount(Number(input.totals?.[column.key]) || 0)
         : formatBoardNestedQty(Number(input.totals?.[column.key]) || 0),
+      iconKey: column.iconKey,
     }));
   }
   if (input.quantityBoard) {
@@ -534,17 +536,21 @@ function nestedLines(input: {
     const logged = input.progress?.logged ?? 0;
     const goal = input.progress?.target ?? 0;
     return [
-      { label: 'Logged', value: `${formatBoardNestedQty(logged)}${unit}`.trim() },
-      { label: 'Goal', value: `${formatBoardNestedQty(goal)}${unit}`.trim() },
+      { label: 'Logged', value: `${formatBoardNestedQty(logged)}${unit}`.trim(), iconKey: 'route' },
+      { label: 'Goal', value: `${formatBoardNestedQty(goal)}${unit}`.trim(), iconKey: 'trophy' },
     ];
   }
   if (input.consistencyBoard) {
     const lines: NestedLine[] = [
-      { label: 'Days', value: `${input.days} / ${input.requiredDays}` },
-      { label: 'Status', value: input.status },
+      { label: 'Days', value: `${input.days} / ${input.requiredDays}`, iconKey: 'calendar' },
+      { label: 'Status', value: input.status, iconKey: 'checklist' },
     ];
     if (input.showMissLine && input.missCap != null) {
-      lines.push({ label: 'Miss', value: `${missesAllowedCopy(input.missCap)} · ${missesUsedCopy(input.missesUsed)}` });
+      lines.push({
+        label: 'Miss',
+        value: `${missesAllowedCopy(input.missCap)} · ${missesUsedCopy(input.missesUsed)}`,
+        iconKey: 'calendar',
+      });
     }
     return lines;
   }
@@ -584,9 +590,11 @@ function ShareLine({
             {copy('board.prizeUntilSettlement')}
           </AppText>
         </View>
-        <View style={{ flexShrink: 0, backgroundColor: 'transparent' }}>
-          <BlobMascot variant="wave" size={72} />
-        </View>
+        {prizePool > 0 ? (
+          <View style={{ flexShrink: 0, backgroundColor: 'transparent' }}>
+            <BlobMascot variant="wave" size={72} />
+          </View>
+        ) : null}
       </View>
     );
   }
@@ -728,11 +736,16 @@ function BoardRankRow({
   const rowMin = compact ? BOARD_ROW_MIN_COMPACT : BOARD_ROW_MIN;
   const nameSize = compact ? 13 : 14;
   const numSize = compact ? 12 : 13;
-  const medalFill = boardMedalColor(medal);
   const wash = boardMedalWash(medal);
 
   return (
-    <View style={{ borderBottomWidth: 1, borderBottomColor: THEME.border, backgroundColor: wash ?? THEME.surface }}>
+    <View
+      style={{
+        borderBottomWidth: 1,
+        borderBottomColor: THEME.border,
+        backgroundColor: wash ?? THEME.surface,
+        overflow: 'visible',
+      }}>
       <Pressable
         accessibilityRole={canExpand ? 'button' : undefined}
         accessibilityLabel={canExpand ? `${label}. ${expanded ? 'Hide details' : 'Show details'}` : label}
@@ -751,30 +764,13 @@ function BoardRankRow({
             flexShrink: 0,
             alignItems: 'center',
             justifyContent: 'center',
+            overflow: 'visible',
           }}>
-          {medalFill && rank !== '—' ? (
-            <View
-              style={{
-                width: BOARD_MEDAL,
-                height: BOARD_MEDAL,
-                borderRadius: BOARD_MEDAL / 2,
-                backgroundColor: medalFill,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}>
-              <AppText
-                className="text-center text-[10px] font-extrabold"
-                style={{ color: THEME.textPrimary, fontVariant: ['tabular-nums'] }}>
-                {rank}
-              </AppText>
-            </View>
-          ) : (
-            <AppText
-              className="text-center text-[12px] font-extrabold"
-              style={{ color: ink, fontVariant: ['tabular-nums'] }}>
-              {rank}
-            </AppText>
-          )}
+          <RankMedal
+            rank={rank === '—' ? null : Number(rank) || rank}
+            size={compact ? 40 : BOARD_MEDAL}
+            muted={muted}
+          />
         </View>
 
         <ProfileLink
@@ -838,7 +834,7 @@ function BoardRankRow({
 
       {expanded && nested.length > 0 ? (
         <View
-          className="flex-row"
+          className="flex-row flex-wrap"
           style={{
             paddingBottom: 10,
             paddingTop: 2,
@@ -850,13 +846,15 @@ function BoardRankRow({
               key={line.label}
               style={{
                 flex: 1,
+                minWidth: nested.length > 3 ? '33%' : undefined,
                 alignItems: 'center',
                 paddingVertical: 4,
                 borderLeftWidth: index === 0 ? 0 : 1,
                 borderLeftColor: THEME.border,
               }}>
+              <ScoringIcon iconKey={line.iconKey} size={24} label={line.label} />
               <AppText
-                className="text-[12px] font-semibold"
+                className="mt-1 text-[12px] font-bold"
                 style={{ color: ink, fontVariant: ['tabular-nums'] }}>
                 {line.value}
               </AppText>

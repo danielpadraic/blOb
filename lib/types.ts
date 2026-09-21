@@ -65,6 +65,7 @@ export type {
   ScoreWindow,
   ScoringMethod,
 } from '@/lib/comparablePoints';
+export type { ScoringIconKey } from '@/lib/scoringIcons';
 
 export type WeightUnit = 'kg' | 'lb';
 

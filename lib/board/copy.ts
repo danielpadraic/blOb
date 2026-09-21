@@ -41,7 +41,7 @@ export function boardEmptyCopy(view: Pick<BoardView, 'settled' | 'spectator'>): 
   if (view.settled) {
     return 'This challenge settled with nobody on the board.';
   }
-  return 'Board fills when people join.';
+  return 'No scores yet';
 }
 
 export function boardSettledCopy(view: Pick<BoardView, 'forfeited' | 'youPaid' | 'spectator' | 'remainingCount'>): {

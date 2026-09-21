@@ -277,6 +277,25 @@ describe('generated log fields', () => {
     expect(fields.find((field) => field.kind === 'activity' && field.label === 'Closed tickets')?.inputKind).toBe(
       'money',
     );
+    expect(fields.find((field) => field.label === 'Floor walks')?.iconKey).toBe('steps');
+    expect(fields.find((field) => field.label === 'Closed tickets')?.iconKey).toBe('money');
+    expect(
+      parseComparablePointsConfig({
+        version: 1,
+        parity_points: 100,
+        activities: [
+          {
+            id: 'a',
+            name: 'Dials',
+            unit: 'dials',
+            parity_qty: 10,
+            icon_key: 'camera',
+            multiplier: { enabled: false, extra_factor: 1 },
+            qualifiers: { enabled: false, items: [] },
+          },
+        ],
+      })?.activities[0]?.icon_key,
+    ).toBe('camera');
     expect(comparableCheckinCaption(gymConfig(), {})).toBe('Check-in Complete');
     expect(comparableCheckinCaption(gymConfig(), { closed: 'Two tickets' })).toBe('Two tickets');
   });

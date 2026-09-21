@@ -133,12 +133,13 @@ import {
   totalTaskPoints,
 } from '@/lib/challenges';
 import {
-  comparableLogPreviewLines,
+  comparableLogFields,
   comparablePointsFromChallenge,
   comparablePointsHeadline,
   comparablePointsLaneSubline,
   comparablePointsLiveSentence,
 } from '@/lib/comparablePoints';
+import { ScoringIcon } from '@/components/ui/ScoringIcon';
 import {
   canMarkJudging,
   canSettleChallenge,
@@ -1505,11 +1506,14 @@ export default function ChallengeDetailScreen() {
                     {comparablePointsLaneSubline(comparableConfig)}
                   </AppText>
                 ) : null}
-                {comparableLogPreviewLines(comparableConfig).map((line) => (
-                  <AppText key={line} className="text-xs leading-4 text-muted">
-                    {line}
-                  </AppText>
-                ))}
+                {comparableLogFields(comparableConfig)
+                  .filter((field) => field.kind === 'activity' || field.kind === 'multiplier')
+                  .map((field) => (
+                    <View key={field.key} className="flex-row items-center" style={{ gap: 8 }}>
+                      <ScoringIcon iconKey={field.iconKey} size={20} label={field.label} />
+                      <AppText className="text-xs leading-4 text-muted">{field.label}</AppText>
+                    </View>
+                  ))}
               </View>
             ) : isPoints || isUnlimited || challenge.is_official || !ruleCopy.totalHint ? null : (
               <AppText className="mt-1 text-xs leading-4 text-muted">{ruleCopy.totalHint}</AppText>

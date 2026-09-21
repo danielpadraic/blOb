@@ -1,3 +1,5 @@
+import { isScoringIconKey, resolveScoringIconKey, type ScoringIconKey } from '@/lib/scoringIcons';
+
 export const COMPARABLE_POINTS_METHOD = 'comparable_points' as const;
 export const COMPARABLE_CHECKIN_EMPTY_CAPTION = 'Check-in Complete';
 
@@ -16,6 +18,7 @@ export type ActivityMultiplierConfig = {
   enabled: boolean;
   extra_factor: number;
   label?: string;
+  icon_key?: ScoringIconKey;
   tiers?: ActivityMultiplierTier[];
 };
 
@@ -45,6 +48,7 @@ export type ActivityConfig = {
   unit: string;
   parity_qty: number;
   input_kind?: LogInputKind;
+  icon_key?: ScoringIconKey;
   lane_ids?: string[];
   multiplier: ActivityMultiplierConfig;
   qualifiers: ActivityQualifiersConfig;
@@ -106,6 +110,7 @@ export type ComparableLogNumericField = {
   label: string;
   inputKind: LogInputKind;
   unit: string;
+  iconKey: ScoringIconKey;
 };
 
 export type ComparableLogTextField = LogTextField & { kind: 'text' };
@@ -119,6 +124,7 @@ export type ComparableBoardColumn = {
   key: string;
   label: string;
   money: boolean;
+  iconKey: ScoringIconKey;
 };
 
 function newId(prefix: string): string {
@@ -168,6 +174,10 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+function parseIconKey(value: unknown): ScoringIconKey | undefined {
+  return isScoringIconKey(value) ? value : undefined;
 }
 
 function parseLaneIds(value: unknown): string[] | undefined {
@@ -291,11 +301,13 @@ export function emptyActivity(partial?: Partial<ActivityConfig>): ActivityConfig
     unit,
     parity_qty: Number.isFinite(partial?.parity_qty) ? Number(partial?.parity_qty) : 0,
     input_kind: inferInputKind(unit, partial?.input_kind),
+    icon_key: parseIconKey(partial?.icon_key),
     lane_ids: parseLaneIds(partial?.lane_ids),
     multiplier: {
       enabled: Boolean(partial?.multiplier?.enabled),
       extra_factor: asExtraFactor(partial?.multiplier?.extra_factor ?? DEFAULT_MULTIPLIER_FACTOR),
       label: typeof partial?.multiplier?.label === 'string' ? partial.multiplier.label : undefined,
+      icon_key: parseIconKey(partial?.multiplier?.icon_key),
       tiers: tiers && tiers.length > 0 ? tiers : undefined,
     },
     qualifiers: {
@@ -386,11 +398,13 @@ function parseActivity(value: unknown): ActivityConfig | null {
     unit,
     parity_qty: asQty(row.parity_qty),
     input_kind: inferInputKind(unit, explicitKind),
+    icon_key: parseIconKey(row.icon_key),
     lane_ids: parseLaneIds(row.lane_ids),
     multiplier: {
       enabled: Boolean(multiplierRow?.enabled ?? row.multiplier_enabled),
       extra_factor: asExtraFactor(multiplierRow?.extra_factor ?? row.extra_factor),
       label: typeof multiplierRow?.label === 'string' ? multiplierRow.label : undefined,
+      icon_key: parseIconKey(multiplierRow?.icon_key),
       tiers: Array.isArray(multiplierRow?.tiers)
         ? multiplierRow.tiers
             .map((item) => {
@@ -1039,6 +1053,12 @@ export function comparableLogFields(config: ComparablePointsConfig): ComparableL
       label: activity.name.trim(),
       inputKind: inferInputKind(activity.unit, activity.input_kind),
       unit: activity.unit.trim(),
+      iconKey: resolveScoringIconKey({
+        icon_key: activity.icon_key,
+        name: activity.name,
+        unit: activity.unit,
+        input_kind: activity.input_kind,
+      }),
     });
     if (!activity.multiplier.enabled) {
       continue;
@@ -1058,6 +1078,10 @@ export function comparableLogFields(config: ComparablePointsConfig): ComparableL
       label,
       inputKind: 'count',
       unit: '',
+      iconKey: resolveScoringIconKey({
+        icon_key: activity.multiplier.icon_key,
+        name: label,
+      }),
     });
   }
   for (const field of config.text_fields ?? []) {
@@ -1087,6 +1111,7 @@ export function comparableBoardColumns(config: ComparablePointsConfig): Comparab
       key: field.key,
       label: field.label,
       money: field.inputKind === 'money',
+      iconKey: field.iconKey,
     }));
 }
 
