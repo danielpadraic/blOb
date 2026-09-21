@@ -5,6 +5,8 @@
 -- (supabase/migrations/20260921134441_comparable_points_window_score.sql).
 -- If those functions are missing, this row still inserts, but Board points stay 0.
 --
+-- Host is profiles.username = danielharder (created_by only). Do not use
+-- danielpadraic@gmail.com — that login is Official @blob, a different account.
 -- Do NOT run admin_mass_join.
 -- Do NOT join username danielharder as a contestant.
 -- Do NOT UPDATE the older "Rookies vs. Rockstars" row.
@@ -15,7 +17,8 @@
 -- 2. Sign in if asked.
 -- 3. You should see a blank editor and a green Run button.
 -- 4. SCRIPT A first: select only the block under "SCRIPT A" (the SELECT). Click Run.
---    Done when the grid shows host username danielharder and scoring_functions_ready = true.
+--    Done when the grid shows host_username = danielharder and scoring_functions_ready = true.
+--    gmail_login_is_a_different_account = true is expected. Do not host as that Gmail.
 --    If host_found = false, stop. If scoring_functions_ready = false, paste and Run the
 --    4fd4e40 scoring SQL first, then come back.
 --    The older Rockstars row (if listed) must stay untouched.
@@ -25,8 +28,9 @@
 --    If you see HOST_MISSING, stop.
 --    If you see Permission denied, the URL must include tguzdtwsajnnczdxjqyq.
 -- 6. SCRIPT C last: clear the box. Paste only the block under "SCRIPT C". Click Run.
---    Done when the grid shows a NEW uuid, title Rookies vs. Veterans, scoring_method
---    comparable_points, and host_on_board = false. The second grid is older Rookies /
+--    Done when the grid shows a NEW uuid, title Rookies vs. Veterans, host_username
+--    = danielharder, scoring_method comparable_points, and host_on_board = false.
+--    The second grid is older Rookies /
 --    Rockstars rows — those titles and start times must match SCRIPT A.
 -- 7. Open the challenge_url from SCRIPT C on https://blob.mobi after Vercel Ready.
 --    You must be signed in as danielharder (or someone House-added).
@@ -38,8 +42,17 @@
 -- SCRIPT A — preview (read only)
 -- =============================================================================
 select
-  (select id from public.profiles where lower(username) = 'danielharder' limit 1) as host_id,
-  exists(select 1 from public.profiles where lower(username) = 'danielharder') as host_found,
+  p.id as host_id,
+  p.username as host_username,
+  u.email as host_email,
+  (p.id is not null) as host_found,
+  exists(
+    select 1
+    from auth.users au
+    join public.profiles bp on bp.id = au.id
+    where lower(au.email) = 'danielpadraic@gmail.com'
+      and lower(bp.username) is distinct from 'danielharder'
+  ) as gmail_login_is_a_different_account,
   (
     to_regprocedure('public.comparable_score_window(jsonb, jsonb)') is not null
     and to_regprocedure('public.apply_comparable_points(uuid, uuid, uuid)') is not null
@@ -50,7 +63,10 @@ select
     from public.challenges
     where title = 'Rookies vs. Veterans'
       and starts_at = timestamptz '2026-09-21 00:00:00-05'
-  ) as this_row_already_exists;
+  ) as this_row_already_exists
+from (select 1) as seed
+left join public.profiles p on lower(p.username) = 'danielharder'
+left join auth.users u on u.id = p.id;
 
 select
   id,
@@ -142,12 +158,20 @@ declare
     )
   );
 begin
-  select id into v_host
-  from public.profiles
-  where lower(username) = 'danielharder'
+  -- Username only. The Gmail Official login must not become created_by.
+  select p.id into v_host
+  from public.profiles p
+  where lower(p.username) = 'danielharder'
   limit 1;
   if v_host is null then
     raise exception 'HOST_MISSING: username danielharder not found. Stop.';
+  end if;
+  if exists (
+    select 1 from auth.users au
+    where au.id = v_host
+      and lower(au.email) = 'danielpadraic@gmail.com'
+  ) then
+    raise exception 'HOST_WRONG_ACCOUNT: danielharder must not be the Official Gmail login. Stop.';
   end if;
 
   select c.id into v_id
