@@ -490,6 +490,10 @@ export function defaultChallengeProofs(_task = ''): ChallengeProof[] {
   return [makeProof(defaultSentenceForMethod('photo'), 'photo')];
 }
 
+export function honorCheckinProof(): ChallengeProof {
+  return { ...makeProof(defaultSentenceForMethod('honor'), 'honor'), id: 'honor' };
+}
+
 export function isChallengeProofMethod(value: unknown): value is ChallengeProofMethod {
   return CHALLENGE_PROOF_METHODS.includes(value as ChallengeProofMethod);
 }
@@ -969,7 +973,7 @@ export function namedProofsFromLegacyTypes(types: string[]): ChallengeProof[] {
   });
   return list.length > 0
     ? list
-    : [{ ...makeProof(defaultSentenceForMethod('honor'), 'honor'), id: 'honor' }];
+    : [honorCheckinProof()];
 }
 
 export function parseChallengeProofs(value: unknown): ChallengeProof[] {
@@ -1101,6 +1105,9 @@ export function parseProofParts(value: unknown): Record<string, ChallengeProofPa
   }
   const parts: Record<string, ChallengeProofPart> = {};
   for (const [id, item] of Object.entries(value as Record<string, unknown>)) {
+    if (id === 'log_choices') {
+      continue;
+    }
     if (!item || typeof item !== 'object') {
       continue;
     }

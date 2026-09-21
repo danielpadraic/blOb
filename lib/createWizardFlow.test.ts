@@ -73,12 +73,11 @@ describe('create wizard flow', () => {
     ).toEqual([{ id: 'b', title: 'Read 10 pages' }]);
   });
 
-  it('skips Scoring unless comparable points is on or the editor was opened', () => {
-    expect(shouldSkipScoringStep({ scoring_method: null }, false)).toBe(true);
+  it('always visits Scoring so the host can turn Comparable Points on', () => {
+    expect(shouldSkipScoringStep({ scoring_method: null }, false)).toBe(false);
     expect(shouldSkipScoringStep({ scoring_method: 'comparable_points' }, false)).toBe(false);
-    expect(shouldSkipScoringStep({ scoring_method: null }, true)).toBe(false);
-    expect(nextCreateWizardStep(PRIZE, { scoring_method: null }, false)).toBe(FUNDING);
-    expect(prevCreateWizardStep(FUNDING, { scoring_method: null }, false)).toBe(PRIZE);
+    expect(nextCreateWizardStep(PRIZE, { scoring_method: null }, false)).toBe(PRIZE + 1);
+    expect(prevCreateWizardStep(FUNDING, { scoring_method: null }, false)).toBe(FUNDING - 1);
   });
 
   it('lets Rules Next pass for Points with only the Goal task and no extra constraint', () => {

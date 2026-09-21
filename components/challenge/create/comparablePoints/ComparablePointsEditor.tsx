@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Pressable, Switch, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { ActivityCard } from '@/components/challenge/create/comparablePoints/ActivityCard';
+import { LogExtrasEditor } from '@/components/challenge/create/comparablePoints/LogExtrasEditor';
+import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
 import type { ComparablePointsForm } from '@/hooks/useComparablePointsForm';
@@ -9,25 +11,61 @@ import {
   COMPARABLE_POINTS_HARD_MAX,
   COMPARABLE_POINTS_SOFT_MAX,
   comparablePointsLiveSentence,
+  extrasKeepAddingFor,
   formatPoints,
-  scoreSampleActivity,
+  inferInputKind,
+  inferScoreWindow,
+  multiplierMetricKey,
+  scoreComparableWindow,
+  scoreWindowLabel,
+  type ScoreWindow,
 } from '@/lib/comparablePoints';
-import { COLORS } from '@/lib/constants';
 import { THEME } from '@/lib/theme';
+
+const WINDOW_CHIPS: { id: ScoreWindow; label: string; help: string }[] = [
+  { id: 'challenge', label: 'This challenge', help: 'Running total. The multiplier revalues the whole contest.' },
+  { id: 'period', label: 'Each period', help: 'The challenge-tz period only. The multiplier revalues that period.' },
+  { id: 'day', label: 'Each day', help: 'That calendar day only. The multiplier revalues that day.' },
+];
 
 export function ComparablePointsEditor({ form }: { form: ComparablePointsForm }) {
   const { draft } = form;
   const [simOpen, setSimOpen] = useState(false);
   const [sampleQty, setSampleQty] = useState<Record<string, string>>({});
-  const [sampleMultiplier, setSampleMultiplier] = useState<Record<string, string>>({});
-  const [sampleMet, setSampleMet] = useState<Record<string, boolean>>({});
 
   const sentence = useMemo(() => comparablePointsLiveSentence(draft), [draft]);
+  const window = inferScoreWindow(draft.window);
   const atSoftMax = draft.activities.length >= COMPARABLE_POINTS_SOFT_MAX;
   const atHardMax = draft.activities.length >= COMPARABLE_POINTS_HARD_MAX;
+  const sampleTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    for (const activity of draft.activities) {
+      totals[activity.id] = Number(sampleQty[activity.id] || 0);
+      const label = activity.multiplier.label?.trim();
+      if (activity.multiplier.enabled && label) {
+        totals[multiplierMetricKey(label)] = Number(sampleQty[multiplierMetricKey(label)] || 0);
+      }
+    }
+    return totals;
+  }, [draft.activities, sampleQty]);
+  const samplePoints = useMemo(() => scoreComparableWindow(draft, sampleTotals), [draft, sampleTotals]);
 
   return (
     <View className="gap-4">
+      <View className="gap-1">
+        <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
+          Full-value points
+        </AppText>
+        <Input
+          label="Full-value points"
+          placeholder="10000"
+          keyboardType="number-pad"
+          value={draft.parity_points > 0 ? String(draft.parity_points) : ''}
+          onChangeText={form.setParityPoints}
+          hint="Each activity is worth this many points when it hits its full-value quantity."
+        />
+      </View>
+
       <View className="gap-1">
         <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
           Activities
@@ -43,6 +81,7 @@ export function ComparablePointsEditor({ form }: { form: ComparablePointsForm })
           activity={activity}
           index={index}
           parityPoints={draft.parity_points}
+          extrasKeepAdding={draft.extras_keep_adding !== false}
           canRemove={draft.activities.length > 1}
           onChange={(partial) => form.patchActivity(activity.id, partial)}
           onRemove={() => form.removeActivity(activity.id)}
@@ -73,33 +112,25 @@ export function ComparablePointsEditor({ form }: { form: ComparablePointsForm })
         </AppText>
       ) : null}
 
+      <LogExtrasEditor form={form} />
+
       <View className="gap-2">
         <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
-          Parity
+          Score window
         </AppText>
-        <Input
-          label="Points at full value"
-          placeholder="10000"
-          keyboardType="number-pad"
-          value={draft.parity_points > 0 ? String(draft.parity_points) : ''}
-          onChangeText={form.setParityPoints}
-          hint="Every activity’s full-value quantity is worth this many points."
-        />
-        <View className="flex-row items-center justify-between gap-3">
-          <View className="min-w-0 flex-1">
-            <AppText className="font-semibold text-charcoal">Shared floor</AppText>
-            <AppText className="mt-0.5 text-xs leading-5 text-muted">
-              Use each activity’s floor together when scoring the day.
-            </AppText>
-          </View>
-          <Switch
-            value={Boolean(draft.floor_master)}
-            onValueChange={form.setFloorMaster}
-            trackColor={{ true: COLORS.mintDark, false: COLORS.line }}
-            thumbColor={COLORS.white}
-            ios_backgroundColor={COLORS.line}
-          />
-        </View>
+        <ChipRow>
+          {WINDOW_CHIPS.map((item) => (
+            <Chip
+              key={item.id}
+              label={item.label}
+              selected={window === item.id}
+              onPress={() => form.setWindow(item.id)}
+            />
+          ))}
+        </ChipRow>
+        <AppText className="text-[13px] leading-5 text-muted">
+          {WINDOW_CHIPS.find((item) => item.id === window)?.help}
+        </AppText>
         <AppText className="text-sm leading-6 text-charcoal">{sentence}</AppText>
       </View>
 
@@ -116,7 +147,7 @@ export function ComparablePointsEditor({ form }: { form: ComparablePointsForm })
           onPress={() => setSimOpen((current) => !current)}
           className="flex-row items-center justify-between px-4"
           style={{ minHeight: 52 }}>
-          <AppText className="font-semibold text-charcoal">Test a sample day</AppText>
+          <AppText className="font-semibold text-charcoal">Test a sample</AppText>
           <AppText className="text-sm font-semibold" style={{ color: THEME.accent }}>
             {simOpen ? 'Hide' : 'Open'}
           </AppText>
@@ -124,17 +155,17 @@ export function ComparablePointsEditor({ form }: { form: ComparablePointsForm })
         {simOpen ? (
           <View className="gap-3 px-4 pb-4">
             <AppText className="text-[13px] leading-5 text-muted">
-              Plug in one day’s work. This doesn’t save to the challenge.
+              Plug in one window of work. This doesn’t save to the challenge.
             </AppText>
             {draft.activities.map((activity) => {
-              const qty = Number(sampleQty[activity.id] || 0);
-              const multiplierQty = Number(sampleMultiplier[activity.id] || 0);
-              const met = sampleMet[activity.id] !== false;
-              const points = scoreSampleActivity(draft, activity, qty, met, multiplierQty);
+              const name = activity.name.trim() || 'Untitled activity';
+              const money = inferInputKind(activity.unit, activity.input_kind) === 'money';
+              const multiplierLabel = activity.multiplier.label?.trim();
+              const multiplierKey = multiplierLabel ? multiplierMetricKey(multiplierLabel) : '';
               return (
                 <View key={activity.id} className="gap-2">
                   <Input
-                    label={activity.name.trim() || 'Untitled activity'}
+                    label={`${name}${money ? ' ($)' : activity.unit ? ` (${activity.unit})` : ''}`}
                     placeholder="0"
                     keyboardType="decimal-pad"
                     value={sampleQty[activity.id] ?? ''}
@@ -142,54 +173,28 @@ export function ComparablePointsEditor({ form }: { form: ComparablePointsForm })
                       setSampleQty((current) => ({ ...current, [activity.id]: value }))
                     }
                   />
-                  {activity.multiplier.enabled ? (
+                  {activity.multiplier.enabled && multiplierLabel && multiplierKey ? (
                     <Input
-                      label={activity.multiplier.label?.trim() || 'Multiplier'}
+                      label={multiplierLabel}
                       placeholder="0"
                       keyboardType="decimal-pad"
-                      value={sampleMultiplier[activity.id] ?? ''}
+                      value={sampleQty[multiplierKey] ?? ''}
                       onChangeText={(value) =>
-                        setSampleMultiplier((current) => ({ ...current, [activity.id]: value }))
+                        setSampleQty((current) => ({ ...current, [multiplierKey]: value }))
                       }
                     />
                   ) : null}
-                  {activity.qualifiers.enabled ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() =>
-                        setSampleMet((current) => ({ ...current, [activity.id]: !met }))
-                      }
-                      className="self-start rounded-full px-3"
-                      style={{
-                        minHeight: 32,
-                        justifyContent: 'center',
-                        backgroundColor: met ? THEME.accentSoft : THEME.surface,
-                        borderWidth: 1,
-                        borderColor: met ? THEME.accent : THEME.border,
-                      }}>
-                      <AppText
-                        className="text-xs font-semibold"
-                        style={{ color: met ? THEME.accent : THEME.textMuted }}>
-                        {met ? 'Qualifiers met' : 'Qualifiers not met'}
-                      </AppText>
-                    </Pressable>
-                  ) : null}
-                  <AppText className="text-[13px] text-muted">{formatPoints(points)} pts</AppText>
                 </View>
               );
             })}
             <AppText className="text-sm font-semibold text-charcoal">
-              Day total:{' '}
-              {formatPoints(
-                draft.activities.reduce((sum, activity) => {
-                  const qty = Number(sampleQty[activity.id] || 0);
-                  const multiplierQty = Number(sampleMultiplier[activity.id] || 0);
-                  const met = sampleMet[activity.id] !== false;
-                  return sum + scoreSampleActivity(draft, activity, qty, met, multiplierQty);
-                }, 0),
-              )}{' '}
-              pts
+              {scoreWindowLabel(window)} total: {formatPoints(samplePoints)} pts
             </AppText>
+            {draft.activities.some((activity) => extrasKeepAddingFor(activity, draft)) ? null : (
+              <AppText className="text-xs leading-5 text-muted">
+                Amounts above full value are capped on this sample.
+              </AppText>
+            )}
           </View>
         ) : null}
       </View>

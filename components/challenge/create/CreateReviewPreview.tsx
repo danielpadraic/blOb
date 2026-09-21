@@ -17,8 +17,11 @@ import { resolveTaskCadence, taskCadenceLabel } from '@/lib/taskCadence';
 import { previewFromValues } from '@/lib/challengeTemplates';
 import {
   activityQtyLabel,
+  comparableLogPreviewLines,
   comparablePointsHeadline,
+  comparablePointsLiveSentence,
   parseComparablePointsConfig,
+  scoreWindowLabel,
 } from '@/lib/comparablePoints';
 import { nobodyFinishedRuleCopy } from '@/lib/settlement/receipts';
 import { THEME } from '@/lib/theme';
@@ -159,14 +162,27 @@ export function CreateReviewPreview({
           <AppText className="mt-1 text-[13px] leading-5 text-muted">
             {comparablePointsHeadline(comparable)}
           </AppText>
+          <AppText className="mt-1 text-[13px] leading-5 text-muted">
+            {comparablePointsLiveSentence(comparable)}
+          </AppText>
+          <AppText className="mt-2 text-[13px] leading-5 text-muted">
+            Score window · {scoreWindowLabel(comparable.window)}
+          </AppText>
           <View className="mt-3 gap-1.5">
             {comparable.activities
               .filter((item) => item.name.trim().length > 0)
               .map((item) => (
                 <AppText key={item.id} className="text-[14px] leading-5 text-charcoal">
                   {item.name.trim()} · {activityQtyLabel(item)}
-                  {item.multiplier.enabled ? ' · Multiplier' : ''}
+                  {item.multiplier.enabled ? ` · ${item.multiplier.label?.trim() || 'Multiplier'}` : ''}
                   {item.qualifiers.enabled ? ' · Qualifiers' : ''}
+                </AppText>
+              ))}
+            {comparableLogPreviewLines(comparable)
+              .filter((line) => !comparable.activities.some((item) => line.startsWith(item.name.trim())))
+              .map((line) => (
+                <AppText key={line} className="text-[14px] leading-5 text-charcoal">
+                  {line}
                 </AppText>
               ))}
           </View>

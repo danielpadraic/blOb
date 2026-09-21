@@ -1,9 +1,8 @@
-import { Image, View } from 'react-native';
+import { Switch, View } from 'react-native';
 
-import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { AppText } from '@/components/ui/AppText';
-import { challengeTypeIconSource } from '@/lib/challengeTypeIcon';
+import { COLORS } from '@/lib/constants';
 import {
   activityQtyLabel,
   comparablePointsHeadline,
@@ -12,49 +11,42 @@ import {
 import { THEME } from '@/lib/theme';
 
 export function ComparablePointsMethodCard({
+  enabled,
   config,
-  onPress,
+  onEnabledChange,
 }: {
+  enabled: boolean;
   config: ComparablePointsConfig | null;
-  onPress: () => void;
+  onEnabledChange: (next: boolean) => void;
 }) {
-  const saved = config != null;
-  const activities = saved
+  const activities = config
     ? config.activities.filter((item) => item.name.trim().length > 0)
     : [];
 
   return (
     <Card>
-      <View className="flex-row items-start gap-3">
-        <View
-          className="h-11 w-11 items-center justify-center overflow-hidden"
-          style={{
-            backgroundColor: THEME.accentSoft,
-            borderRadius: 14,
-          }}>
-          <Image
-            source={challengeTypeIconSource('fitness')}
-            style={{ width: 28, height: 28 }}
-            resizeMode="contain"
-          />
-        </View>
+      <View className="flex-row items-start justify-between gap-3">
         <View className="min-w-0 flex-1">
           <AppText className="text-[17px] font-semibold leading-6 text-charcoal">
             Comparable Points
           </AppText>
-          {saved ? (
-            <AppText className="mt-0.5 text-[13px] leading-5 text-muted">
-              {comparablePointsHeadline(config)}
-            </AppText>
-          ) : (
-            <AppText className="mt-0.5 text-[13px] leading-5 text-muted">
-              Compare different kinds of work on one leaderboard
-            </AppText>
-          )}
+          <AppText className="mt-0.5 text-[13px] leading-5 text-muted">
+            {enabled && config
+              ? comparablePointsHeadline(config)
+              : 'Compare different kinds of work on one leaderboard'}
+          </AppText>
         </View>
+        <Switch
+          value={enabled}
+          onValueChange={onEnabledChange}
+          trackColor={{ true: COLORS.mintDark, false: COLORS.line }}
+          thumbColor={COLORS.white}
+          ios_backgroundColor={COLORS.line}
+          accessibilityLabel="Comparable Points"
+        />
       </View>
 
-      {saved && activities.length > 0 ? (
+      {enabled && activities.length > 0 ? (
         <View className="mt-3 gap-2">
           {activities.map((activity) => (
             <View key={activity.id} className="flex-row flex-wrap items-center gap-2">
@@ -69,10 +61,6 @@ export function ComparablePointsMethodCard({
           ))}
         </View>
       ) : null}
-
-      <View className="mt-4">
-        <Button title={saved ? 'Edit scoring' : 'Configure'} onPress={onPress} />
-      </View>
     </Card>
   );
 }

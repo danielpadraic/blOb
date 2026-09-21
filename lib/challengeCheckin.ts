@@ -17,6 +17,7 @@ export type ChallengeCheckin = {
   post_selfie_url?: string | null;
   hr_monitor_url?: string | null;
   notes?: string | null;
+  metric_values?: Record<string, number> | null;
   health_workout_id?: string | null;
   workout_submission_id?: string | null;
   started_at: string;

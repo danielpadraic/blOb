@@ -1,4 +1,3 @@
-import { COMPARABLE_POINTS_METHOD } from '@/lib/comparablePoints';
 import { nextCreateItemId } from '@/lib/createItemIds';
 import type { CreateChallengeValues } from '@/utils/validators';
 
@@ -51,10 +50,10 @@ export function seedPointsTasksFromGoal(
 }
 
 export function shouldSkipScoringStep(
-  values: Pick<CreateChallengeValues, 'scoring_method'>,
-  scoringEditorOpen: boolean,
+  _values: Pick<CreateChallengeValues, 'scoring_method'>,
+  _scoringEditorOpen: boolean,
 ): boolean {
-  return values.scoring_method !== COMPARABLE_POINTS_METHOD && !scoringEditorOpen;
+  return false;
 }
 
 export function nextCreateWizardStep(

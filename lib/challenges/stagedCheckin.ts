@@ -64,8 +64,12 @@ export async function submitLocationProof(input: {
   return parseChallengeCheckin((data ?? {}) as Record<string, unknown>);
 }
 
-export async function saveCheckinMetricValues(challengeId: string, values: Record<string, number>) {
-  await saveCheckinMetricValuesWithClient(supabase as never, challengeId, values);
+export async function saveCheckinMetricValues(
+  challengeId: string,
+  values: Record<string, number>,
+  extras?: { notes?: string | null; logChoices?: Record<string, string> | null },
+) {
+  await saveCheckinMetricValuesWithClient(supabase as never, challengeId, values, extras);
 }
 
 export async function submitCheckin(challengeId: string, forUserId?: string | null) {

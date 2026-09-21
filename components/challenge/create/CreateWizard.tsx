@@ -130,6 +130,7 @@ import {
 } from '@/lib/challengeSchedule';
 import {
   COMPARABLE_POINTS_METHOD,
+  emptyComparablePointsConfig,
   parseComparablePointsConfig,
 } from '@/lib/comparablePoints';
 import { useComparablePointsForm } from '@/hooks/useComparablePointsForm';
@@ -265,6 +266,11 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   const isPoints = isPointsDraft(values);
   const isCumulative = isCumulativeDraft(values);
   const usesComparablePoints = values.scoring_method === COMPARABLE_POINTS_METHOD && comparableConfig != null;
+  useEffect(() => {
+    if (usesComparablePoints) {
+      setScoringEditorOpen(true);
+    }
+  }, [usesComparablePoints]);
   const isUnlimited = isUnlimitedDraft(values);
   const isCreatorFunded = values.funding_model === 'creator' || values.funding_model === 'hybrid';
   const contributionAmount = isCreatorFunded ? Math.max(Number(values.creator_contribution) || 0, 0) : 0;
@@ -1053,13 +1059,19 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   }
 
   function openScoringEditor() {
-    scoringForm.resetFrom(getValues('scoring_config'));
+    scoringForm.resetFrom(getValues('scoring_config') ?? emptyComparablePointsConfig());
     setScoringEditorOpen(true);
+    setValue('scoring_method', COMPARABLE_POINTS_METHOD, { shouldDirty: true, shouldValidate: true });
+    if (!parseComparablePointsConfig(getValues('scoring_config'))) {
+      setValue('scoring_config', emptyComparablePointsConfig(), { shouldDirty: true, shouldValidate: false });
+    }
   }
 
   function closeScoringEditor() {
-    scoringForm.resetFrom(getValues('scoring_config'));
+    scoringForm.resetFrom(emptyComparablePointsConfig());
     setScoringEditorOpen(false);
+    setValue('scoring_method', null, { shouldDirty: true, shouldValidate: true });
+    setValue('scoring_config', null, { shouldDirty: true, shouldValidate: true });
   }
 
   function saveScoringMethod() {
@@ -1070,7 +1082,6 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     }
     setValue('scoring_method', COMPARABLE_POINTS_METHOD, { shouldDirty: true, shouldValidate: true });
     setValue('scoring_config', result.config, { shouldDirty: true, shouldValidate: true });
-    setScoringEditorOpen(false);
     setScoringToast('Scoring method saved');
     setTimeout(() => setScoringToast((current) => (current === 'Scoring method saved' ? null : current)), 1800);
     return true;
@@ -1245,7 +1256,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       showBobIssue({ field: 'start', step: STEP_START });
       return;
     }
-    if (index !== STEP_SCORING && scoringEditorOpen) {
+    if (index !== STEP_SCORING && scoringEditorOpen && getValues('scoring_method') !== COMPARABLE_POINTS_METHOD) {
       closeScoringEditor();
     }
     setStep(index);
@@ -1284,9 +1295,15 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
       showBobIssue({ field: 'start', step: STEP_START });
       return;
     }
-    if (step === STEP_SCORING && scoringEditorOpen) {
-      saveScoringMethod();
-      return;
+    if (step === STEP_SCORING) {
+      if (scoringEditorOpen || getValues('scoring_method') === COMPARABLE_POINTS_METHOD) {
+        if (!saveScoringMethod()) {
+          return;
+        }
+      } else {
+        setValue('scoring_method', null, { shouldDirty: true, shouldValidate: true });
+        setValue('scoring_config', null, { shouldDirty: true, shouldValidate: true });
+      }
     }
     if (step === STEP_RULES) {
       flushRulesDraftRef.current();
@@ -1365,7 +1382,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   function goBack() {
     setFormError(null);
     clearBobError();
-    if (step === STEP_SCORING && scoringEditorOpen) {
+    if (step === STEP_SCORING && scoringEditorOpen && !usesComparablePoints && !getValues('scoring_method')) {
       closeScoringEditor();
       return;
     }
@@ -1816,11 +1833,16 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
           ) : null}
           {step === STEP_SCORING ? (
             <ScoringMethodSlide
-              config={usesComparablePoints ? comparableConfig : null}
-              editorOpen={scoringEditorOpen}
+              config={comparableConfig}
+              enabled={scoringEditorOpen || usesComparablePoints}
               form={scoringForm}
-              onConfigure={openScoringEditor}
-              onEdit={openScoringEditor}
+              onEnabledChange={(next) => {
+                if (next) {
+                  openScoringEditor();
+                  return;
+                }
+                closeScoringEditor();
+              }}
             />
           ) : null}
           {step === STEP_FUNDING ? (
@@ -1953,15 +1975,13 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
             onNext={() => void goNext()}
             nextDisabled={lastStep && !skillAck}
             nextTitle={
-              step === STEP_SCORING && scoringEditorOpen
-                ? 'Save scoring method'
-                : lastStep
-                  ? isEditing
-                    ? copy('create.save')
-                    : 'Publish'
-                  : reviewReturn
-                    ? copy('create.backToReview')
-                    : 'Next'
+              lastStep
+                ? isEditing
+                  ? copy('create.save')
+                  : 'Publish'
+                : reviewReturn
+                  ? copy('create.backToReview')
+                  : 'Next'
             }
             nextLoading={lastStep && publishing}
             savePending={saveDraft.isPending}
@@ -2600,16 +2620,14 @@ function DurationSlide({
 
 function ScoringMethodSlide({
   config,
-  editorOpen,
+  enabled,
   form,
-  onConfigure,
-  onEdit,
+  onEnabledChange,
 }: {
   config: ReturnType<typeof parseComparablePointsConfig>;
-  editorOpen: boolean;
+  enabled: boolean;
   form: ReturnType<typeof useComparablePointsForm>;
-  onConfigure: () => void;
-  onEdit: () => void;
+  onEnabledChange: (next: boolean) => void;
 }) {
   return (
     <FieldAnchor name="scoring_method">
@@ -2618,17 +2636,18 @@ function ScoringMethodSlide({
           <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
             Scoring method
           </AppText>
-          {editorOpen ? (
+          {enabled ? (
             <AppText className="text-[13px] leading-5 text-muted">
-              Activities first, then optional rules, then shared parity.
+              Name the work, then optional extras, then the score window.
             </AppText>
           ) : null}
         </View>
-        {editorOpen ? (
-          <ComparablePointsEditor form={form} />
-        ) : (
-          <ComparablePointsMethodCard config={config} onPress={config ? onEdit : onConfigure} />
-        )}
+        <ComparablePointsMethodCard
+          enabled={enabled}
+          config={enabled ? config : null}
+          onEnabledChange={onEnabledChange}
+        />
+        {enabled ? <ComparablePointsEditor form={form} /> : null}
       </View>
     </FieldAnchor>
   );

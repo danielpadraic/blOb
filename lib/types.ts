@@ -59,6 +59,10 @@ export type {
   ActivityQualifier,
   ActivityQualifiersConfig,
   ComparablePointsConfig,
+  LogChoiceField,
+  LogInputKind,
+  LogTextField,
+  ScoreWindow,
   ScoringMethod,
 } from '@/lib/comparablePoints';
 

@@ -1,6 +1,11 @@
 export const COMPARABLE_POINTS_METHOD = 'comparable_points' as const;
+export const COMPARABLE_CHECKIN_EMPTY_CAPTION = 'Check-in Complete';
 
 export type ScoringMethod = typeof COMPARABLE_POINTS_METHOD;
+
+export type LogInputKind = 'count' | 'decimal' | 'money';
+
+export type ScoreWindow = 'challenge' | 'period' | 'day';
 
 export type ActivityMultiplierTier = {
   threshold: number;
@@ -34,16 +39,34 @@ export type ActivityConfig = {
   name: string;
   unit: string;
   parity_qty: number;
+  input_kind?: LogInputKind;
   multiplier: ActivityMultiplierConfig;
   qualifiers: ActivityQualifiersConfig;
   floor?: ActivityFloorConfig;
 };
 
+export type LogTextField = {
+  id: string;
+  label: string;
+  placeholder?: string;
+  required?: boolean;
+};
+
+export type LogChoiceField = {
+  id: string;
+  label: string;
+  options: string[];
+};
+
 export type ComparablePointsConfig = {
   version: number;
   parity_points: number;
+  window?: ScoreWindow;
+  extras_keep_adding?: boolean;
   floor_master?: boolean;
   activities: ActivityConfig[];
+  text_fields?: LogTextField[];
+  choice_fields?: LogChoiceField[];
 };
 
 export type ChallengeScoringAudit = {
@@ -57,11 +80,39 @@ export type ChallengeScoringAudit = {
 };
 
 export const ACTIVITY_UNIT_PRESETS = ['minutes', 'miles', 'reps', 'sessions'] as const;
+export const LOG_INPUT_KINDS: LogInputKind[] = ['count', 'decimal', 'money'];
+export const SCORE_WINDOWS: ScoreWindow[] = ['challenge', 'period', 'day'];
 
 export const COMPARABLE_POINTS_SOFT_MAX = 4;
 export const COMPARABLE_POINTS_HARD_MAX = 6;
+export const LOG_TEXT_FIELD_MAX = 3;
+export const LOG_CHOICE_FIELD_MAX = 2;
+export const LOG_CHOICE_OPTION_MIN = 2;
+export const LOG_CHOICE_OPTION_MAX = 8;
 export const DEFAULT_PARITY_POINTS = 10_000;
-export const DEFAULT_MULTIPLIER_FACTOR = 0.5;
+export const DEFAULT_MULTIPLIER_FACTOR = 1;
+export const LOG_CHOICES_PART_KEY = 'log_choices';
+
+export type ComparableLogNumericField = {
+  kind: 'activity' | 'multiplier';
+  key: string;
+  label: string;
+  inputKind: LogInputKind;
+  unit: string;
+};
+
+export type ComparableLogTextField = LogTextField & { kind: 'text' };
+export type ComparableLogChoiceField = LogChoiceField & { kind: 'choice' };
+export type ComparableLogField =
+  | ComparableLogNumericField
+  | ComparableLogTextField
+  | ComparableLogChoiceField;
+
+export type ComparableBoardColumn = {
+  key: string;
+  label: string;
+  money: boolean;
+};
 
 function newId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
@@ -69,6 +120,103 @@ function newId(prefix: string): string {
 
 export function emptyQualifier(): ActivityQualifier {
   return { id: newId('q'), label: '' };
+}
+
+export function emptyLogTextField(partial?: Partial<LogTextField>): LogTextField {
+  return {
+    id: partial?.id ?? newId('txt'),
+    label: typeof partial?.label === 'string' ? partial.label : '',
+    placeholder: typeof partial?.placeholder === 'string' ? partial.placeholder : undefined,
+    required: Boolean(partial?.required),
+  };
+}
+
+export function emptyLogChoiceField(partial?: Partial<LogChoiceField>): LogChoiceField {
+  const options = Array.isArray(partial?.options)
+    ? partial.options.map((item) => String(item ?? '').trim()).filter(Boolean)
+    : [];
+  return {
+    id: partial?.id ?? newId('choice'),
+    label: typeof partial?.label === 'string' ? partial.label : '',
+    options: options.length > 0 ? options : ['', ''],
+  };
+}
+
+export function inferInputKind(unit: string, explicit?: LogInputKind | null): LogInputKind {
+  if (explicit === 'count' || explicit === 'decimal' || explicit === 'money') {
+    return explicit;
+  }
+  const lower = unit.trim().toLowerCase();
+  if (lower === 'usd' || lower === '$' || lower === 'money') {
+    return 'money';
+  }
+  return 'count';
+}
+
+export function inferScoreWindow(value: unknown): ScoreWindow {
+  return value === 'period' || value === 'day' ? value : 'challenge';
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function asExtraFactor(value: unknown, fallback = DEFAULT_MULTIPLIER_FACTOR): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) {
+    return fallback;
+  }
+  return Math.min(4, Math.max(0, Math.round(n * 100) / 100));
+}
+
+function asQty(value: unknown): number {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) {
+    return 0;
+  }
+  return Math.round(n * 100) / 100;
+}
+
+export function asScoringVersion(value: unknown, fallback = 1): number {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n) || n < 1) {
+    return fallback;
+  }
+  return n;
+}
+
+export function parseMoneyInput(raw: string): number {
+  const cleaned = String(raw ?? '')
+    .replace(/[^0-9.]/g, '')
+    .trim();
+  if (!cleaned || cleaned === '.') {
+    return 0;
+  }
+  const n = Number(cleaned);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0;
+}
+
+export function formatMoneyAmount(value: number): string {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n === 0) {
+    return '$0';
+  }
+  return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
+}
+
+export function slugMetricLabel(label: string): string {
+  return label
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+export function multiplierMetricKey(label: string): string {
+  const slug = slugMetricLabel(label);
+  return slug ? `multiplier:${slug}` : '';
 }
 
 export function emptyActivity(partial?: Partial<ActivityConfig>): ActivityConfig {
@@ -80,19 +228,21 @@ export function emptyActivity(partial?: Partial<ActivityConfig>): ActivityConfig
         }))
         .filter((item) => Number.isFinite(item.threshold) && Number.isFinite(item.percent))
     : undefined;
+  const unit =
+    typeof partial?.unit === 'string' && partial.unit.trim()
+      ? partial.unit.trim()
+      : partial
+        ? ''
+        : 'minutes';
   return {
     id: partial?.id ?? newId('act'),
     name: partial?.name ?? '',
-    unit:
-      typeof partial?.unit === 'string' && partial.unit.trim()
-        ? partial.unit.trim()
-        : partial
-          ? ''
-          : 'minutes',
+    unit,
     parity_qty: Number.isFinite(partial?.parity_qty) ? Number(partial?.parity_qty) : 0,
+    input_kind: inferInputKind(unit, partial?.input_kind),
     multiplier: {
       enabled: Boolean(partial?.multiplier?.enabled),
-      extra_factor: clampFactor(partial?.multiplier?.extra_factor ?? DEFAULT_MULTIPLIER_FACTOR),
+      extra_factor: asExtraFactor(partial?.multiplier?.extra_factor ?? DEFAULT_MULTIPLIER_FACTOR),
       label: typeof partial?.multiplier?.label === 'string' ? partial.multiplier.label : undefined,
       tiers: tiers && tiers.length > 0 ? tiers : undefined,
     },
@@ -116,38 +266,48 @@ export function emptyComparablePointsConfig(): ComparablePointsConfig {
   return {
     version: 1,
     parity_points: DEFAULT_PARITY_POINTS,
+    window: 'challenge',
+    extras_keep_adding: true,
     activities: [emptyActivity()],
+    text_fields: [],
+    choice_fields: [],
   };
 }
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
+function parseTextField(value: unknown): LogTextField | null {
+  const row = asRecord(value);
+  if (!row) {
+    return null;
+  }
+  const label = typeof row.label === 'string' ? row.label.trim() : '';
+  if (!label) {
+    return null;
+  }
+  return emptyLogTextField({
+    id: typeof row.id === 'string' && row.id ? row.id : newId('txt'),
+    label,
+    placeholder: typeof row.placeholder === 'string' ? row.placeholder : undefined,
+    required: Boolean(row.required),
+  });
 }
 
-function clampFactor(value: unknown): number {
-  const n = Number(value);
-  if (!Number.isFinite(n)) {
-    return DEFAULT_MULTIPLIER_FACTOR;
+function parseChoiceField(value: unknown): LogChoiceField | null {
+  const row = asRecord(value);
+  if (!row) {
+    return null;
   }
-  return Math.min(4, Math.max(0.1, Math.round(n * 100) / 100));
-}
-
-function asQty(value: unknown): number {
-  const n = Number(value);
-  if (!Number.isFinite(n) || n < 0) {
-    return 0;
+  const label = typeof row.label === 'string' ? row.label.trim() : '';
+  const options = Array.isArray(row.options)
+    ? row.options.map((item) => String(item ?? '').trim()).filter(Boolean)
+    : [];
+  if (!label || options.length < 1) {
+    return null;
   }
-  return Math.round(n * 100) / 100;
-}
-
-export function asScoringVersion(value: unknown, fallback = 1): number {
-  const n = Math.round(Number(value));
-  if (!Number.isFinite(n) || n < 1) {
-    return fallback;
-  }
-  return n;
+  return {
+    id: typeof row.id === 'string' && row.id ? row.id : newId('choice'),
+    label,
+    options,
+  };
 }
 
 function parseActivity(value: unknown): ActivityConfig | null {
@@ -163,14 +323,20 @@ function parseActivity(value: unknown): ActivityConfig | null {
       ? row.qualifier_items
       : [];
   const floorRow = asRecord(row.floor);
+  const unit = typeof row.unit === 'string' && row.unit.trim() ? row.unit.trim() : '';
+  const explicitKind =
+    row.input_kind === 'count' || row.input_kind === 'decimal' || row.input_kind === 'money'
+      ? row.input_kind
+      : undefined;
   return emptyActivity({
     id: typeof row.id === 'string' && row.id ? row.id : newId('act'),
     name: typeof row.name === 'string' ? row.name : '',
-    unit: typeof row.unit === 'string' && row.unit.trim() ? row.unit.trim() : '',
+    unit,
     parity_qty: asQty(row.parity_qty),
+    input_kind: inferInputKind(unit, explicitKind),
     multiplier: {
       enabled: Boolean(multiplierRow?.enabled ?? row.multiplier_enabled),
-      extra_factor: clampFactor(multiplierRow?.extra_factor ?? row.extra_factor),
+      extra_factor: asExtraFactor(multiplierRow?.extra_factor ?? row.extra_factor),
       label: typeof multiplierRow?.label === 'string' ? multiplierRow.label : undefined,
       tiers: Array.isArray(multiplierRow?.tiers)
         ? multiplierRow.tiers
@@ -221,11 +387,23 @@ export function parseComparablePointsConfig(value: unknown): ComparablePointsCon
     return null;
   }
   const parity = Number(row.parity_points);
+  const text_fields = (Array.isArray(row.text_fields) ? row.text_fields : [])
+    .map(parseTextField)
+    .filter((item): item is LogTextField => item != null)
+    .slice(0, LOG_TEXT_FIELD_MAX);
+  const choice_fields = (Array.isArray(row.choice_fields) ? row.choice_fields : [])
+    .map(parseChoiceField)
+    .filter((item): item is LogChoiceField => item != null)
+    .slice(0, LOG_CHOICE_FIELD_MAX);
   return {
     version: asScoringVersion(row.version, 1),
     parity_points: Number.isFinite(parity) && parity > 0 ? Math.round(parity) : DEFAULT_PARITY_POINTS,
+    window: inferScoreWindow(row.window),
+    extras_keep_adding: row.extras_keep_adding === false ? false : true,
     floor_master: Boolean(row.floor_master),
     activities: activities.slice(0, COMPARABLE_POINTS_HARD_MAX),
+    text_fields,
+    choice_fields,
   };
 }
 
@@ -233,13 +411,30 @@ export function cloneComparablePointsConfig(config: ComparablePointsConfig): Com
   return {
     version: asScoringVersion(config.version, 1),
     parity_points: config.parity_points,
+    window: inferScoreWindow(config.window),
+    extras_keep_adding: config.extras_keep_adding === false ? false : true,
     floor_master: Boolean(config.floor_master),
     activities: config.activities.map((activity) => emptyActivity(activity)),
+    text_fields: (config.text_fields ?? []).map((field) => emptyLogTextField(field)),
+    choice_fields: (config.choice_fields ?? []).map((field) => emptyLogChoiceField(field)),
   };
 }
 
 export function filledComparableActivities(config: ComparablePointsConfig): ActivityConfig[] {
   return config.activities.filter((activity) => activity.name.trim().length > 0 && activity.parity_qty > 0);
+}
+
+export function extrasKeepAddingFor(
+  activity: ActivityConfig,
+  config?: Pick<ComparablePointsConfig, 'extras_keep_adding'>,
+): boolean {
+  if (activity.multiplier.extra_factor === 0) {
+    return false;
+  }
+  if (activity.multiplier.extra_factor === 1) {
+    return true;
+  }
+  return config?.extras_keep_adding !== false;
 }
 
 export function validateComparablePointsConfig(
@@ -254,8 +449,14 @@ export function validateComparablePointsConfig(
       emptyActivity({
         ...activity,
         name: activity.name.trim(),
-        unit: activity.unit.trim() || 'units',
+        unit: activity.unit.trim() || (activity.input_kind === 'money' ? 'USD' : 'units'),
         parity_qty: asQty(activity.parity_qty),
+        input_kind: inferInputKind(activity.unit, activity.input_kind),
+        multiplier: {
+          ...activity.multiplier,
+          extra_factor: extrasKeepAddingFor(activity, config) ? 1 : 0,
+          label: activity.multiplier.label?.trim() || undefined,
+        },
         qualifiers: {
           enabled: activity.qualifiers.enabled,
           items: activity.qualifiers.items
@@ -268,13 +469,56 @@ export function validateComparablePointsConfig(
   if (!activities.some((activity) => activity.parity_qty > 0)) {
     return { ok: false, message: 'Name at least one activity and set a full-value quantity.' };
   }
+  const text_fields = (config.text_fields ?? [])
+    .map((field) => emptyLogTextField({ ...field, label: field.label.trim() }))
+    .filter((field) => field.label.length > 0)
+    .slice(0, LOG_TEXT_FIELD_MAX);
+  const choice_fields: LogChoiceField[] = [];
+  for (const field of config.choice_fields ?? []) {
+    const label = field.label.trim();
+    const options: string[] = [];
+    const seen = new Set<string>();
+    for (const option of field.options ?? []) {
+      const next = String(option ?? '').trim();
+      if (!next) {
+        continue;
+      }
+      const key = next.toLowerCase();
+      if (seen.has(key)) {
+        return { ok: false, message: `Each choice under “${label || 'a choice field'}” needs a unique option.` };
+      }
+      seen.add(key);
+      options.push(next);
+    }
+    if (!label) {
+      continue;
+    }
+    if (options.length < LOG_CHOICE_OPTION_MIN) {
+      return { ok: false, message: `“${label}” needs at least two options.` };
+    }
+    if (options.length > LOG_CHOICE_OPTION_MAX) {
+      return { ok: false, message: `Keep “${label}” to ${LOG_CHOICE_OPTION_MAX} options.` };
+    }
+    choice_fields.push({
+      id: field.id || newId('choice'),
+      label,
+      options,
+    });
+    if (choice_fields.length >= LOG_CHOICE_FIELD_MAX) {
+      break;
+    }
+  }
   return {
     ok: true,
     config: {
       version: asScoringVersion(config.version, 1),
       parity_points: parity,
+      window: inferScoreWindow(config.window),
+      extras_keep_adding: config.extras_keep_adding === false ? false : true,
       floor_master: Boolean(config.floor_master),
       activities,
+      text_fields,
+      choice_fields,
     },
   };
 }
@@ -333,6 +577,12 @@ export function diffComparablePoints(
       `Full-value points ${formatPoints(before.parity_points)} → ${formatPoints(after.parity_points)}`,
     );
   }
+  if (inferScoreWindow(before.window) !== inferScoreWindow(after.window)) {
+    lines.push(`Score window ${inferScoreWindow(before.window)} → ${inferScoreWindow(after.window)}`);
+  }
+  if ((before.extras_keep_adding !== false) !== (after.extras_keep_adding !== false)) {
+    lines.push(`Amounts above full value ${after.extras_keep_adding === false ? 'cap' : 'keep adding'}`);
+  }
   if (Boolean(before.floor_master) !== Boolean(after.floor_master)) {
     lines.push(`Shared floor ${after.floor_master ? 'on' : 'off'}`);
   }
@@ -350,6 +600,9 @@ export function diffComparablePoints(
     }
     if (prev.unit !== activity.unit || prev.parity_qty !== activity.parity_qty) {
       lines.push(`${name} full value ${activityQtyLabel(prev)} → ${activityQtyLabel(activity)}`);
+    }
+    if (inferInputKind(prev.unit, prev.input_kind) !== inferInputKind(activity.unit, activity.input_kind)) {
+      lines.push(`${name} input ${inferInputKind(activity.unit, activity.input_kind)}`);
     }
     if (prev.multiplier.enabled !== activity.multiplier.enabled) {
       lines.push(`${name} multiplier ${activity.multiplier.enabled ? 'on' : 'off'}`);
@@ -387,6 +640,16 @@ export function diffComparablePoints(
       lines.push(`Removed ${activity.name.trim() || 'Untitled activity'}`);
     }
   }
+  const beforeText = (before.text_fields ?? []).map((item) => item.label).join('|');
+  const afterText = (after.text_fields ?? []).map((item) => item.label).join('|');
+  if (beforeText !== afterText) {
+    lines.push('Log text fields updated');
+  }
+  const beforeChoice = (before.choice_fields ?? []).map((item) => item.label).join('|');
+  const afterChoice = (after.choice_fields ?? []).map((item) => item.label).join('|');
+  if (beforeChoice !== afterChoice) {
+    lines.push('Log choice fields updated');
+  }
   if (lines.length === 0) {
     lines.push('No scoring rule changes.');
   }
@@ -422,6 +685,16 @@ export function comparablePointsHeadline(config: ComparablePointsConfig): string
   return `${count} ${count === 1 ? 'activity' : 'activities'} · ${formatPoints(config.parity_points)} pts at full value`;
 }
 
+export function scoreWindowLabel(window: ScoreWindow | undefined): string {
+  if (window === 'period') {
+    return 'Each period';
+  }
+  if (window === 'day') {
+    return 'Each day';
+  }
+  return 'This challenge';
+}
+
 export function comparablePointsLiveSentence(config: ComparablePointsConfig): string {
   const named = filledComparableActivities(config);
   const pts = `${formatPoints(config.parity_points)} pts`;
@@ -429,10 +702,29 @@ export function comparablePointsLiveSentence(config: ComparablePointsConfig): st
     return 'Name an activity and set the quantity that equals full value.';
   }
   const parts = named.map((activity) => `${activityQtyLabel(activity)} of ${activity.name.trim()} equals ${pts}`);
-  if (parts.length === 1) {
-    return `${parts[0]}.`;
+  const body = parts.length === 1 ? `${parts[0]}.` : `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}.`;
+  return body;
+}
+
+export function comparableLogPreviewLines(config: ComparablePointsConfig): string[] {
+  const lines: string[] = [];
+  for (const field of comparableLogFields(config)) {
+    if (field.kind === 'activity') {
+      const money = field.inputKind === 'money' ? ' ($)' : '';
+      lines.push(`${field.label}${money}`);
+      continue;
+    }
+    if (field.kind === 'multiplier') {
+      lines.push(field.label);
+      continue;
+    }
+    if (field.kind === 'text') {
+      lines.push(field.required ? `${field.label} (required)` : field.label);
+      continue;
+    }
+    lines.push(`${field.label}: ${field.options.join(' / ')}`);
   }
-  return `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}.`;
+  return lines;
 }
 
 function multiplierTiers(activity: ActivityConfig): ActivityMultiplierTier[] {
@@ -460,8 +752,23 @@ export function resolveMultiplierPercent(activity: ActivityConfig, multiplierQty
   return Math.max(0, percent);
 }
 
+function scoredQty(
+  config: Pick<ComparablePointsConfig, 'extras_keep_adding'>,
+  activity: ActivityConfig,
+  qty: number,
+): number {
+  const amount = asQty(qty);
+  if (activity.parity_qty <= 0) {
+    return 0;
+  }
+  if (!extrasKeepAddingFor(activity, config)) {
+    return Math.min(amount, activity.parity_qty);
+  }
+  return amount;
+}
+
 export function scoreSampleActivity(
-  config: Pick<ComparablePointsConfig, 'parity_points'>,
+  config: Pick<ComparablePointsConfig, 'parity_points' | 'extras_keep_adding'>,
   activity: ActivityConfig,
   qty: number,
   qualifierMet = true,
@@ -470,22 +777,175 @@ export function scoreSampleActivity(
   if (activity.qualifiers.enabled && !qualifierMet) {
     return 0;
   }
-  const amount = asQty(qty);
+  if (activity.floor?.enabled && asQty(qty) + 1e-9 < activity.floor.min_qty) {
+    return 0;
+  }
+  const amount = scoredQty(config, activity, qty);
   if (activity.parity_qty <= 0 || amount <= 0) {
     return 0;
   }
-  const ratio = amount / activity.parity_qty;
+  const base = (amount / activity.parity_qty) * config.parity_points;
   const usesTiers = activity.multiplier.enabled && multiplierTiers(activity).length > 0;
-  let base: number;
-  if (ratio <= 1 || !activity.multiplier.enabled || usesTiers) {
-    base = Math.min(ratio, 1) * config.parity_points;
-  } else {
-    base =
-      config.parity_points +
-      (ratio - 1) * config.parity_points * clampFactor(activity.multiplier.extra_factor);
-  }
   if (!usesTiers) {
     return Math.round(base);
   }
   return Math.round((base * resolveMultiplierPercent(activity, multiplierQty)) / 100);
+}
+
+export function multiplierSourceQty(
+  activity: ActivityConfig,
+  totals: Record<string, number>,
+): number {
+  if (!activity.multiplier.enabled) {
+    return 0;
+  }
+  const label = activity.multiplier.label?.trim() ?? '';
+  const key = multiplierMetricKey(label);
+  if (key && Number.isFinite(totals[key])) {
+    return asQty(totals[key]);
+  }
+  if (label && Number.isFinite(totals[label])) {
+    return asQty(totals[label]);
+  }
+  return 0;
+}
+
+export function scoreComparableWindow(
+  config: ComparablePointsConfig,
+  totals: Record<string, number>,
+): number {
+  return filledComparableActivities(config).reduce((sum, activity) => {
+    const qty = asQty(totals[activity.id]);
+    return sum + scoreSampleActivity(config, activity, qty, true, multiplierSourceQty(activity, totals));
+  }, 0);
+}
+
+export function comparableLogFields(config: ComparablePointsConfig): ComparableLogField[] {
+  const fields: ComparableLogField[] = [];
+  const seenMultiplier = new Set<string>();
+  for (const activity of filledComparableActivities(config)) {
+    fields.push({
+      kind: 'activity',
+      key: activity.id,
+      label: activity.name.trim(),
+      inputKind: inferInputKind(activity.unit, activity.input_kind),
+      unit: activity.unit.trim(),
+    });
+    if (!activity.multiplier.enabled) {
+      continue;
+    }
+    const label = activity.multiplier.label?.trim();
+    if (!label) {
+      continue;
+    }
+    const key = multiplierMetricKey(label);
+    if (!key || seenMultiplier.has(key)) {
+      continue;
+    }
+    seenMultiplier.add(key);
+    fields.push({
+      kind: 'multiplier',
+      key,
+      label,
+      inputKind: 'count',
+      unit: '',
+    });
+  }
+  for (const field of config.text_fields ?? []) {
+    if (!field.label.trim()) {
+      continue;
+    }
+    fields.push({ ...emptyLogTextField(field), kind: 'text' });
+  }
+  for (const field of config.choice_fields ?? []) {
+    if (!field.label.trim() || field.options.filter((item) => item.trim()).length < 1) {
+      continue;
+    }
+    fields.push({ ...emptyLogChoiceField(field), kind: 'choice' });
+  }
+  return fields;
+}
+
+export function comparableBoardColumns(config: ComparablePointsConfig): ComparableBoardColumn[] {
+  return comparableLogFields(config)
+    .filter((field): field is ComparableLogNumericField => field.kind === 'activity' || field.kind === 'multiplier')
+    .map((field) => ({
+      key: field.key,
+      label: field.label,
+      money: field.inputKind === 'money',
+    }));
+}
+
+export function formatComparableBoardCell(
+  column: ComparableBoardColumn,
+  totals: Record<string, number> | null | undefined,
+): string {
+  const amount = asQty(totals?.[column.key]);
+  if (column.money) {
+    return formatMoneyAmount(amount);
+  }
+  return formatQty(amount);
+}
+
+export function parseMetricValues(value: unknown): Record<string, number> {
+  const row = asRecord(value);
+  if (!row) {
+    return {};
+  }
+  const out: Record<string, number> = {};
+  for (const [key, raw] of Object.entries(row)) {
+    if (!key || key === LOG_CHOICES_PART_KEY) {
+      continue;
+    }
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0) {
+      out[key] = Math.round(n * 100) / 100;
+    }
+  }
+  return out;
+}
+
+export function parseLogChoices(value: unknown): Record<string, string> {
+  const row = asRecord(value);
+  if (!row) {
+    return {};
+  }
+  const out: Record<string, string> = {};
+  for (const [key, raw] of Object.entries(row)) {
+    const next = String(raw ?? '').trim();
+    if (key && next) {
+      out[key] = next;
+    }
+  }
+  return out;
+}
+
+export function logChoicesFromProofParts(parts: unknown): Record<string, string> {
+  const row = asRecord(parts);
+  if (!row) {
+    return {};
+  }
+  return parseLogChoices(row[LOG_CHOICES_PART_KEY] ?? row.log_choices);
+}
+
+export function comparableCheckinCaption(
+  config: ComparablePointsConfig,
+  textValues: Record<string, string>,
+): string {
+  const parts = (config.text_fields ?? [])
+    .map((field) => String(textValues[field.id] ?? '').trim())
+    .filter(Boolean);
+  return parts.join('\n') || COMPARABLE_CHECKIN_EMPTY_CAPTION;
+}
+
+export function comparableRequiredTextMissing(
+  config: ComparablePointsConfig,
+  textValues: Record<string, string>,
+): string | null {
+  for (const field of config.text_fields ?? []) {
+    if (field.required && !String(textValues[field.id] ?? '').trim()) {
+      return field.label.trim() || 'This note';
+    }
+  }
+  return null;
 }

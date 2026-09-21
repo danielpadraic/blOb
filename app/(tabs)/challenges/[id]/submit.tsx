@@ -4,6 +4,11 @@ import { Alert, Platform, Pressable, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 
 import { CheckinComposer, type CheckinExtra } from '@/components/challenge/CheckinComposer';
+import {
+  ComparablePointsLogFields,
+  emptyComparableLogDraft,
+  type ComparableLogDraft,
+} from '@/components/challenge/ComparablePointsLogFields';
 import { LiftPickerSheet } from '@/components/lift/LiftPickerSheet';
 import { fetchLiftSession } from '@/lib/lift/api';
 import { persistLiftSnapshotOnPost } from '@/lib/lift/persistSnapshot';
@@ -55,7 +60,7 @@ import { personDisplayName } from '@/lib/social';
 import { isHomeSocialFeedKey, seedChallengeLivePost } from '@/hooks/useFeed';
 import { rememberSentLiveCheckin } from '@/lib/liveLanding';
 import { runPostSendOcr } from '@/lib/health/runPostSendOcr';
-import { submitLocationProof } from '@/lib/challenges/stagedCheckin';
+import { saveCheckinMetricValues, submitLocationProof } from '@/lib/challenges/stagedCheckin';
 import { readLocationFix, locationPermissionGrantedThisSession } from '@/lib/locationDevice';
 import { parseLocationPlace } from '@/lib/locationProof';
 import { normalizeCheckinStill } from '@/lib/checkinPhotoOrientation';
@@ -153,9 +158,16 @@ import {
 } from '@/lib/health/workoutProofCard';
 import { challengeClockTz, checkinPeriodKey } from '@/lib/checkinPeriod';
 import { getHealthProvider, healthProviderAvailable } from '@/services/health';
+import { distanceProofIsSessionLog, usesComparablePointsScoring } from '@/lib/challengeExperience';
 import {
-  distanceProofIsSessionLog,
-} from '@/lib/challengeExperience';
+  comparableCheckinCaption,
+  comparableLogFields,
+  comparablePointsFromChallenge,
+  comparableRequiredTextMissing,
+  logChoicesFromProofParts,
+  parseMetricValues,
+  parseMoneyInput,
+} from '@/lib/comparablePoints';
 import { allowsMultiCheckin, checkinPeriodComplete } from '@/lib/loggable';
 import { hasChallengeStarted, isClosedForLogs, loggingOpensHelper } from '@/lib/settlement';
 import { supabase } from '@/lib/supabase';
@@ -454,6 +466,7 @@ function SubmitWorkoutInner() {
   const [attachedLift, setAttachedLift] = useState<LiftSessionSummary | null>(null);
   const [liftPickerOpen, setLiftPickerOpen] = useState(false);
   const [sendLock, setSendLock] = useState(false);
+  const [logDraft, setLogDraft] = useState<ComparableLogDraft>(emptyComparableLogDraft);
   const lobbyLocked = checkinHidesHomeShare(challengeQuery.data);
   const lockedShare = applyCheckinShareLock(sharePrefs, lobbyLocked);
   const shareHome = lockedShare.home;
@@ -466,6 +479,8 @@ function SubmitWorkoutInner() {
   }, []);
 
   const challenge = challengeQuery.data;
+  const comparableConfig = comparablePointsFromChallenge(challenge);
+  const comparableHonor = usesComparablePointsScoring(challenge);
   const canProxy = viewerCanProxyCheckin({
     challenge,
     viewerId: uid,
@@ -553,7 +568,7 @@ function SubmitWorkoutInner() {
   const multiSubmit = allowsMultiCheckin(challenge);
   const rawPhase = checkinQuery.data?.phase ?? 'none';
   const phase = multiSubmit && rawPhase === 'submitted' ? 'none' : rawPhase;
-  const honorOnly = proofsAreHonorOnly(proofSteps);
+  const honorOnly = proofsAreHonorOnly(proofSteps) || comparableHonor;
   /**
    * Prayer needs a photo and a written note. Auto-opening the camera hides the note requirement
    * behind a full-screen viewfinder, so these challenges land on the composer with both slots
@@ -795,13 +810,50 @@ function SubmitWorkoutInner() {
     checkinQuery.isFetched,
   ]);
 
+  useEffect(() => {
+    if (!comparableHonor || !checkinQuery.isFetched) {
+      return;
+    }
+    const config = comparablePointsFromChallenge(challenge);
+    if (!config) {
+      return;
+    }
+    const row = checkinQuery.data;
+    const metrics = parseMetricValues(row?.metric_values);
+    const choices = logChoicesFromProofParts(row?.proof_parts);
+    const text: Record<string, string> = {};
+    const notes = String(row?.notes ?? '').trim();
+    const noteLines = notes && notes !== 'Check-in Complete' ? notes.split('\n') : [];
+    (config.text_fields ?? []).forEach((field, index) => {
+      text[field.id] = noteLines[index] ?? '';
+    });
+    const nextMetrics: Record<string, string> = {};
+    for (const field of comparableLogFields(config)) {
+      if (field.kind === 'activity' || field.kind === 'multiplier') {
+        nextMetrics[field.key] = metrics[field.key] != null ? String(metrics[field.key]) : '';
+      }
+    }
+    setLogDraft({ metrics: nextMetrics, text, choices });
+  }, [
+    comparableHonor,
+    challenge,
+    checkinQuery.isFetched,
+    checkinQuery.data?.id,
+    checkinQuery.data?.updated_at,
+  ]);
+
   const filledCount = blockingProofs.filter((proof) =>
     partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }),
   ).length;
   const allReady = blockingProofs.length > 0 && filledCount === blockingProofs.length;
   const busy = sendLock || submitCheckin.isPending;
   const hasRequiredAttached = honorOnly || filledCount > 0;
-  const canSend = canSendCheckin(honorOnly, hasRequiredAttached, phase, busy);
+  const requiredLogMissing =
+    comparableHonor && comparableConfig
+      ? comparableRequiredTextMissing(comparableConfig, logDraft.text)
+      : null;
+  const canSend =
+    canSendCheckin(honorOnly, hasRequiredAttached, phase, busy) && !requiredLogMissing;
   const firstCamera = beginCameraProof(blockingProofs.length ? blockingProofs : proofSteps);
   const hasReviewDraft = proofSteps.some(
     (proof) => slotStillUris(drafts[proof.id]).length > 0 || drafts[proof.id]?.text || drafts[proof.id]?.inFence,
@@ -1284,6 +1336,14 @@ function SubmitWorkoutInner() {
         return;
       }
     }
+    if (comparableHonor && comparableConfig) {
+      const missingLog = comparableRequiredTextMissing(comparableConfig, logDraft.text);
+      if (missingLog) {
+        setFailKind(null);
+        setError(`Add ${missingLog}.`);
+        return;
+      }
+    }
     setError(null);
     setFailKind(null);
     if (isLikelyOffline()) {
@@ -1292,7 +1352,11 @@ function SubmitWorkoutInner() {
       return;
     }
     try {
-      const body = checkinPostBody(caption.text);
+      const comparableNotes =
+        comparableHonor && comparableConfig
+          ? comparableCheckinCaption(comparableConfig, logDraft.text)
+          : null;
+      const body = comparableNotes ?? checkinPostBody(caption.text);
       let saved: ChallengeCheckin | null = checkinQuery.data ?? null;
       let savedParts = { ...(checkinQuery.data?.proof_parts ?? {}) };
       for (const proof of proofSteps) {
@@ -1370,6 +1434,28 @@ function SubmitWorkoutInner() {
         });
       } catch (extraSaveError) {
         logCheckinPhase('save', 'extra-soft-fail', getErrorMessage(extraSaveError));
+      }
+      if (comparableHonor && comparableConfig) {
+        const metrics: Record<string, number> = {};
+        for (const field of comparableLogFields(comparableConfig)) {
+          if (field.kind !== 'activity' && field.kind !== 'multiplier') {
+            continue;
+          }
+          metrics[field.key] =
+            field.inputKind === 'money'
+              ? parseMoneyInput(logDraft.metrics[field.key] ?? '')
+              : Number(logDraft.metrics[field.key] || 0) || 0;
+        }
+        try {
+          await saveCheckinMetricValues(id, metrics, {
+            notes: body,
+            logChoices: logDraft.choices,
+          });
+        } catch (metricError) {
+          setFailKind(null);
+          setError(getErrorMessage(metricError));
+          return;
+        }
       }
       // Extra photos/videos/GIFs never block Send. Board counts required proof.
       const extraWarning =
@@ -2245,6 +2331,8 @@ function SubmitWorkoutInner() {
         attachedLift={attachedLift}
         onAttachLift={() => setLiftPickerOpen(true)}
         onRemoveLift={() => setAttachedLift(null)}
+        compactEmptyHero={comparableHonor}
+        hideCaption={comparableHonor}
         dueLine={
           <PeriodCheckinDue
             challenge={challenge}
@@ -2253,8 +2341,18 @@ function SubmitWorkoutInner() {
           />
         }
         accessory={
-          locationProofs.length || textProofs.length || distanceProofs.length || error ? (
+          comparableHonor || locationProofs.length || textProofs.length || distanceProofs.length || error ? (
             <>
+              {comparableHonor && comparableConfig ? (
+                <View className="mb-2">
+                  <ComparablePointsLogFields
+                    config={comparableConfig}
+                    draft={logDraft}
+                    disabled={busy}
+                    onChange={setLogDraft}
+                  />
+                </View>
+              ) : null}
               {locationProofs.map((proof) => (
                 <View key={proof.id} className="mb-2">
                   <LocationProofRow

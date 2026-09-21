@@ -11,6 +11,8 @@ import {
   simpleDraftFromChallenge,
   simpleDraftToCreateValues,
   simpleHowYouWin,
+  stageAdvancedFromSimple,
+  peekAdvancedFromSimple,
 } from '@/lib/simpleChallenge';
 
 describe('Simple How you win', () => {
@@ -174,5 +176,14 @@ describe('Simple allowed misses', () => {
     expect(canRoundTripToSimple({ challenge_type: 'points' })).toBe(false);
     expect(canRoundTripToSimple({ extra_rules: [{ text: 'No bikes' }] })).toBe(false);
     expect(canRoundTripToSimple({ challenge_lane: 'private' })).toBe(false);
+    expect(canRoundTripToSimple({ scoring_method: 'comparable_points' })).toBe(false);
+  });
+
+  it('seeds an empty Comparable Points card when Simple flips to Advanced', () => {
+    stageAdvancedFromSimple(defaultSimpleDraft());
+    const staged = peekAdvancedFromSimple();
+    expect(staged?.scoring_method).toBe('comparable_points');
+    const activities = (staged?.scoring_config as { activities?: Array<{ name?: string }> } | null)?.activities ?? [];
+    expect(activities.some((item) => String(item.name ?? '').trim())).toBe(false);
   });
 });

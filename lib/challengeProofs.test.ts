@@ -257,6 +257,24 @@ describe('check-in slot hydrate', () => {
   });
 });
 
+describe('comparable points check-in is honor', () => {
+  it('does not require a camera when Comparable Points is on', () => {
+    const proofs = requiredChallengeProofs({
+      scoring_method: 'comparable_points',
+      proofs: [
+        { id: 'pre', name: 'Pre-workout selfie', method: 'photo' },
+        { id: 'post', name: 'Post-workout selfie', method: 'photo' },
+      ],
+      proof_requirements: [
+        { type: 'pre_selfie', required: true },
+        { type: 'post_selfie', required: true },
+        { type: 'hr_monitor', required: true },
+      ],
+    });
+    expect(proofs.map((proof) => proof.method)).toEqual(['honor']);
+  });
+});
+
 describe('points task proofs beat leftover photo type', () => {
   it('opens a note check-in for Prayer, not a selfie camera', () => {
     const proofs = requiredChallengeProofs({

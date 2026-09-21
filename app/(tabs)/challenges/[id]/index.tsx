@@ -133,6 +133,7 @@ import {
   totalTaskPoints,
 } from '@/lib/challenges';
 import {
+  comparableLogPreviewLines,
   comparablePointsFromChallenge,
   comparablePointsHeadline,
   comparablePointsLiveSentence,
@@ -1489,9 +1490,16 @@ export default function ChallengeDetailScreen() {
                     : ruleCopy.toFinish || challenge.task?.trim() || ruleCopy.cadenceLong}
             </AppText>
           {comparable && comparableConfig ? (
-              <AppText className="mt-1 text-xs leading-4 text-muted">
-                {comparablePointsLiveSentence(comparableConfig)}
-              </AppText>
+              <View className="mt-1 gap-1">
+                <AppText className="text-xs leading-4 text-muted">
+                  {comparablePointsLiveSentence(comparableConfig)}
+                </AppText>
+                {comparableLogPreviewLines(comparableConfig).map((line) => (
+                  <AppText key={line} className="text-xs leading-4 text-muted">
+                    {line}
+                  </AppText>
+                ))}
+              </View>
             ) : isPoints || isUnlimited || challenge.is_official || !ruleCopy.totalHint ? null : (
               <AppText className="mt-1 text-xs leading-4 text-muted">{ruleCopy.totalHint}</AppText>
             )}

@@ -9,6 +9,7 @@ import {
 } from '@/lib/challengeSchedule';
 import type { Challenge, ChallengeCategory } from '@/lib/types';
 import { DEFAULT_CREATE_VALUES } from '@/lib/challengeTemplates';
+import { COMPARABLE_POINTS_METHOD, emptyComparablePointsConfig } from '@/lib/comparablePoints';
 import { milesToMeters, type DistanceUnit } from '@/lib/distance';
 import {
   CUMULATIVE_METRIC_CAP,
@@ -969,7 +970,12 @@ function writeAdvancedHandoff(values: CreateChallengeValues | null) {
 }
 
 export function stageAdvancedFromSimple(draft: SimpleChallengeDraft) {
-  writeAdvancedHandoff(simpleDraftToCreateValues(draft));
+  const values = simpleDraftToCreateValues(draft);
+  writeAdvancedHandoff({
+    ...values,
+    scoring_method: COMPARABLE_POINTS_METHOD,
+    scoring_config: emptyComparablePointsConfig(),
+  });
 }
 
 export function peekAdvancedFromSimple(): CreateChallengeValues | null {

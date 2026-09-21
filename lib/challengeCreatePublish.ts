@@ -1,6 +1,7 @@
 import {
   defaultSentenceForMethod,
   ensureProofSentence,
+  honorCheckinProof,
   makeProof,
   namedProofsFromLegacyTypes,
   proofHeartRateMinutes,
@@ -9,6 +10,7 @@ import {
   proofTypeFromMethod,
   type ChallengeProof,
 } from '@/lib/challengeProofs';
+import { COMPARABLE_POINTS_METHOD } from '@/lib/comparablePoints';
 import { extraHasMinMinutes } from '@/lib/consistencyRules';
 import { DEFAULT_MIN_MINUTES } from '@/lib/constants';
 import { resolveTaskCadence } from '@/lib/taskCadence';
@@ -69,6 +71,9 @@ export function extraTaskNamedProofs(tasks: ExtraCreateTask[]): ChallengeProof[]
 }
 
 export function namedProofsForPublish(values: CreateChallengeValues): ChallengeProof[] {
+  if (values.scoring_method === COMPARABLE_POINTS_METHOD) {
+    return [honorCheckinProof()];
+  }
   const requiredMeters = Math.max(Number(values.distance_meters_required) || 0, 0);
   const base =
     values.challenge_proofs && values.challenge_proofs.length > 0

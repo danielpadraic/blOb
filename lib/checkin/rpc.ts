@@ -8,6 +8,7 @@ import {
 import { parseSessionDistanceText } from '../distance';
 import type { CheckinHealthProof } from '../health/checkinHealthProof';
 import { asCheckinStatus, type ChallengeCheckin } from '../challengeCheckin';
+import { parseMetricValues } from '../comparablePoints';
 import { normalizePeriodKey } from '../checkinPeriod';
 import { clampProofCaption } from '../checkinShare';
 import { isVendorHealthSlot } from '../health/ocrBackfill';
@@ -118,6 +119,7 @@ export function parseChallengeCheckin(row: Record<string, unknown>): ChallengeCh
     post_selfie_url: (row.post_selfie_url as string | null) ?? null,
     hr_monitor_url: (row.hr_monitor_url as string | null) ?? null,
     notes: (row.notes as string | null) ?? null,
+    metric_values: parseMetricValues(row.metric_values),
     health_workout_id: (row.health_workout_id as string | null) ?? null,
     workout_submission_id: (row.workout_submission_id as string | null) ?? null,
     started_at: String(row.started_at ?? row.created_at ?? new Date().toISOString()),
@@ -312,13 +314,32 @@ export async function saveCheckinMetricValuesWithClient(
   client: CheckinRpcClient,
   challengeId: string,
   values: Record<string, number>,
+  extras?: { notes?: string | null; logChoices?: Record<string, string> | null },
 ): Promise<void> {
-  const { error } = (await client.rpc('save_checkin_metric_values', {
+  const payload = {
     p_challenge_id: challengeId,
     p_metric_values: values,
-  })) as { error: { message?: string } | null };
-  if (error) {
-    throw new Error(mapCheckinRpcError(error, 'save'));
+    p_notes: extras?.notes ?? null,
+    p_log_choices: extras?.logChoices ?? null,
+  };
+  let result = (await client.rpc('save_checkin_metric_values', payload)) as {
+    error: { message?: string } | null;
+  };
+  const message = result.error?.message ?? '';
+  if (
+    result.error &&
+    (message.includes('p_notes') ||
+      message.includes('p_log_choices') ||
+      message.includes('schema cache') ||
+      message.includes('does not exist'))
+  ) {
+    result = (await client.rpc('save_checkin_metric_values', {
+      p_challenge_id: challengeId,
+      p_metric_values: values,
+    })) as { error: { message?: string } | null };
+  }
+  if (result.error) {
+    throw new Error(mapCheckinRpcError(result.error, 'save'));
   }
 }
 

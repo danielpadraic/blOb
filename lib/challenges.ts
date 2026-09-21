@@ -12,6 +12,7 @@ import {
   usesComparablePointsScoring,
 } from '@/lib/challengeExperience';
 import {
+  honorCheckinProof,
   isDefaultFitnessProofRequirements,
   namedProofsFromLegacyTypes,
   parseChallengeProofs,
@@ -1525,9 +1526,12 @@ export function requiredChallengeProofs(
       return namedProofsFromLegacyTypes(taskTypes);
     }
   }
+  if (usesComparablePointsScoring(challenge)) {
+    return [honorCheckinProof()];
+  }
   const stored = parseChallengeProofs(challenge?.proofs);
   const requirements =
-    usesComparablePointsScoring(challenge) || isCorporateChallenge(challenge)
+    isCorporateChallenge(challenge)
       ? isDefaultFitnessProofRequirements(challenge?.proof_requirements)
         ? []
         : challenge?.proof_requirements
@@ -1539,7 +1543,7 @@ export function requiredChallengeProofs(
       proof_requirements: requirements,
     });
   }
-  if (usesComparablePointsScoring(challenge) || isCorporateChallenge(challenge)) {
+  if (isCorporateChallenge(challenge)) {
     if (requirements && requirements.length > 0) {
       return resolveChallengeProofs({
         proofs: [],
@@ -1550,7 +1554,7 @@ export function requiredChallengeProofs(
     if (challenge?.proof_type) {
       return proofsFromProofType(challenge.proof_type);
     }
-    return [];
+    return [honorCheckinProof()];
   }
   if (isPointsChallenge(challenge)) {
     const types = requiredProofTypes(challenge);

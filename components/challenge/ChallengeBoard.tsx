@@ -23,7 +23,12 @@ import {
   quantityBoardHeaderLine,
   rankBoardRows,
 } from '@/lib/board';
-import { usesQuantityScoring, usesPointsBoard } from '@/lib/challengeExperience';
+import { usesQuantityScoring, usesPointsBoard, usesComparablePointsScoring } from '@/lib/challengeExperience';
+import {
+  comparableBoardColumns,
+  comparablePointsFromChallenge,
+  formatComparableBoardCell,
+} from '@/lib/comparablePoints';
 import { storedDurationDays } from '@/lib/challengeGoal';
 import { challengeTargetCount } from '@/lib/challenges';
 import { copy } from '@/lib/copy';
@@ -107,6 +112,10 @@ export function ChallengeBoard({
   const openReceipt = receiptOpen || showReceipt;
   const { isActor } = useHostAdjustUi();
   const pointsBoard = usesPointsBoard(challenge);
+  const comparableConfig = usesComparablePointsScoring(challenge)
+    ? comparablePointsFromChallenge(challenge)
+    : null;
+  const comparableColumns = comparableConfig ? comparableBoardColumns(comparableConfig) : [];
   const quantityOrPoints = quantityBoard || pointsBoard;
   const requiredDays = storedDurationDays(challenge) ?? challengeTargetCount(challenge);
   const progressByUser = useMemo(() => {
@@ -263,11 +272,24 @@ export function ChallengeBoard({
               username={row.username}
               userId={row.userId}
               avatarUrl={row.avatarUrl}
+              detail={
+                comparableColumns.length
+                  ? comparableColumns
+                      .map((column) => {
+                        const totals =
+                          (roster ?? []).find((item) => item.user_id === row.userId)?.metric_totals ?? null;
+                        return `${column.label} ${formatComparableBoardCell(column, totals)}`;
+                      })
+                      .join(' · ')
+                  : undefined
+              }
               score={
                 quantityBoard
                   ? progressByUser.get(row.userId)?.label?.trim() || '0'
                   : pointsBoard
-                    ? boardScoreLabel(row, { pointsBoard: true, requiredDays })
+                    ? `${boardScoreLabel(row, { pointsBoard: true, requiredDays })}${
+                        comparableColumns.length ? ' pts' : ''
+                      }`
                     : `${Number(row.days) || 0} / ${requiredDays}`
               }
               status={boardRowTag(row, view.settled, {
@@ -360,6 +382,7 @@ function BoardRankRow({
   userId,
   avatarUrl,
   score,
+  detail,
   status,
   muted,
   payout,
@@ -374,6 +397,7 @@ function BoardRankRow({
   userId: string;
   avatarUrl: string | null;
   score: string;
+  detail?: string;
   status: string;
   muted?: boolean;
   payout?: number | null;
@@ -405,6 +429,11 @@ function BoardRankRow({
             <AppText className="text-[15px] font-semibold" style={{ color: ink }} numberOfLines={1}>
               {label}
             </AppText>
+            {detail ? (
+              <AppText className="text-[11px] leading-4" numberOfLines={2} style={{ color: THEME.textMuted }}>
+                {detail}
+              </AppText>
+            ) : null}
             <AppText
               className="text-[12px] font-semibold"
               numberOfLines={1}

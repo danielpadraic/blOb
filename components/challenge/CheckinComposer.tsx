@@ -131,6 +131,10 @@ type CheckinComposerProps = {
   dueLine?: ReactNode;
   /** Host / moderator proxy: show “Checking in for {name}” instead of the actor’s own check-in. */
   proxyForName?: string | null;
+  /** Honor log: skip the tall empty hero so fields sit on the keyboard. */
+  compactEmptyHero?: boolean;
+  /** Honor log: notes come from generated fields, not the share box. */
+  hideCaption?: boolean;
 };
 
 export function CheckinComposer({
@@ -170,6 +174,8 @@ export function CheckinComposer({
   accessory,
   dueLine,
   proxyForName,
+  compactEmptyHero = false,
+  hideCaption = false,
 }: CheckinComposerProps) {
   const fieldRef = useRef<MentionFieldHandle>(null);
   const pagerRef = useRef<FlatList<ReviewPage>>(null);
@@ -672,7 +678,7 @@ export function CheckinComposer({
               </View>
             )}
           />
-        ) : (
+        ) : compactEmptyHero ? null : (
           <View
             className="items-center justify-center px-8"
             style={{
@@ -1042,6 +1048,11 @@ export function CheckinComposer({
               paddingVertical: 4,
               minHeight: 40,
             }}>
+            {hideCaption ? (
+              <View className="min-w-0 flex-1" style={{ minHeight: 32, justifyContent: 'center' }}>
+                <AppText className="text-[13px] text-muted">On your honor</AppText>
+              </View>
+            ) : (
             <View className="min-w-0 flex-1" style={{ minHeight: 32, justifyContent: 'flex-end' }}>
               <MentionField
                 ref={fieldRef}
@@ -1056,6 +1067,7 @@ export function CheckinComposer({
                 accessibilityLabel={copy('checkin.post')}
               />
             </View>
+            )}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Send"

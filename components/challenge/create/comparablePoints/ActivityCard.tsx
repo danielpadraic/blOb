@@ -6,15 +6,25 @@ import { AppText } from '@/components/ui/AppText';
 import { COLORS } from '@/lib/constants';
 import {
   ACTIVITY_UNIT_PRESETS,
+  extrasKeepAddingFor,
   formatPoints,
+  inferInputKind,
   type ActivityConfig,
+  type LogInputKind,
 } from '@/lib/comparablePoints';
 import { THEME } from '@/lib/theme';
+
+const INPUT_KINDS: { id: LogInputKind; label: string }[] = [
+  { id: 'count', label: 'Count' },
+  { id: 'decimal', label: 'Decimal' },
+  { id: 'money', label: 'Money' },
+];
 
 export function ActivityCard({
   activity,
   index,
   parityPoints,
+  extrasKeepAdding,
   canRemove,
   onChange,
   onRemove,
@@ -25,6 +35,7 @@ export function ActivityCard({
   activity: ActivityConfig;
   index: number;
   parityPoints: number;
+  extrasKeepAdding: boolean;
   canRemove: boolean;
   onChange: (partial: Partial<ActivityConfig>) => void;
   onRemove: () => void;
@@ -33,6 +44,8 @@ export function ActivityCard({
   onRemoveQualifier: (id: string) => void;
 }) {
   const unitIsPreset = (ACTIVITY_UNIT_PRESETS as readonly string[]).includes(activity.unit);
+  const inputKind = inferInputKind(activity.unit, activity.input_kind);
+  const extrasOn = extrasKeepAddingFor(activity, { extras_keep_adding: extrasKeepAdding });
 
   return (
     <View
@@ -62,11 +75,40 @@ export function ActivityCard({
 
       <Input
         label="Name"
-        placeholder={index === 0 ? 'e.g. Running' : 'e.g. Push-ups'}
+        placeholder={index === 0 ? 'e.g. walks' : 'e.g. tickets'}
         value={activity.name}
         onChangeText={(name) => onChange({ name })}
         maxLength={40}
       />
+
+      <View className="gap-2">
+        <AppText className="text-sm font-semibold text-charcoal">Input</AppText>
+        <ChipRow>
+          {INPUT_KINDS.map((kind) => (
+            <Chip
+              key={kind.id}
+              label={kind.label}
+              selected={inputKind === kind.id}
+              onPress={() =>
+                onChange({
+                  input_kind: kind.id,
+                  unit:
+                    kind.id === 'money' && unitIsPreset
+                      ? 'USD'
+                      : kind.id !== 'money' && activity.unit === 'USD'
+                        ? 'sessions'
+                        : activity.unit,
+                })
+              }
+            />
+          ))}
+        </ChipRow>
+        {inputKind === 'money' ? (
+          <AppText className="text-xs leading-5 text-muted">
+            Check-in shows a $ amount. The score still uses the number.
+          </AppText>
+        ) : null}
+      </View>
 
       <View className="gap-2">
         <AppText className="text-sm font-semibold text-charcoal">Unit</AppText>
@@ -76,7 +118,7 @@ export function ActivityCard({
               key={unit}
               label={unit}
               selected={unitIsPreset && activity.unit === unit}
-              onPress={() => onChange({ unit })}
+              onPress={() => onChange({ unit, input_kind: inputKind === 'money' ? 'count' : inputKind })}
             />
           ))}
           <Chip
@@ -87,17 +129,17 @@ export function ActivityCard({
         </ChipRow>
         {unitIsPreset ? null : (
           <Input
-            placeholder="e.g. pages"
-            value={activity.unit}
-            onChangeText={(unit) => onChange({ unit })}
+            placeholder="e.g. walks"
+            value={activity.unit === 'USD' && inputKind === 'money' ? 'USD' : activity.unit}
+            onChangeText={(unit) => onChange({ unit, input_kind: inferInputKind(unit, inputKind) })}
             maxLength={20}
           />
         )}
       </View>
 
       <Input
-        label="Quantity at full value"
-        placeholder="30"
+        label="Full-value quantity"
+        placeholder={inputKind === 'money' ? '30000' : '30'}
         keyboardType="decimal-pad"
         value={activity.parity_qty > 0 ? String(activity.parity_qty) : ''}
         onChangeText={(raw) => {
@@ -106,14 +148,25 @@ export function ActivityCard({
         }}
         hint={
           activity.parity_qty > 0
-            ? `${activity.parity_qty} ${activity.unit || 'units'} = ${formatPoints(parityPoints)} pts`
+            ? `${inputKind === 'money' ? '$' : ''}${activity.parity_qty} ${activity.unit || 'units'} = ${formatPoints(parityPoints)} pts`
             : `How much of this equals ${formatPoints(parityPoints)} pts`
         }
       />
 
       <ToggleRow
+        title="Amounts above full value keep adding"
+        body="Off caps this activity at its full-value quantity."
+        value={extrasOn}
+        onValueChange={(enabled) =>
+          onChange({
+            multiplier: { ...activity.multiplier, extra_factor: enabled ? 1 : 0 },
+          })
+        }
+      />
+
+      <ToggleRow
         title="Multiplier"
-        body="Extra work after full value still scores, at a lower rate."
+        body="Optional extra number that scales this activity."
         value={activity.multiplier.enabled}
         onValueChange={(enabled) =>
           onChange({ multiplier: { ...activity.multiplier, enabled } })
@@ -128,19 +181,22 @@ export function ActivityCard({
             padding: 12,
           }}>
           <Input
-            label="Multiplier label"
-            placeholder="e.g. presentations"
+            label="Scales with"
+            placeholder="e.g. demos"
             value={activity.multiplier.label ?? ''}
             onChangeText={(label) =>
               onChange({ multiplier: { ...activity.multiplier, label } })
             }
           />
+          <AppText className="text-xs leading-5 text-muted">
+            Collected on each log as its own number. Counts past the last tier do not raise the percent.
+          </AppText>
           {(activity.multiplier.tiers ?? []).map((tier, tierIndex) => (
             <View key={`${tier.threshold}-${tier.percent}-${tierIndex}`} className="flex-row items-start gap-2">
               <View className="flex-1">
                 <Input
                   label={tierIndex === 0 ? 'At this many' : undefined}
-                  placeholder="1"
+                  placeholder="5"
                   keyboardType="number-pad"
                   value={tier.threshold ? String(tier.threshold) : ''}
                   onChangeText={(raw) => {
@@ -156,7 +212,7 @@ export function ActivityCard({
               <View className="flex-1">
                 <Input
                   label={tierIndex === 0 ? 'Percent' : undefined}
-                  placeholder="25"
+                  placeholder="50"
                   keyboardType="number-pad"
                   value={tier.percent ? String(tier.percent) : ''}
                   onChangeText={(raw) => {
@@ -210,30 +266,12 @@ export function ActivityCard({
             }}>
             <AppText className="text-sm font-semibold text-charcoal">+ Add tier</AppText>
           </Pressable>
-          {(activity.multiplier.tiers ?? []).length === 0 ? (
-            <Input
-              label="Extra-work factor"
-              placeholder="0.5"
-              keyboardType="decimal-pad"
-              value={String(activity.multiplier.extra_factor)}
-              onChangeText={(raw) => {
-                const next = Number(raw.replace(/[^\d.]/g, ''));
-                onChange({
-                  multiplier: {
-                    ...activity.multiplier,
-                    extra_factor: Number.isFinite(next) ? next : activity.multiplier.extra_factor,
-                  },
-                });
-              }}
-              hint="After full value, extra units score at this multiple. 0.5 = half rate."
-            />
-          ) : null}
         </View>
       ) : null}
 
       <ToggleRow
         title="Qualifiers"
-        body="A bar this check-in must meet before it counts."
+        body="Optional checklist before this activity counts."
         value={activity.qualifiers.enabled}
         onValueChange={(enabled) =>
           onChange({ qualifiers: { ...activity.qualifiers, enabled } })
@@ -251,7 +289,7 @@ export function ActivityCard({
             <View key={item.id} className="flex-row items-start gap-2">
               <View className="flex-1">
                 <Input
-                  placeholder={itemIndex === 0 ? 'e.g. FEX' : 'Another qualifier'}
+                  placeholder={itemIndex === 0 ? 'e.g. form check' : 'Another qualifier'}
                   value={item.label}
                   onChangeText={(label) => onPatchQualifier(item.id, label)}
                   maxLength={80}

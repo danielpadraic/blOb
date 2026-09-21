@@ -36,7 +36,7 @@ import { mergeFeedMediaIntoParts, mergePeriodCheckinRows, periodCheckinIds } fro
 import { signedProofUrl } from '@/utils/upload';
 
 const CHECKIN_COLUMNS =
-  'id, user_id, challenge_id, period_key, status, proof_parts, pre_selfie_url, post_selfie_url, hr_monitor_url, notes, health_workout_id, workout_submission_id, started_at, submitted_at, created_at, updated_at, logged_by';
+  'id, user_id, challenge_id, period_key, status, proof_parts, pre_selfie_url, post_selfie_url, hr_monitor_url, notes, metric_values, health_workout_id, workout_submission_id, started_at, submitted_at, created_at, updated_at, logged_by';
 
 type PeriodChallenge = CheckinPeriodChallenge & {
   frequency?: string | null;
