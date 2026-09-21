@@ -19,6 +19,7 @@ import {
   activityQtyLabel,
   comparableLogPreviewLines,
   comparablePointsHeadline,
+  comparablePointsLaneSubline,
   comparablePointsLiveSentence,
   parseComparablePointsConfig,
   scoreWindowLabel,
@@ -165,6 +166,11 @@ export function CreateReviewPreview({
           <AppText className="mt-1 text-[13px] leading-5 text-muted">
             {comparablePointsLiveSentence(comparable)}
           </AppText>
+          {comparablePointsLaneSubline(comparable) ? (
+            <AppText className="mt-1 text-[13px] leading-5 text-muted">
+              {comparablePointsLaneSubline(comparable)}
+            </AppText>
+          ) : null}
           <AppText className="mt-2 text-[13px] leading-5 text-muted">
             Score window · {scoreWindowLabel(comparable.window)}
           </AppText>

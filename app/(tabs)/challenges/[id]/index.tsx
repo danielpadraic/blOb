@@ -136,6 +136,7 @@ import {
   comparableLogPreviewLines,
   comparablePointsFromChallenge,
   comparablePointsHeadline,
+  comparablePointsLaneSubline,
   comparablePointsLiveSentence,
 } from '@/lib/comparablePoints';
 import {
@@ -1494,6 +1495,11 @@ export default function ChallengeDetailScreen() {
                 <AppText className="text-xs leading-4 text-muted">
                   {comparablePointsLiveSentence(comparableConfig)}
                 </AppText>
+                {comparablePointsLaneSubline(comparableConfig) ? (
+                  <AppText className="text-xs leading-4 text-muted">
+                    {comparablePointsLaneSubline(comparableConfig)}
+                  </AppText>
+                ) : null}
                 {comparableLogPreviewLines(comparableConfig).map((line) => (
                   <AppText key={line} className="text-xs leading-4 text-muted">
                     {line}

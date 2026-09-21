@@ -10,6 +10,7 @@ import type { ComparablePointsForm } from '@/hooks/useComparablePointsForm';
 import {
   COMPARABLE_POINTS_HARD_MAX,
   COMPARABLE_POINTS_SOFT_MAX,
+  comparablePointsLaneSubline,
   comparablePointsLiveSentence,
   extrasKeepAddingFor,
   formatPoints,
@@ -132,6 +133,9 @@ export function ComparablePointsEditor({ form }: { form: ComparablePointsForm })
           {WINDOW_CHIPS.find((item) => item.id === window)?.help}
         </AppText>
         <AppText className="text-sm leading-6 text-charcoal">{sentence}</AppText>
+        {comparablePointsLaneSubline(draft) ? (
+          <AppText className="text-[13px] leading-5 text-muted">{comparablePointsLaneSubline(draft)}</AppText>
+        ) : null}
       </View>
 
       <View

@@ -543,6 +543,7 @@ export interface ChallengeParticipant {
   distance_meters_total?: number | null;
   metric_totals?: Record<string, number> | null;
   live_mute?: LiveMute | string | null;
+  scoring_lane?: string | null;
   place?: number | null;
   result?: string | null;
 }
@@ -2346,6 +2347,10 @@ export type Database = {
           p_user_id: string;
           p_mode: 'out_of_pot' | 'leave_room';
         };
+        Returns: Record<string, unknown>;
+      };
+      set_participant_scoring_lane: {
+        Args: { p_challenge_id: string; p_user_id: string; p_lane: string };
         Returns: Record<string, unknown>;
       };
       publish_scoring_change: {

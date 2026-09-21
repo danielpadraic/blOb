@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { ChallengeLifecycleStatus } from '@/components/challenge/ChallengeLifecycleStatus';
@@ -7,6 +7,7 @@ import { FieldNoteLabel } from '@/components/challenge/FieldNote';
 import { SettlementSummary } from '@/components/challenge/SettlementSummary';
 import { ProfileLink } from '@/components/profile/ProfileLink';
 import { BoardAdjustButton, BoardBulkAdjustButton, useHostAdjustUi } from '@/components/challenge/HostAdjustHost';
+import { ScoringLaneChip } from '@/components/challenge/ScoringLaneChip';
 import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { MascotState } from '@/components/mascot/MascotState';
 import { Avatar } from '@/components/ui/Avatar';
@@ -28,7 +29,9 @@ import {
   comparableBoardColumns,
   comparablePointsFromChallenge,
   formatComparableBoardCell,
+  participantNeedsScoringLane,
 } from '@/lib/comparablePoints';
+import { useSetScoringLane } from '@/hooks/useChallenge';
 import { storedDurationDays } from '@/lib/challengeGoal';
 import { challengeTargetCount } from '@/lib/challenges';
 import { copy } from '@/lib/copy';
@@ -111,10 +114,13 @@ export function ChallengeBoard({
   const settledCopy = boardSettledCopy(view);
   const openReceipt = receiptOpen || showReceipt;
   const { isActor } = useHostAdjustUi();
+  const setLane = useSetScoringLane(challenge.id);
   const pointsBoard = usesPointsBoard(challenge);
   const comparableConfig = usesComparablePointsScoring(challenge)
     ? comparablePointsFromChallenge(challenge)
     : null;
+  const scoringLanes = comparableConfig?.lanes ?? [];
+  const canAssignLane = Boolean(isActor && scoringLanes.length > 0 && !view.settled);
   const comparableColumns = comparableConfig ? comparableBoardColumns(comparableConfig) : [];
   const quantityOrPoints = quantityBoard || pointsBoard;
   const requiredDays = storedDurationDays(challenge) ?? challengeTargetCount(challenge);
@@ -263,34 +269,49 @@ export function ChallengeBoard({
         <MascotState kind="empty" compact title={boardEmptyCopy(view)} />
       ) : (
         <View className="gap-1">
-          {rows.map((row) => (
+          {rows.map((row) => {
+            const participant = (roster ?? []).find((item) => item.user_id === row.userId);
+            const needsLane = participantNeedsScoringLane(comparableConfig, participant?.scoring_lane);
+            return (
             <BoardRankRow
               key={row.userId}
-              rank={row.rank == null ? '—' : String(row.rank)}
+              rank={row.rank == null || needsLane ? '—' : String(row.rank)}
               name={row.name}
               you={row.you}
               username={row.username}
               userId={row.userId}
               avatarUrl={row.avatarUrl}
+              laneChip={
+                scoringLanes.length ? (
+                  <ScoringLaneChip
+                    lanes={scoringLanes}
+                    laneId={participant?.scoring_lane}
+                    canAssign={canAssignLane}
+                    busy={setLane.isPending}
+                    onAssign={(laneId) => setLane.mutate({ userId: row.userId, laneId })}
+                  />
+                ) : null
+              }
               detail={
                 comparableColumns.length
                   ? comparableColumns
                       .map((column) => {
-                        const totals =
-                          (roster ?? []).find((item) => item.user_id === row.userId)?.metric_totals ?? null;
+                        const totals = participant?.metric_totals ?? null;
                         return `${column.label} ${formatComparableBoardCell(column, totals)}`;
                       })
                       .join(' · ')
                   : undefined
               }
               score={
-                quantityBoard
-                  ? progressByUser.get(row.userId)?.label?.trim() || '0'
-                  : pointsBoard
-                    ? `${boardScoreLabel(row, { pointsBoard: true, requiredDays })}${
-                        comparableColumns.length ? ' pts' : ''
-                      }`
-                    : `${Number(row.days) || 0} / ${requiredDays}`
+                needsLane
+                  ? 'Needs a side'
+                  : quantityBoard
+                    ? progressByUser.get(row.userId)?.label?.trim() || '0'
+                    : pointsBoard
+                      ? `${boardScoreLabel(row, { pointsBoard: true, requiredDays })}${
+                          comparableColumns.length ? ' pts' : ''
+                        }`
+                      : `${Number(row.days) || 0} / ${requiredDays}`
               }
               status={boardRowTag(row, view.settled, {
                 quantityDone: quantityBoard ? Boolean(progressByUser.get(row.userId)?.done) : false,
@@ -299,9 +320,10 @@ export function ChallengeBoard({
               payout={view.settled ? row.payout : null}
               currency={challenge.currency}
               showAdjust={!view.settled}
-              participantStatus={(roster ?? []).find((item) => item.user_id === row.userId)?.status}
+              participantStatus={participant?.status}
             />
-          ))}
+            );
+          })}
         </View>
       )}
 
@@ -381,6 +403,7 @@ function BoardRankRow({
   username,
   userId,
   avatarUrl,
+  laneChip,
   score,
   detail,
   status,
@@ -396,6 +419,7 @@ function BoardRankRow({
   username: string | null;
   userId: string;
   avatarUrl: string | null;
+  laneChip?: ReactNode;
   score: string;
   detail?: string;
   status: string;
@@ -443,6 +467,7 @@ function BoardRankRow({
           </View>
         </View>
       </ProfileLink>
+      {laneChip ? <View style={{ flexShrink: 0, marginLeft: 6 }}>{laneChip}</View> : null}
       <View className="items-end" style={{ flexShrink: 0, marginLeft: 8 }}>
         <AppText
           className="text-[15px] font-extrabold"

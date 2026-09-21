@@ -7,6 +7,7 @@ import {
   hostRigorOf,
   hostRigorReviewLine,
   officialCashPublishRejected,
+  viewerCanAssignScoringLane,
   viewerCanEditBoardScore,
   viewerCanFriendlyHostAdd,
   viewerCanNormalHostAdjust,
@@ -169,6 +170,25 @@ describe('host rigor', () => {
         challenge: { ...live, host_rigor: 'strict' },
         viewerId: 'courtney',
         moderatorIds: ['courtney'],
+      }),
+    ).toBe(false);
+    expect(
+      viewerCanAssignScoringLane({
+        challenge: { ...live, host_rigor: 'strict' },
+        viewerId: 'courtney',
+        moderatorIds: ['courtney'],
+      }),
+    ).toBe(true);
+    expect(
+      viewerCanAssignScoringLane({
+        challenge: live,
+        viewerId: 'courtney',
+      }),
+    ).toBe(false);
+    expect(
+      viewerCanAssignScoringLane({
+        challenge: { created_by: 'host', status: 'settled' },
+        viewerId: 'host',
       }),
     ).toBe(false);
   });

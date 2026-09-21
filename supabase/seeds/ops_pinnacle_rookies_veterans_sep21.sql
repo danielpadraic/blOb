@@ -56,7 +56,10 @@ select
       and lower(bp.username) is distinct from 'danielharder'
   ) as gmail_login_is_a_different_account,
   (
-    to_regprocedure('public.comparable_score_window(jsonb, jsonb)') is not null
+    (
+      to_regprocedure('public.comparable_score_window(jsonb, jsonb, text)') is not null
+      or to_regprocedure('public.comparable_score_window(jsonb, jsonb)') is not null
+    )
     and to_regprocedure('public.apply_comparable_points(uuid, uuid, uuid)') is not null
     and to_regprocedure('public.save_checkin_metric_values(uuid, jsonb, text, jsonb)') is not null
   ) as scoring_functions_ready,
@@ -98,6 +101,10 @@ declare
   "parity_points": 13000,
   "window": "challenge",
   "extras_keep_adding": true,
+  "lanes": [
+    { "id": "rookie", "label": "Rookie" },
+    { "id": "veteran", "label": "Veteran" }
+  ],
   "activities": [
     {
       "id": "act-dials",
@@ -105,6 +112,7 @@ declare
       "unit": "dials",
       "input_kind": "count",
       "parity_qty": 3500,
+      "lane_ids": ["rookie"],
       "multiplier": {
         "enabled": true,
         "extra_factor": 1,
@@ -131,6 +139,7 @@ declare
       "unit": "USD",
       "input_kind": "money",
       "parity_qty": 13000,
+      "lane_ids": ["rookie", "veteran"],
       "multiplier": { "enabled": false, "extra_factor": 1, "label": "" },
       "qualifiers": {"enabled": false, "items": []}
     }
@@ -143,14 +152,11 @@ declare
       "required": false
     }
   ],
-  "choice_fields": [
-    { "id": "choice-side", "label": "Side", "options": ["Rookie", "Veteran"] }
-  ]
+  "choice_fields": []
 }$cfg$::jsonb;
   v_rules text :=
     'Honor log. Totals add up for the whole contest, then they are scored. '
     || 'Zeros are allowed. A second Send on the same Chicago day replaces that day. '
-    || 'The Side chip is context only and does not score. '
     || 'The Board closes Friday 11:59 PM Chicago.';
   v_proofs jsonb := jsonb_build_array(
     jsonb_build_object(
@@ -372,7 +378,10 @@ select
   c.scoring_config->'text_fields' as text_fields,
   c.scoring_config->'choice_fields' as choice_fields,
   (
-    to_regprocedure('public.comparable_score_window(jsonb, jsonb)') is not null
+    (
+      to_regprocedure('public.comparable_score_window(jsonb, jsonb, text)') is not null
+      or to_regprocedure('public.comparable_score_window(jsonb, jsonb)') is not null
+    )
     and to_regprocedure('public.apply_comparable_points(uuid, uuid, uuid)') is not null
   ) as scoring_functions_ready
 from public.challenges c

@@ -34,12 +34,18 @@ export type ActivityFloorConfig = {
   min_qty: number;
 };
 
+export type ScoringLane = {
+  id: string;
+  label: string;
+};
+
 export type ActivityConfig = {
   id: string;
   name: string;
   unit: string;
   parity_qty: number;
   input_kind?: LogInputKind;
+  lane_ids?: string[];
   multiplier: ActivityMultiplierConfig;
   qualifiers: ActivityQualifiersConfig;
   floor?: ActivityFloorConfig;
@@ -64,6 +70,7 @@ export type ComparablePointsConfig = {
   window?: ScoreWindow;
   extras_keep_adding?: boolean;
   floor_master?: boolean;
+  lanes?: ScoringLane[];
   activities: ActivityConfig[];
   text_fields?: LogTextField[];
   choice_fields?: LogChoiceField[];
@@ -163,6 +170,35 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+function parseLaneIds(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const ids = value.map((item) => String(item ?? '').trim()).filter(Boolean);
+  return ids.length > 0 ? ids : undefined;
+}
+
+function parseLanes(value: unknown): ScoringLane[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const lanes = value
+    .map((item) => {
+      const row = asRecord(item);
+      if (!row) {
+        return null;
+      }
+      const id = typeof row.id === 'string' ? row.id.trim() : '';
+      const label = typeof row.label === 'string' ? row.label.trim() : '';
+      if (!id || !label) {
+        return null;
+      }
+      return { id, label };
+    })
+    .filter((item): item is ScoringLane => item != null);
+  return lanes.length > 0 ? lanes : undefined;
+}
+
 function asExtraFactor(value: unknown, fallback = DEFAULT_MULTIPLIER_FACTOR): number {
   const n = Number(value);
   if (!Number.isFinite(n)) {
@@ -206,6 +242,21 @@ export function formatMoneyAmount(value: number): string {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
 }
 
+/** Mechanics sentence: “$13,000” not “$13,000.00” or “13000 USD”. */
+export function formatMoneySentenceAmount(value: number): string {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n === 0) {
+    return '$0';
+  }
+  const whole = Number.isInteger(n);
+  return n.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: whole ? 0 : 2,
+    minimumFractionDigits: whole ? 0 : 2,
+  });
+}
+
 export function slugMetricLabel(label: string): string {
   return label
     .trim()
@@ -240,6 +291,7 @@ export function emptyActivity(partial?: Partial<ActivityConfig>): ActivityConfig
     unit,
     parity_qty: Number.isFinite(partial?.parity_qty) ? Number(partial?.parity_qty) : 0,
     input_kind: inferInputKind(unit, partial?.input_kind),
+    lane_ids: parseLaneIds(partial?.lane_ids),
     multiplier: {
       enabled: Boolean(partial?.multiplier?.enabled),
       extra_factor: asExtraFactor(partial?.multiplier?.extra_factor ?? DEFAULT_MULTIPLIER_FACTOR),
@@ -334,6 +386,7 @@ function parseActivity(value: unknown): ActivityConfig | null {
     unit,
     parity_qty: asQty(row.parity_qty),
     input_kind: inferInputKind(unit, explicitKind),
+    lane_ids: parseLaneIds(row.lane_ids),
     multiplier: {
       enabled: Boolean(multiplierRow?.enabled ?? row.multiplier_enabled),
       extra_factor: asExtraFactor(multiplierRow?.extra_factor ?? row.extra_factor),
@@ -401,6 +454,7 @@ export function parseComparablePointsConfig(value: unknown): ComparablePointsCon
     window: inferScoreWindow(row.window),
     extras_keep_adding: row.extras_keep_adding === false ? false : true,
     floor_master: Boolean(row.floor_master),
+    lanes: parseLanes(row.lanes),
     activities: activities.slice(0, COMPARABLE_POINTS_HARD_MAX),
     text_fields,
     choice_fields,
@@ -414,6 +468,7 @@ export function cloneComparablePointsConfig(config: ComparablePointsConfig): Com
     window: inferScoreWindow(config.window),
     extras_keep_adding: config.extras_keep_adding === false ? false : true,
     floor_master: Boolean(config.floor_master),
+    lanes: parseLanes(config.lanes),
     activities: config.activities.map((activity) => emptyActivity(activity)),
     text_fields: (config.text_fields ?? []).map((field) => emptyLogTextField(field)),
     choice_fields: (config.choice_fields ?? []).map((field) => emptyLogChoiceField(field)),
@@ -516,6 +571,7 @@ export function validateComparablePointsConfig(
       window: inferScoreWindow(config.window),
       extras_keep_adding: config.extras_keep_adding === false ? false : true,
       floor_master: Boolean(config.floor_master),
+      lanes: parseLanes(config.lanes),
       activities,
       text_fields,
       choice_fields,
@@ -680,6 +736,149 @@ export function activityQtyLabel(activity: Pick<ActivityConfig, 'parity_qty' | '
   return `${formatQty(activity.parity_qty)} ${unit}`;
 }
 
+function normalizeWord(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+/** “dials” vs “Dials” / “dial” — same word, do not print both. */
+export function unitCollidesWithName(unit: string, name: string): boolean {
+  const u = normalizeWord(unit);
+  const n = normalizeWord(name);
+  if (!u || !n) {
+    return false;
+  }
+  if (u === n) {
+    return true;
+  }
+  return u === `${n}s` || n === `${u}s`;
+}
+
+export function fullValueMultiplierThreshold(activity: ActivityConfig): number | null {
+  if (!activity.multiplier.enabled) {
+    return null;
+  }
+  const label = activity.multiplier.label?.trim();
+  if (!label) {
+    return null;
+  }
+  const tiers = multiplierTiers(activity);
+  if (tiers.length === 0) {
+    return null;
+  }
+  const full = [...tiers].reverse().find((tier) => tier.percent >= 100);
+  if (full) {
+    return full.threshold;
+  }
+  return tiers.reduce((best, tier) => (tier.threshold >= best.threshold ? tier : best)).threshold;
+}
+
+export function activityQtyPhrase(activity: ActivityConfig): string {
+  const name = activity.name.trim();
+  const kind = inferInputKind(activity.unit, activity.input_kind);
+  if (kind === 'money') {
+    return `${formatMoneySentenceAmount(activity.parity_qty)} of ${name}`;
+  }
+  if (unitCollidesWithName(activity.unit, name)) {
+    return `${formatQty(activity.parity_qty)} ${name}`;
+  }
+  return `${activityQtyLabel(activity)} of ${name}`;
+}
+
+function joinSentenceParts(parts: string[]): string {
+  if (parts.length === 0) {
+    return '';
+  }
+  if (parts.length === 1) {
+    return `${parts[0]}.`;
+  }
+  return `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}.`;
+}
+
+export function activityScoresForLane(
+  activity: Pick<ActivityConfig, 'lane_ids'>,
+  laneId?: string | null,
+): boolean {
+  const ids = (activity.lane_ids ?? []).map((item) => item.trim()).filter(Boolean);
+  if (ids.length === 0) {
+    return true;
+  }
+  const lane = String(laneId ?? '').trim();
+  return Boolean(lane) && ids.includes(lane);
+}
+
+export function scoringLaneLabel(
+  config: Pick<ComparablePointsConfig, 'lanes'> | null | undefined,
+  laneId?: string | null,
+): string | null {
+  const id = String(laneId ?? '').trim();
+  if (!id) {
+    return null;
+  }
+  return config?.lanes?.find((lane) => lane.id === id)?.label.trim() || null;
+}
+
+export function participantNeedsScoringLane(
+  config: ComparablePointsConfig | null | undefined,
+  laneId?: string | null,
+): boolean {
+  if (!config?.lanes?.length) {
+    return false;
+  }
+  if (scoringLaneLabel(config, laneId)) {
+    return false;
+  }
+  return filledComparableActivities(config).some((activity) => (activity.lane_ids?.length ?? 0) > 0);
+}
+
+function laneActorLabel(label: string): string {
+  const text = label.trim();
+  if (text.length <= 1 || /s$/i.test(text)) {
+    return text;
+  }
+  return `${text}s`;
+}
+
+function joinActNames(names: string[]): string {
+  if (names.length <= 1) {
+    return names[0] ?? '';
+  }
+  if (names.length === 2) {
+    return `${names[0]} and ${names[1]}`;
+  }
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+function activityLaneName(activity: ActivityConfig): string {
+  const name = activity.name.trim();
+  const multiplier = activity.multiplier.enabled ? activity.multiplier.label?.trim() : '';
+  return multiplier ? `${name} (with ${multiplier})` : name;
+}
+
+/** “Rookies score Dials (with Presentations) and AP. Veterans score AP only.” */
+export function comparablePointsLaneSubline(config: ComparablePointsConfig): string {
+  const lanes = config.lanes ?? [];
+  if (lanes.length === 0) {
+    return '';
+  }
+  const filled = filledComparableActivities(config);
+  return lanes
+    .map((lane) => {
+      const names = filled
+        .filter((activity) => activityScoresForLane(activity, lane.id))
+        .map(activityLaneName)
+        .filter(Boolean);
+      const who = laneActorLabel(lane.label);
+      if (names.length === 0) {
+        return `${who} score nothing.`;
+      }
+      if (names.length === 1) {
+        return `${who} score ${names[0]} only.`;
+      }
+      return `${who} score ${joinActNames(names)}.`;
+    })
+    .join(' ');
+}
+
 export function comparablePointsHeadline(config: ComparablePointsConfig): string {
   const count = filledComparableActivities(config).length || config.activities.length;
   return `${count} ${count === 1 ? 'activity' : 'activities'} · ${formatPoints(config.parity_points)} pts at full value`;
@@ -697,13 +896,19 @@ export function scoreWindowLabel(window: ScoreWindow | undefined): string {
 
 export function comparablePointsLiveSentence(config: ComparablePointsConfig): string {
   const named = filledComparableActivities(config);
-  const pts = `${formatPoints(config.parity_points)} pts`;
+  const pts = `${formatPoints(config.parity_points)} points`;
   if (named.length === 0) {
     return 'Name an activity and set the quantity that equals full value.';
   }
-  const parts = named.map((activity) => `${activityQtyLabel(activity)} of ${activity.name.trim()} equals ${pts}`);
-  const body = parts.length === 1 ? `${parts[0]}.` : `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}.`;
-  return body;
+  const parts = named.map((activity) => {
+    const qty = activityQtyPhrase(activity);
+    const threshold = fullValueMultiplierThreshold(activity);
+    const label = activity.multiplier.label?.trim();
+    const withMult =
+      threshold != null && label ? `${qty} with ${formatQty(threshold)} ${label}` : qty;
+    return `${withMult} equals ${pts}`;
+  });
+  return joinSentenceParts(parts);
 }
 
 export function comparableLogPreviewLines(config: ComparablePointsConfig): string[] {
@@ -813,8 +1018,12 @@ export function multiplierSourceQty(
 export function scoreComparableWindow(
   config: ComparablePointsConfig,
   totals: Record<string, number>,
+  laneId?: string | null,
 ): number {
   return filledComparableActivities(config).reduce((sum, activity) => {
+    if (!activityScoresForLane(activity, laneId)) {
+      return sum;
+    }
     const qty = asQty(totals[activity.id]);
     return sum + scoreSampleActivity(config, activity, qty, true, multiplierSourceQty(activity, totals));
   }, 0);
@@ -857,8 +1066,13 @@ export function comparableLogFields(config: ComparablePointsConfig): ComparableL
     }
     fields.push({ ...emptyLogTextField(field), kind: 'text' });
   }
+  const hideSelfServeLane = (config.lanes?.length ?? 0) > 0;
   for (const field of config.choice_fields ?? []) {
     if (!field.label.trim() || field.options.filter((item) => item.trim()).length < 1) {
+      continue;
+    }
+    const label = field.label.trim().toLowerCase();
+    if (hideSelfServeLane && (label === 'side' || label === 'lane')) {
       continue;
     }
     fields.push({ ...emptyLogChoiceField(field), kind: 'choice' });

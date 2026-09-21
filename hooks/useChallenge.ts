@@ -345,6 +345,8 @@ export function useChallenge(id: string | undefined) {
 }
 
 const PARTICIPANT_COLUMNS =
+  'id, challenge_id, user_id, status, days_completed, points, joined_at, completed_at, eliminated_at, distance_meters_total, metric_totals, live_mute, scoring_lane';
+const PARTICIPANT_COLUMNS_NO_LANE =
   'id, challenge_id, user_id, status, days_completed, points, joined_at, completed_at, eliminated_at, distance_meters_total, metric_totals, live_mute';
 const PARTICIPANT_COLUMNS_NO_POINTS =
   'id, challenge_id, user_id, status, days_completed, joined_at, completed_at, eliminated_at';
@@ -366,6 +368,7 @@ function asParticipant(row: ChallengeParticipant, extras?: Partial<ChallengePart
         ? (row.metric_totals as Record<string, number>)
         : extras?.metric_totals ?? null,
     live_mute: asLiveMute(row.live_mute ?? extras?.live_mute),
+    scoring_lane: row.scoring_lane ?? extras?.scoring_lane ?? null,
   };
 }
 
@@ -381,6 +384,14 @@ export function useChallengeParticipants(challengeId: string | undefined) {
         .order('joined_at', { ascending: true });
       if (!error) {
         return (data ?? []).map((row) => asParticipant(row as ChallengeParticipant));
+      }
+      const withoutLane = await supabase
+        .from('challenge_participants')
+        .select(PARTICIPANT_COLUMNS_NO_LANE)
+        .eq('challenge_id', challengeId!)
+        .order('joined_at', { ascending: true });
+      if (!withoutLane.error) {
+        return (withoutLane.data ?? []).map((row) => asParticipant(row as ChallengeParticipant));
       }
       const withoutPoints = await supabase
         .from('challenge_participants')
@@ -422,6 +433,15 @@ export function useMyParticipation(challengeId: string | undefined) {
       if (!error) {
         return data ? asParticipant(data as ChallengeParticipant) : null;
       }
+      const withoutLane = await supabase
+        .from('challenge_participants')
+        .select(PARTICIPANT_COLUMNS_NO_LANE)
+        .eq('challenge_id', challengeId!)
+        .eq('user_id', user!.id)
+        .maybeSingle();
+      if (!withoutLane.error) {
+        return withoutLane.data ? asParticipant(withoutLane.data as ChallengeParticipant) : null;
+      }
       const withoutPoints = await supabase
         .from('challenge_participants')
         .select(PARTICIPANT_COLUMNS_NO_POINTS)
@@ -449,6 +469,32 @@ export function useMyParticipation(challengeId: string | undefined) {
     },
   });
   return { ...query, participation: query.data ?? null };
+}
+
+export function useSetScoringLane(challengeId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { userId: string; laneId: string }) => {
+      if (!challengeId) {
+        throw new Error('Missing challenge.');
+      }
+      const { error } = await supabase.rpc('set_participant_scoring_lane', {
+        p_challenge_id: challengeId,
+        p_user_id: input.userId,
+        p_lane: input.laneId,
+      });
+      if (error) {
+        throw error;
+      }
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['challenge-participants', challengeId] }),
+        queryClient.invalidateQueries({ queryKey: ['my-participation', challengeId] }),
+        queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] }),
+      ]);
+    },
+  });
 }
 
 export function useMyChallengeProgress() {

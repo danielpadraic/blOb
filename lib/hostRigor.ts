@@ -258,6 +258,19 @@ export function viewerCanNormalHostAdjust(input: {
   return rigor === 'normal' || rigor === 'friendly';
 }
 
+/** Host, moderator, or @blob. Not the participant. */
+export function viewerCanAssignScoringLane(input: {
+  challenge?: { created_by?: string | null; status?: string | null } | null;
+  viewerId?: string | null;
+  moderatorIds?: readonly string[] | null;
+  officialOps?: boolean | null;
+}): boolean {
+  if (!input.challenge || challengeIsSettledForRigor(input.challenge.status)) {
+    return false;
+  }
+  return viewerIsChallengeStaff(input);
+}
+
 export function viewerCanEditBoardScore(input: {
   challenge?: {
     created_by?: string | null;

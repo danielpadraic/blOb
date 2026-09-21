@@ -3,11 +3,14 @@ import { describe, expect, it } from 'vitest';
 import {
   comparableCheckinCaption,
   comparableLogFields,
+  activityScoresForLane,
+  comparablePointsLaneSubline,
   comparablePointsLiveSentence,
   emptyActivity,
   emptyComparablePointsConfig,
   extrasKeepAddingFor,
   formatMoneyAmount,
+  formatMoneySentenceAmount,
   inferInputKind,
   inferScoreWindow,
   multiplierMetricKey,
@@ -93,10 +96,58 @@ describe('comparable points config', () => {
 
   it('writes a live sentence from host names, never canned product words', () => {
     const sentence = comparablePointsLiveSentence(gymConfig());
-    expect(sentence).toContain('Floor walks');
-    expect(sentence).toContain('Closed tickets');
-    expect(sentence).toContain('4800 walks');
+    expect(sentence).toBe(
+      '4800 walks of Floor walks with 10 Demos equals 10,000 points, and $30,000 of Closed tickets equals 10,000 points.',
+    );
     expect(sentence.toLowerCase()).not.toMatch(/dial|annual premium|\bap\b|fex|iul|pinnacle|rookie|veteran/);
+    expect(sentence).not.toContain('USD');
+    expect(sentence).not.toContain(' pts');
+  });
+
+  it('drops a colliding unit and prints money plus the full-value multiplier', () => {
+    const config: ComparablePointsConfig = {
+      version: 1,
+      parity_points: 13_000,
+      activities: [
+        emptyActivity({
+          id: 'act-count',
+          name: 'Dials',
+          unit: 'dials',
+          parity_qty: 3500,
+          input_kind: 'count',
+          lane_ids: ['rookie'],
+          multiplier: {
+            enabled: true,
+            extra_factor: 1,
+            label: 'Presentations',
+            tiers: [
+              { threshold: 5, percent: 50 },
+              { threshold: 10, percent: 100 },
+            ],
+          },
+        }),
+        emptyActivity({
+          id: 'act-money',
+          name: 'AP',
+          unit: 'USD',
+          parity_qty: 13_000,
+          input_kind: 'money',
+          lane_ids: ['rookie', 'veteran'],
+          multiplier: { enabled: false, extra_factor: 1 },
+        }),
+      ],
+      lanes: [
+        { id: 'rookie', label: 'Rookie' },
+        { id: 'veteran', label: 'Veteran' },
+      ],
+    };
+    expect(comparablePointsLiveSentence(config)).toBe(
+      '3500 Dials with 10 Presentations equals 13,000 points, and $13,000 of AP equals 13,000 points.',
+    );
+    expect(comparablePointsLaneSubline(config)).toBe(
+      'Rookies score Dials (with Presentations) and AP. Veterans score AP only.',
+    );
+    expect(formatMoneySentenceAmount(13_000)).toBe('$13,000');
   });
 });
 
@@ -165,6 +216,45 @@ describe('window totals then score', () => {
   it('scores a zero window as zero so an empty honor send is allowed', () => {
     expect(scoreComparableWindow(gymConfig(), { walks: 0, tickets: 0 })).toBe(0);
   });
+
+  it('gates a lane-listed activity and leaves open activities for every lane', () => {
+    const config = parseComparablePointsConfig({
+      version: 1,
+      parity_points: 13_000,
+      lanes: [
+        { id: 'rookie', label: 'Rookie' },
+        { id: 'veteran', label: 'Veteran' },
+      ],
+      activities: [
+        {
+          id: 'act-dials',
+          name: 'Dials',
+          unit: 'dials',
+          parity_qty: 3500,
+          lane_ids: ['rookie'],
+          multiplier: { enabled: false, extra_factor: 1 },
+          qualifiers: { enabled: false, items: [] },
+        },
+        {
+          id: 'act-ap',
+          name: 'AP',
+          unit: 'USD',
+          parity_qty: 13_000,
+          lane_ids: ['rookie', 'veteran'],
+          multiplier: { enabled: false, extra_factor: 1 },
+          qualifiers: { enabled: false, items: [] },
+        },
+      ],
+    })!;
+    const totals = { 'act-dials': 3500, 'act-ap': 13_000 };
+    expect(activityScoresForLane(config.activities[0]!, 'rookie')).toBe(true);
+    expect(activityScoresForLane(config.activities[0]!, 'veteran')).toBe(false);
+    expect(activityScoresForLane(config.activities[0]!, null)).toBe(false);
+    expect(scoreComparableWindow(config, totals, 'rookie')).toBe(26_000);
+    expect(scoreComparableWindow(config, totals, 'veteran')).toBe(13_000);
+    expect(scoreComparableWindow(config, totals, null)).toBe(0);
+    expect(scoreComparableWindow(config, totals, 'veteran')).not.toBe(0);
+  });
 });
 
 describe('generated log fields', () => {
@@ -182,5 +272,19 @@ describe('generated log fields', () => {
     );
     expect(comparableCheckinCaption(gymConfig(), {})).toBe('Check-in Complete');
     expect(comparableCheckinCaption(gymConfig(), { closed: 'Two tickets' })).toBe('Two tickets');
+  });
+
+  it('hides a self-serve Side choice when scoring lanes exist', () => {
+    const fields = comparableLogFields(
+      gymConfig({
+        lanes: [
+          { id: 'a', label: 'A' },
+          { id: 'b', label: 'B' },
+        ],
+        choice_fields: [{ id: 'side', label: 'Side', options: ['A', 'B'] }],
+      }),
+    );
+    expect(fields.some((field) => field.kind === 'choice')).toBe(false);
+    expect(fields.map((field) => field.label)).not.toContain('Side');
   });
 });
