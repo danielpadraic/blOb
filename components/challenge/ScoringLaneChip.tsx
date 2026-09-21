@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
+import { shortLaneMarkLabel } from '@/lib/board';
 import { THEME } from '@/lib/theme';
 import type { ScoringLane } from '@/lib/comparablePoints';
 
@@ -11,18 +12,29 @@ type ScoringLaneChipProps = {
   laneId?: string | null;
   canAssign: boolean;
   busy?: boolean;
-  compact?: boolean;
+  /** Board table: 18–20px mark. Default stays the larger picker chip. */
+  density?: 'default' | 'mark';
   onAssign: (laneId: string) => void;
 };
 
-export function ScoringLaneChip({ lanes, laneId, canAssign, busy, compact, onAssign }: ScoringLaneChipProps) {
+export function ScoringLaneChip({
+  lanes,
+  laneId,
+  canAssign,
+  busy,
+  density = 'default',
+  onAssign,
+}: ScoringLaneChipProps) {
   const [open, setOpen] = useState(false);
   if (lanes.length < 1) {
     return null;
   }
   const current = lanes.find((lane) => lane.id === laneId);
   const needsSide = !current;
-  const label = current?.label.trim() || (compact ? '—' : 'Needs a side');
+  const mark = density === 'mark';
+  const label = mark
+    ? shortLaneMarkLabel(current?.label ?? '')
+    : current?.label.trim() || 'Needs a side';
 
   function choose(id: string) {
     setOpen(false);
@@ -30,6 +42,28 @@ export function ScoringLaneChip({ lanes, laneId, canAssign, busy, compact, onAss
       onAssign(id);
     }
   }
+
+  const chip = (
+    <View
+      style={{
+        height: mark ? 20 : 28,
+        paddingHorizontal: mark ? 6 : 10,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: needsSide ? THEME.border : THEME.accent,
+        backgroundColor: mark || needsSide ? THEME.surface : THEME.accentSoft,
+        justifyContent: 'center',
+        alignItems: 'center',
+        opacity: busy ? 0.55 : 1,
+      }}>
+      <AppText
+        className={mark ? 'text-[10px] font-bold' : 'text-[12px] font-semibold'}
+        numberOfLines={1}
+        style={{ color: needsSide ? THEME.textMuted : mark ? THEME.textPrimary : THEME.accent }}>
+        {label}
+      </AppText>
+    </View>
+  );
 
   return (
     <>
@@ -42,22 +76,18 @@ export function ScoringLaneChip({ lanes, laneId, canAssign, busy, compact, onAss
             setOpen(true);
           }
         }}
-        style={{
-          minHeight: compact ? (canAssign ? 44 : 22) : 28,
-          paddingHorizontal: compact ? 6 : 10,
-          borderRadius: 999,
-          borderWidth: 1,
-          borderColor: needsSide ? THEME.border : THEME.accent,
-          backgroundColor: needsSide ? THEME.surface : THEME.accentSoft,
-          justifyContent: 'center',
-          opacity: busy ? 0.55 : 1,
-        }}>
-        <AppText
-          className={compact ? 'text-[11px] font-semibold' : 'text-[12px] font-semibold'}
-          numberOfLines={1}
-          style={{ color: needsSide ? THEME.textMuted : THEME.accent }}>
-          {label}
-        </AppText>
+        hitSlop={mark ? 8 : 0}
+        style={
+          mark
+            ? {
+                minHeight: canAssign ? 44 : 20,
+                minWidth: canAssign ? 44 : undefined,
+                justifyContent: 'center',
+                alignItems: 'flex-start',
+              }
+            : undefined
+        }>
+        {chip}
       </Pressable>
       <ChromeOverlay visible={open} onClose={() => setOpen(false)} align="center">
         <View

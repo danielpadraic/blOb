@@ -16,9 +16,12 @@ import { Card } from '@/components/ui/Card';
 import {
   BOARD_ADJUST_COL,
   BOARD_AVATAR,
+  BOARD_CHEVRON_COL,
+  BOARD_MEDAL,
   BOARD_RANK_COL,
   BOARD_ROW_MIN,
   BOARD_ROW_MIN_COMPACT,
+  BOARD_SIDE_COL,
   boardColumnWidth,
   boardCompletersCount,
   boardEmptyCopy,
@@ -28,6 +31,7 @@ import {
   boardRowTag,
   boardSettledCopy,
   buildBoard,
+  formatBoardNestedQty,
   formatBoardPoints,
   quantityBoardHeaderLine,
   rankBoardRows,
@@ -40,11 +44,13 @@ import {
   formatComparableBoardCell,
   participantNeedsScoringLane,
   shortComparableBoardLabel,
+  type ComparableBoardColumn,
 } from '@/lib/comparablePoints';
 import { useSetScoringLane } from '@/hooks/useChallenge';
 import { storedDurationDays } from '@/lib/challengeGoal';
 import { challengeTargetCount } from '@/lib/challenges';
 import { copy } from '@/lib/copy';
+import { challengeShowsMissBudget, missesAllowedCap, missesAllowedCopy, missesUsedCopy } from '@/lib/missDuty';
 import { isOfficialChallenge } from '@/lib/official';
 import { flexChildMin, THEME } from '@/lib/theme';
 import type { Challenge, ChallengeParticipantWithProfile, ChallengeSettlementView } from '@/lib/types';
@@ -64,12 +70,7 @@ type ChallengeBoardProps = {
   missesUsed?: number;
 };
 
-type GridCol = {
-  key: string;
-  label: string;
-  width: number;
-  flex?: number;
-};
+type NestedLine = { label: string; value: string };
 
 export function ChallengeBoard({
   challenge,
@@ -86,6 +87,7 @@ export function ChallengeBoard({
   missesUsed = 0,
 }: ChallengeBoardProps) {
   const [receiptOpen, setReceiptOpen] = useState(showReceipt);
+  const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
   const compact = variant === 'compact';
   const quantityBoard = usesQuantityScoring(challenge);
   const view = useMemo(
@@ -143,11 +145,14 @@ export function ChallengeBoard({
   const canAssignLane = Boolean(isActor && scoringLanes.length > 0 && !view.settled);
   const comparableColumns = comparableConfig ? comparableBoardColumns(comparableConfig) : [];
   const consistencyBoard = !quantityBoard && !pointsBoard;
+  const hasNested = comparableColumns.length > 0 || consistencyBoard || quantityBoard;
   const showAdjustCol =
     !view.settled &&
     consistencyBoard &&
     (canAdjust || canHouseRemove || canFriendlyRemove || canEditScore || canProxy);
   const requiredDays = storedDurationDays(challenge) ?? challengeTargetCount(challenge);
+  const showMissLine = challengeShowsMissBudget(challenge);
+  const missCap = missesAllowedCap(challenge);
   const progressByUser = useMemo(() => {
     const map = new Map<string, ReturnType<typeof boardQuantityProgress>>();
     if (!quantityBoard) {
@@ -200,98 +205,65 @@ export function ChallengeBoard({
     }
     return map;
   }, [roster]);
-
-  const grid = useMemo(() => {
-    const cols: GridCol[] = [
-      { key: 'rank', label: '#', width: BOARD_RANK_COL },
-      { key: 'player', label: 'Player', width: 0, flex: 1 },
-    ];
-    const widthOf = (samples: string[], min?: number) =>
-      boardColumnWidth(samples, { compact, min: min ?? (compact ? 26 : 28) });
-
-    if (scoringLanes.length) {
-      const sideSamples = [
-        'Side',
-        ...scoringLanes.map((lane) => lane.label.trim() || '—'),
-        '—',
-      ];
-      cols.push({ key: 'side', label: 'Side', width: widthOf(sideSamples, compact ? 36 : 44) });
-    }
-
-    if (comparableColumns.length) {
-      for (const column of comparableColumns) {
-        const header = shortComparableBoardLabel(column.label);
-        const samples = [
-          header,
-          ...rows.map((row) => {
-            const participant = participantById.get(row.userId);
-            return formatComparableBoardCell(column, participant?.metric_totals ?? null);
-          }),
-        ];
-        cols.push({ key: column.key, label: header, width: widthOf(samples, 32) });
+  const racingIds = useMemo(() => racing.map((row) => row.userId), [racing]);
+  const allDetailsOpen = hasNested && racingIds.length > 0 && racingIds.every((id) => openIds.has(id));
+  const quantityUnit =
+    [...progressByUser.values()].find((item) => item?.unit)?.unit || 'mi';
+  const scoreHeader = quantityBoard
+    ? shortBoardHeader(quantityUnit)
+    : consistencyBoard
+      ? 'Days'
+      : 'Pts';
+  const scoreWidth = useMemo(() => {
+    const samples = rows.map((row) => {
+      const participant = participantById.get(row.userId);
+      const needsLane = participantNeedsScoringLane(comparableConfig, participant?.scoring_lane);
+      if (needsLane) {
+        return 'Needs a side';
       }
-      const ptsSamples = [
-        'Pts',
-        ...rows.map((row) => {
-          const participant = participantById.get(row.userId);
-          return participantNeedsScoringLane(comparableConfig, participant?.scoring_lane)
-            ? 'Needs a side'
-            : formatBoardPoints(row.points);
-        }),
-      ];
-      cols.push({
-        key: 'pts',
-        label: 'Pts',
-        width: widthOf(ptsSamples, ptsSamples.includes('Needs a side') ? 68 : 36),
-      });
-    } else if (pointsBoard) {
-      const ptsSamples = ['Pts', ...rows.map((row) => formatBoardPoints(row.points))];
-      cols.push({ key: 'pts', label: 'Pts', width: widthOf(ptsSamples, 36) });
-    } else if (quantityBoard) {
-      const unit =
-        [...progressByUser.values()].find((item) => item?.unit)?.unit ||
-        shortBoardHeader('Progress');
-      const header = shortBoardHeader(unit);
-      const samples = [
-        header,
-        ...rows.map((row) => progressByUser.get(row.userId)?.label?.trim() || '0'),
-      ];
-      cols.push({ key: 'progress', label: header, width: widthOf(samples, 56) });
-    } else {
-      const daysSamples = [
-        'Days',
-        ...rows.map((row) => `${Number(row.days) || 0} / ${requiredDays}`),
-      ];
-      const statusSamples = [
-        'Status',
-        ...rows.map((row) =>
-          boardRowTag(row, view.settled, {
-            quantityDone: false,
-          }),
-        ),
-      ];
-      cols.push({ key: 'days', label: 'Days', width: widthOf(daysSamples, 40) });
-      cols.push({ key: 'status', label: 'Status', width: widthOf(statusSamples, 48) });
-    }
-
-    if (showAdjustCol) {
-      cols.push({ key: 'adjust', label: '', width: BOARD_ADJUST_COL });
-    }
-    return cols;
+      if (quantityBoard) {
+        return progressByUser.get(row.userId)?.label?.trim() || '0 / 0 mi';
+      }
+      if (consistencyBoard) {
+        return `${Number(row.days) || 0}/${requiredDays}`;
+      }
+      return formatBoardPoints(row.points);
+    });
+    return boardColumnWidth([scoreHeader, ...samples], {
+      compact,
+      min: 44,
+      max: 88,
+    });
   }, [
     compact,
-    comparableColumns,
     comparableConfig,
+    consistencyBoard,
     participantById,
-    pointsBoard,
     progressByUser,
     quantityBoard,
     requiredDays,
     rows,
-    scoringLanes,
-    showAdjustCol,
-    view.settled,
+    scoreHeader,
   ]);
+
+  function toggleRow(userId: string) {
+    if (!hasNested) {
+      return;
+    }
+    setOpenIds((current) => {
+      const next = new Set(current);
+      if (next.has(userId)) {
+        next.delete(userId);
+      } else {
+        next.add(userId);
+      }
+      return next;
+    });
+  }
+
+  function toggleAllDetails() {
+    setOpenIds(allDetailsOpen ? new Set() : new Set(racingIds));
+  }
 
   function toggleReceipt() {
     if (onOpenReceipt) {
@@ -301,44 +273,64 @@ export function ChallengeBoard({
     setReceiptOpen((current) => !current);
   }
 
+  const detailsControl = hasNested ? (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={allDetailsOpen ? copy('board.hideDetails') : copy('board.showDetails')}
+      onPress={toggleAllDetails}
+      style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 }}>
+      <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
+        {allDetailsOpen ? copy('board.hideDetails') : copy('board.showDetails')}
+      </AppText>
+    </Pressable>
+  ) : null;
+
   const table = view.empty ? (
     <MascotState kind="empty" compact title={boardEmptyCopy(view)} />
   ) : (
-    <View style={{ marginHorizontal: compact ? 0 : -4 }}>
-      <BoardHeaderRow cols={grid} compact={compact} />
+    <View>
+      <BoardHeaderRow
+        compact={compact}
+        hasSide={scoringLanes.length > 0}
+        scoreHeader={scoreHeader}
+        scoreWidth={scoreWidth}
+        hasChevron={hasNested}
+        showAdjust={showAdjustCol}
+      />
       {rows.map((row) => {
         const participant = participantById.get(row.userId);
         const needsLane = participantNeedsScoringLane(comparableConfig, participant?.scoring_lane);
         const dropped = row.bucket === 'dropped';
         const displayRank = row.rank == null || needsLane || dropped ? null : row.rank;
-        const cells = grid
-          .filter((col) => col.key !== 'rank' && col.key !== 'player' && col.key !== 'side' && col.key !== 'adjust')
-          .map((col) => {
-            if (col.key === 'pts') {
-              return needsLane ? 'Needs a side' : formatBoardPoints(row.points);
-            }
-            if (col.key === 'days') {
-              return `${Number(row.days) || 0} / ${requiredDays}`;
-            }
-            if (col.key === 'status') {
-              return boardRowTag(row, view.settled, {
-                quantityDone: quantityBoard ? Boolean(progressByUser.get(row.userId)?.done) : false,
-              });
-            }
-            if (col.key === 'progress') {
-              const progress = progressByUser.get(row.userId);
-              return progress?.label?.trim() || (progress && progress.target > 0 ? `${progress.logged} / ${progress.target} ${progress.unit}`.trim() : '0');
-            }
-            const metric = comparableColumns.find((column) => column.key === col.key);
-            if (metric) {
-              return formatComparableBoardCell(metric, participant?.metric_totals ?? null);
-            }
-            return '';
-          });
+        const progress = progressByUser.get(row.userId);
+        const score = needsLane
+          ? 'Needs a side'
+          : quantityBoard
+            ? progress?.label?.trim() ||
+              (progress && progress.target > 0
+                ? `${progress.logged} / ${progress.target} ${progress.unit}`.trim()
+                : '0')
+            : consistencyBoard
+              ? `${Number(row.days) || 0}/${requiredDays}`
+              : formatBoardPoints(row.points);
+        const nested = nestedLines({
+          comparableColumns,
+          totals: participant?.metric_totals ?? null,
+          consistencyBoard,
+          quantityBoard,
+          days: Number(row.days) || 0,
+          requiredDays,
+          status: boardRowTag(row, view.settled, {
+            quantityDone: quantityBoard ? Boolean(progress?.done) : false,
+          }),
+          showMissLine,
+          missCap,
+          missesUsed,
+          progress,
+        });
         return (
           <BoardRankRow
             key={row.userId}
-            cols={grid}
             compact={compact}
             rank={displayRank == null ? '—' : String(displayRank)}
             medal={dropped || needsLane ? null : boardMedalTone(displayRank)}
@@ -348,19 +340,25 @@ export function ChallengeBoard({
             userId={row.userId}
             avatarUrl={row.avatarUrl}
             muted={dropped}
-            cells={cells}
+            hasSide={scoringLanes.length > 0}
             side={
               scoringLanes.length ? (
                 <ScoringLaneChip
                   lanes={scoringLanes}
                   laneId={participant?.scoring_lane}
                   canAssign={canAssignLane}
-                  compact
+                  density="mark"
                   busy={setLane.isPending}
                   onAssign={(laneId) => setLane.mutate({ userId: row.userId, laneId })}
                 />
               ) : null
             }
+            score={score}
+            scoreWidth={scoreWidth}
+            expanded={openIds.has(row.userId)}
+            canExpand={hasNested && nested.length > 0}
+            nested={nested}
+            onToggle={() => toggleRow(row.userId)}
             showAdjust={showAdjustCol}
             participantStatus={participant?.status}
           />
@@ -372,9 +370,12 @@ export function ChallengeBoard({
   if (compact) {
     return (
       <Card className="gap-2" style={{ padding: 12 }}>
-        <AppText className="text-[12px] font-semibold" style={{ color: THEME.textMuted }}>
-          {headerLine}
-        </AppText>
+        <View className="flex-row items-center justify-between">
+          <AppText className="text-[12px] font-semibold" style={{ color: THEME.textMuted, ...flexChildMin() }}>
+            {headerLine}
+          </AppText>
+          {detailsControl}
+        </View>
         {error ? (
           <AppText className="text-sm leading-5 text-coral-dark">
             Couldn’t load the board.{' '}
@@ -416,9 +417,12 @@ export function ChallengeBoard({
         </View>
       </View>
 
-      <AppText className="text-[13px] font-semibold" style={{ color: THEME.textMuted }}>
-        {headerLine}
-      </AppText>
+      <View className="flex-row items-center justify-between" style={{ gap: 8 }}>
+        <AppText className="text-[13px] font-semibold" style={{ color: THEME.textMuted, ...flexChildMin() }}>
+          {headerLine}
+        </AppText>
+        {detailsControl}
+      </View>
       {quantityBoard ? null : <MissBudgetLines challenge={challenge} used={missesUsed} />}
 
       {view.settled ? (
@@ -487,6 +491,49 @@ export function ChallengeBoard({
   );
 }
 
+function nestedLines(input: {
+  comparableColumns: ComparableBoardColumn[];
+  totals: Record<string, number> | null;
+  consistencyBoard: boolean;
+  quantityBoard: boolean;
+  days: number;
+  requiredDays: number;
+  status: string;
+  showMissLine: boolean;
+  missCap: number | null;
+  missesUsed: number;
+  progress: ReturnType<typeof boardQuantityProgress>;
+}): NestedLine[] {
+  if (input.comparableColumns.length) {
+    return input.comparableColumns.map((column) => ({
+      label: shortComparableBoardLabel(column.label),
+      value: column.money
+        ? formatComparableBoardCell(column, input.totals)
+        : formatBoardNestedQty(Number(input.totals?.[column.key]) || 0),
+    }));
+  }
+  if (input.quantityBoard) {
+    const unit = input.progress?.unit ? ` ${input.progress.unit}` : '';
+    const logged = input.progress?.logged ?? 0;
+    const goal = input.progress?.target ?? 0;
+    return [
+      { label: 'Logged', value: `${formatBoardNestedQty(logged)}${unit}` },
+      { label: 'Goal', value: `${formatBoardNestedQty(goal)}${unit}` },
+    ];
+  }
+  if (input.consistencyBoard) {
+    const lines: NestedLine[] = [
+      { label: 'Days', value: `${input.days} / ${input.requiredDays}` },
+      { label: 'Status', value: input.status },
+    ];
+    if (input.showMissLine && input.missCap != null) {
+      lines.push({ label: 'Miss', value: `${missesAllowedCopy(input.missCap)} · ${missesUsedCopy(input.missesUsed)}` });
+    }
+    return lines;
+  }
+  return [];
+}
+
 function ShareLine({
   challenge,
   share,
@@ -537,35 +584,63 @@ function boardRowPlayerName(name: string, username: string | null | undefined, y
   return you ? `${base} (You)` : base;
 }
 
-function BoardHeaderRow({ cols, compact }: { cols: GridCol[]; compact: boolean }) {
+function BoardHeaderRow({
+  compact,
+  hasSide,
+  scoreHeader,
+  scoreWidth,
+  hasChevron,
+  showAdjust,
+}: {
+  compact: boolean;
+  hasSide: boolean;
+  scoreHeader: string;
+  scoreWidth: number;
+  hasChevron: boolean;
+  showAdjust: boolean;
+}) {
+  const labelStyle = {
+    color: THEME.textMuted,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase' as const,
+  };
   return (
-    <View className="flex-row items-center" style={{ minHeight: compact ? 28 : 32, gap: 3 }}>
-      {cols.map((col) => (
-        <View
-          key={col.key}
-          style={
-            col.flex
-              ? { flex: col.flex, ...flexChildMin() }
-              : { width: col.width, flexShrink: 0 }
-          }>
-          <AppText
-            className={compact ? 'text-[10px] font-semibold' : 'text-[11px] font-semibold'}
-            numberOfLines={1}
-            style={{
-              color: THEME.textMuted,
-              textAlign: col.key === 'player' || col.key === 'side' ? 'left' : 'right',
-              fontVariant: col.key === 'player' ? undefined : ['tabular-nums'],
-            }}>
-            {col.label}
-          </AppText>
-        </View>
-      ))}
+    <View
+      className="flex-row items-center"
+      style={{
+        minHeight: compact ? 26 : 28,
+        paddingVertical: 6,
+        borderBottomWidth: 1,
+        borderBottomColor: THEME.border,
+        gap: 6,
+      }}>
+      <AppText
+        className="text-center text-[10px] font-semibold"
+        style={{ width: BOARD_RANK_COL, flexShrink: 0, ...labelStyle }}>
+        #
+      </AppText>
+      <AppText className="text-[10px] font-semibold" style={{ flex: 1, ...flexChildMin(), ...labelStyle }}>
+        Player
+      </AppText>
+      {hasSide ? (
+        <AppText
+          className="text-[10px] font-semibold"
+          style={{ width: BOARD_SIDE_COL, flexShrink: 0, ...labelStyle }}>
+          Side
+        </AppText>
+      ) : null}
+      <AppText
+        className="text-[10px] font-semibold"
+        style={{ width: scoreWidth, flexShrink: 0, textAlign: 'right', ...labelStyle }}>
+        {scoreHeader}
+      </AppText>
+      {hasChevron ? <View style={{ width: BOARD_CHEVRON_COL, flexShrink: 0 }} /> : null}
+      {showAdjust ? <View style={{ width: BOARD_ADJUST_COL, flexShrink: 0 }} /> : null}
     </View>
   );
 }
 
 function BoardRankRow({
-  cols,
   compact,
   rank,
   medal,
@@ -574,13 +649,18 @@ function BoardRankRow({
   username,
   userId,
   avatarUrl,
-  side,
-  cells,
   muted,
+  hasSide,
+  side,
+  score,
+  scoreWidth,
+  expanded,
+  canExpand,
+  nested,
+  onToggle,
   showAdjust,
   participantStatus,
 }: {
-  cols: GridCol[];
   compact: boolean;
   rank: string;
   medal: ReturnType<typeof boardMedalTone>;
@@ -589,9 +669,15 @@ function BoardRankRow({
   username: string | null;
   userId: string;
   avatarUrl: string | null;
-  side?: ReactNode;
-  cells: string[];
   muted?: boolean;
+  hasSide: boolean;
+  side?: ReactNode;
+  score: string;
+  scoreWidth: number;
+  expanded: boolean;
+  canExpand: boolean;
+  nested: NestedLine[];
+  onToggle: () => void;
   showAdjust?: boolean;
   participantStatus?: string | null;
 }) {
@@ -602,96 +688,126 @@ function BoardRankRow({
   const nameSize = compact ? 12 : 13;
   const numSize = compact ? 11 : 12;
   const medalFill = boardMedalColor(medal);
-  const dataCols = cols.filter(
-    (col) => col.key !== 'rank' && col.key !== 'player' && col.key !== 'side' && col.key !== 'adjust',
-  );
 
   return (
-    <View className="flex-row items-center" style={{ minHeight: rowMin, gap: 3 }}>
-      <View
+    <View style={{ borderBottomWidth: 1, borderBottomColor: THEME.border }}>
+      <Pressable
+        accessibilityRole={canExpand ? 'button' : undefined}
+        accessibilityLabel={canExpand ? `${label}. ${expanded ? 'Hide details' : 'Show details'}` : label}
+        onPress={canExpand ? onToggle : undefined}
+        disabled={!canExpand}
         style={{
-          width: BOARD_RANK_COL,
-          flexShrink: 0,
+          minHeight: canExpand ? 44 : rowMin,
+          paddingVertical: compact ? 6 : 8,
+          flexDirection: 'row',
           alignItems: 'center',
-          justifyContent: 'center',
+          gap: 6,
         }}>
-        {medalFill && rank !== '—' ? (
+        <View
+          style={{
+            width: BOARD_RANK_COL,
+            flexShrink: 0,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+          {medalFill && rank !== '—' ? (
+            <View
+              style={{
+                width: BOARD_MEDAL,
+                height: BOARD_MEDAL,
+                borderRadius: BOARD_MEDAL / 2,
+                backgroundColor: medalFill,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+              <AppText
+                className="text-center text-[10px] font-extrabold"
+                style={{ color: THEME.textPrimary, fontVariant: ['tabular-nums'] }}>
+                {rank}
+              </AppText>
+            </View>
+          ) : (
+            <AppText
+              className="text-center text-[12px] font-extrabold"
+              style={{ color: ink, fontVariant: ['tabular-nums'] }}>
+              {rank}
+            </AppText>
+          )}
+        </View>
+
+        <ProfileLink
+          username={username}
+          userId={userId}
+          fill
+          style={{ flex: 1, minWidth: 0, minHeight: rowMin }}>
+          <View className="flex-row items-center" style={{ flex: 1, minWidth: 0, gap: 6 }}>
+            <View style={{ width: BOARD_AVATAR, flexShrink: 0 }}>
+              <Avatar uri={avatarUrl} name={avatarName} size={BOARD_AVATAR} />
+            </View>
+            <View style={flexChildMin()}>
+              <AppText
+                className="font-semibold"
+                numberOfLines={1}
+                style={{ color: ink, fontSize: nameSize }}>
+                {label}
+              </AppText>
+            </View>
+          </View>
+        </ProfileLink>
+
+        {hasSide ? (
+          <View style={{ width: BOARD_SIDE_COL, flexShrink: 0, justifyContent: 'center' }}>{side}</View>
+        ) : null}
+
+        <AppText
+          className="font-semibold"
+          numberOfLines={1}
+          style={{
+            width: scoreWidth,
+            flexShrink: 0,
+            color: score === 'Needs a side' ? THEME.textMuted : ink,
+            fontSize: score === 'Needs a side' ? 10 : numSize,
+            textAlign: 'right',
+            fontVariant: ['tabular-nums'],
+          }}>
+          {score}
+        </AppText>
+
+        {canExpand ? (
           <View
             style={{
-              width: 22,
-              height: 22,
-              borderRadius: 11,
-              backgroundColor: medalFill,
+              width: BOARD_CHEVRON_COL,
+              flexShrink: 0,
               alignItems: 'center',
               justifyContent: 'center',
             }}>
-            <AppText
-              className="text-center text-[11px] font-extrabold"
-              style={{ color: THEME.textPrimary, fontVariant: ['tabular-nums'] }}>
-              {rank}
+            <AppText className="text-[16px] font-semibold" style={{ color: THEME.textMuted }}>
+              {expanded ? '▾' : '▸'}
             </AppText>
           </View>
-        ) : (
-          <AppText
-            className="text-center text-[12px] font-extrabold"
-            style={{ color: ink, fontVariant: ['tabular-nums'] }}>
-            {rank}
-          </AppText>
-        )}
-      </View>
+        ) : null}
 
-      <ProfileLink
-        username={username}
-        userId={userId}
-        fill
-        style={{ flex: 1, minWidth: 0, minHeight: rowMin }}>
-        <View
-          className="flex-row items-center"
-          style={{ flex: 1, minWidth: 0, minHeight: rowMin, gap: 6 }}>
-          <View style={{ width: BOARD_AVATAR, flexShrink: 0 }}>
-            <Avatar uri={avatarUrl} name={avatarName} size={BOARD_AVATAR} />
+        {showAdjust ? (
+          <View style={{ width: BOARD_ADJUST_COL, flexShrink: 0, alignItems: 'center' }}>
+            <BoardAdjustButton userId={userId} displayName={avatarName} status={participantStatus} />
           </View>
-          <View style={flexChildMin()}>
-            <AppText
-              className="font-semibold"
-              numberOfLines={1}
-              style={{ color: ink, fontSize: nameSize }}>
-              {label}
-            </AppText>
-          </View>
-        </View>
-      </ProfileLink>
+        ) : null}
+      </Pressable>
 
-      {cols.some((col) => col.key === 'side') ? (
-        <View
-          style={{
-            width: cols.find((col) => col.key === 'side')?.width ?? 44,
-            flexShrink: 0,
-            alignItems: 'flex-start',
-          }}>
-          {side}
-        </View>
-      ) : null}
-
-      {dataCols.map((col, index) => (
-        <View key={col.key} style={{ width: col.width, flexShrink: 0 }}>
-          <AppText
-            className="font-semibold"
-            numberOfLines={1}
-            style={{
-              color: cells[index] === 'Needs a side' ? THEME.textMuted : ink,
-              fontSize: cells[index] === 'Needs a side' ? 10 : numSize,
-              textAlign: 'right',
-              fontVariant: ['tabular-nums'],
-            }}>
-            {cells[index] || '0'}
-          </AppText>
-        </View>
-      ))}
-
-      {showAdjust ? (
-        <View style={{ width: BOARD_ADJUST_COL, flexShrink: 0, alignItems: 'center' }}>
-          <BoardAdjustButton userId={userId} displayName={avatarName} status={participantStatus} />
+      {expanded && nested.length > 0 ? (
+        <View style={{ paddingBottom: 10, paddingLeft: BOARD_RANK_COL + 6, paddingRight: 4, gap: 4 }}>
+          {nested.map((line) => (
+            <View key={line.label} className="flex-row items-center justify-between" style={{ gap: 12 }}>
+              <AppText className="text-[11px] font-semibold" style={{ color: THEME.textMuted }}>
+                {line.label}
+              </AppText>
+              <AppText
+                className="text-[12px] font-semibold"
+                style={{ color: ink, fontVariant: ['tabular-nums'] }}>
+                {line.value}
+              </AppText>
+            </View>
+          ))}
         </View>
       ) : null}
     </View>

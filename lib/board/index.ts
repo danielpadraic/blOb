@@ -29,12 +29,17 @@ export { boardQuantityProgress } from './quantity';
 export {
   BOARD_ADJUST_COL,
   BOARD_AVATAR,
+  BOARD_CHEVRON_COL,
+  BOARD_MEDAL,
   BOARD_RANK_COL,
   BOARD_ROW_MIN,
   BOARD_ROW_MIN_COMPACT,
+  BOARD_SIDE_COL,
   boardColumnWidth,
   boardMedalColor,
   boardMedalTone,
+  formatBoardNestedQty,
   formatBoardPoints,
   shortBoardHeader,
+  shortLaneMarkLabel,
 } from './columns';

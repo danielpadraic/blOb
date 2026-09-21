@@ -11,12 +11,14 @@ import {
   boardScoreOf,
   boardSettledCopy,
   buildBoard,
+  formatBoardNestedQty,
   formatBoardPoints,
   pointsLeader,
   pointsRank,
   quantityBoardHeaderLine,
   rankBoardRows,
   shortBoardHeader,
+  shortLaneMarkLabel,
 } from '@/lib/board';
 import { checkinPointValue } from '@/lib/challengePoints';
 import { challengeGoalLabel } from '@/lib/challengeGoal';
@@ -320,5 +322,24 @@ describe('board row chrome', () => {
     expect(formatBoardPoints(26000)).toBe('26,000');
     expect(shortBoardHeader('Presentations')).toBe('Pres');
     expect(shortBoardHeader('miles')).toBe('mi');
+  });
+
+  it('ranks a close second as 2, not another gold 1', () => {
+    const view = buildBoard({
+      status: 'live',
+      participants: [
+        { user_id: '01', points: 26000, status: 'joined', display_name: 'Test Rookie 01' },
+        { user_id: '02', points: 25999, status: 'joined', display_name: 'Test Rookie 02' },
+      ],
+    });
+    expect(rankBoardRows(view.people, 'points').map((row) => [row.userId, row.rank])).toEqual([
+      ['01', 1],
+      ['02', 2],
+    ]);
+    expect(boardMedalTone(2)).toBe('silver');
+    expect(shortLaneMarkLabel('Rookie')).toBe('Rookie');
+    expect(shortLaneMarkLabel('Veteran')).toBe('Veteran');
+    expect(shortLaneMarkLabel('Needs a side')).toBe('—');
+    expect(formatBoardNestedQty(3500)).toBe('3,500');
   });
 });
