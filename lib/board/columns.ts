@@ -1,11 +1,11 @@
 import { THEME } from '@/lib/theme';
 
-export const BOARD_RANK_COL = 48;
+export const BOARD_RANK_COL = 26;
 export const BOARD_AVATAR = 28;
 export const BOARD_ADJUST_COL = 44;
 export const BOARD_CHEVRON_COL = 44;
 export const BOARD_SIDE_COL = 80;
-export const BOARD_MEDAL = 46;
+export const BOARD_MEDAL = 22;
 export const BOARD_ROW_MIN = 48;
 export const BOARD_ROW_MIN_COMPACT = 44;
 
