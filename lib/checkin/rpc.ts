@@ -262,6 +262,17 @@ async function proofPartFor(
   };
 }
 
+function proofInputHasFile(input: SaveCheckinProofInput): boolean {
+  const uri = input.uri?.trim() ?? '';
+  if (uri && !uri.startsWith('health:')) {
+    return true;
+  }
+  if (input.blob) {
+    return true;
+  }
+  return Boolean(input.urls?.some((url) => Boolean(url?.trim()) && !url.startsWith('health:')));
+}
+
 export async function saveCheckinProofWithClient(
   client: CheckinRpcClient,
   input: SaveCheckinProofInput,
@@ -269,7 +280,9 @@ export async function saveCheckinProofWithClient(
   resolveUrl: ResolveProofUrlFn,
 ): Promise<ChallengeCheckin> {
   const userId = await currentUserId(client);
-  const packed = await proofPartFor(input, userId, upload, resolveUrl);
+  // A required slot that still has a file is never emptied by p_clear_proof.
+  const clearProof = input.clearProof === true && !proofInputHasFile(input);
+  const packed = await proofPartFor({ ...input, clearProof }, userId, upload, resolveUrl);
   // The RPC replaces the whole slot object with what it is handed, so the stamp has to travel with
   // the part rather than being written separately afterwards.
   const part =
@@ -278,12 +291,12 @@ export async function saveCheckinProofWithClient(
       : packed?.part ?? null;
   const { data, error } = (await client.rpc('save_checkin_proof', {
     p_challenge_id: input.challengeId,
-    p_proof_id: input.clearProof ? input.proof?.id ?? packed?.id ?? null : packed?.id ?? null,
-    p_proof_part: input.clearProof ? null : part,
-    p_health_workout_id: input.clearProof ? null : packed?.healthWorkoutId ?? null,
+    p_proof_id: clearProof ? input.proof?.id ?? packed?.id ?? null : packed?.id ?? null,
+    p_proof_part: clearProof ? null : part,
+    p_health_workout_id: clearProof ? null : packed?.healthWorkoutId ?? null,
     p_notes: input.notes ?? null,
     p_extra_media: input.extraMedia ?? null,
-    p_clear_proof: input.clearProof === true,
+    p_clear_proof: clearProof,
   })) as { data: unknown; error: { message?: string; code?: string; details?: string } | null };
   if (error) {
     throw new Error(mapCheckinRpcError(error, 'save'));

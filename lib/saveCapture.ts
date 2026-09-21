@@ -14,6 +14,8 @@ export type SaveCaptureInput = {
 export type SaveCaptureResult = {
   saved: boolean;
   uri?: string;
+  /** Cache copy written before Photos. Attach / persist this so Camera tmp can die. */
+  copiedUri?: string;
   reason?: 'library' | 'empty' | 'health' | 'remote' | 'denied' | 'web' | 'failed' | 'duplicate';
 };
 
@@ -21,6 +23,7 @@ type SaveListener = (result: SaveCaptureResult) => void;
 
 const savedUris = new Set<string>();
 const pendingUris = new Set<string>();
+const lastResults = new Map<string, SaveCaptureResult>();
 const listeners = new Set<SaveListener>();
 
 export function watchSaveCapture(listener: SaveListener): () => void {
@@ -30,15 +33,34 @@ export function watchSaveCapture(listener: SaveListener): () => void {
   };
 }
 
+function remember(result: SaveCaptureResult) {
+  if (result.uri) {
+    lastResults.set(result.uri, result);
+  }
+  if (result.copiedUri) {
+    lastResults.set(result.copiedUri, result);
+  }
+}
+
 function emit(result: SaveCaptureResult) {
+  remember(result);
   for (const listener of listeners) {
     listener(result);
   }
 }
 
+export function lastSaveCapture(uri?: string | null): SaveCaptureResult | null {
+  const key = uri?.trim() ?? '';
+  if (!key) {
+    return null;
+  }
+  return lastResults.get(key) ?? null;
+}
+
 export function resetSaveCaptureForTests() {
   savedUris.clear();
   pendingUris.clear();
+  lastResults.clear();
 }
 
 /** Skip gallery picks, Health tokens, and other people’s remote files. */
@@ -80,47 +102,36 @@ export async function saveOwnCapture(input: SaveCaptureInput): Promise<SaveCaptu
     return result;
   }
   pendingUris.add(uri);
+  const copied = await copyCaptureForLibrary(input);
+  const toSave = copied ?? uri;
   try {
     const media = await import('expo-media-library');
-    const current = await media.getPermissionsAsync(true);
-    const permission = current.granted ? current : await media.requestPermissionsAsync(true);
+    const permission = await media.requestPermissionsAsync(true);
     if (!permission.granted) {
       pendingUris.delete(uri);
-      const result: SaveCaptureResult = { saved: false, uri, reason: 'denied' };
+      const result: SaveCaptureResult = { saved: false, uri, copiedUri: copied ?? undefined, reason: 'denied' };
       emit(result);
       return result;
     }
-    await media.saveToLibraryAsync(uri);
+    await media.saveToLibraryAsync(toSave);
     pendingUris.delete(uri);
     markSaved(uri);
-    const result: SaveCaptureResult = { saved: true, uri };
+    if (copied) {
+      markSaved(copied);
+    }
+    const result: SaveCaptureResult = { saved: true, uri, copiedUri: copied ?? undefined };
     emit(result);
     return result;
   } catch {
-    const copied = await copyCaptureForLibrary(input);
-    if (copied && copied !== uri) {
-      try {
-        const media = await import('expo-media-library');
-        await media.saveToLibraryAsync(copied);
-        pendingUris.delete(uri);
-        markSaved(uri);
-        markSaved(copied);
-        const result: SaveCaptureResult = { saved: true, uri };
-        emit(result);
-        return result;
-      } catch {
-        // Fall through to failed.
-      }
-    }
     pendingUris.delete(uri);
-    const result: SaveCaptureResult = { saved: false, uri, reason: 'failed' };
+    const result: SaveCaptureResult = { saved: false, uri, copiedUri: copied ?? undefined, reason: 'failed' };
     emit(result);
     return result;
   }
 }
 
-/** Expo Camera tmp URIs sometimes fail saveToLibraryAsync until copied into cache as .mov/.jpg. */
-async function copyCaptureForLibrary(input: SaveCaptureInput): Promise<string | null> {
+/** Copy Camera tmp → cacheDirectory blob-save-{ts}.jpg or .mov before Photos. */
+export async function copyCaptureForLibrary(input: SaveCaptureInput): Promise<string | null> {
   const uri = input.uri?.trim() ?? '';
   if (!uri) {
     return null;

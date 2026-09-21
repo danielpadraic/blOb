@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   classifySaveCapture,
+  copyCaptureForLibrary,
   resetSaveCaptureForTests,
   SAVE_CAPTURE_DENIED,
   SAVE_CAPTURE_WEB,
@@ -41,5 +42,9 @@ describe('save own capture', () => {
   it('keeps the denied caption short', () => {
     expect(SAVE_CAPTURE_DENIED).toBe('Couldn’t save to Photos.');
     expect(SAVE_CAPTURE_WEB).toBe('Save to Photos');
+  });
+
+  it('exposes copyCaptureForLibrary for the copy-then-Photos path', () => {
+    expect(typeof copyCaptureForLibrary).toBe('function');
   });
 });

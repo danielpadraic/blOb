@@ -432,6 +432,7 @@ function SubmitWorkoutInner() {
   /** Context on the check-in post. Never counted toward the proof this challenge requires. */
   const [attachedLift, setAttachedLift] = useState<LiftSessionSummary | null>(null);
   const [liftPickerOpen, setLiftPickerOpen] = useState(false);
+  const [sendLock, setSendLock] = useState(false);
   const lobbyLocked = checkinHidesHomeShare(challengeQuery.data);
   const lockedShare = applyCheckinShareLock(sharePrefs, lobbyLocked);
   const shareHome = lockedShare.home;
@@ -755,7 +756,7 @@ function SubmitWorkoutInner() {
     partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }),
   ).length;
   const allReady = blockingProofs.length > 0 && filledCount === blockingProofs.length;
-  const busy = saveProof.isPending || submitCheckin.isPending;
+  const busy = sendLock || submitCheckin.isPending;
   const hasRequiredAttached = honorOnly || filledCount > 0;
   const canSend = canSendCheckin(honorOnly, hasRequiredAttached, phase, busy);
   const firstCamera = beginCameraProof(blockingProofs.length ? blockingProofs : proofSteps);
@@ -783,9 +784,9 @@ function SubmitWorkoutInner() {
     mimeType?: string | null,
     fromLibrary?: boolean,
     blob?: Blob | null,
-  ) {
+  ): SlotDraft | null {
     if (busy) {
-      return;
+      return null;
     }
     const append = appendStillRef.current;
     const replace = replaceStillRef.current;
@@ -793,35 +794,35 @@ function SubmitWorkoutInner() {
     replaceStillRef.current = null;
     const proof = proofSteps.find((item) => item.id === proofId);
     holdCheckinBlob(uri, blob);
-    setDrafts((current) => {
-      const existing = slotStillUris(current[proofId]);
-      const allows = slotAllowsMultipleStills(proof, current[proofId]);
-      let next: string[];
-      if (append?.proofId === proofId && allows) {
-        next = existing.includes(uri) ? existing : [...existing, uri].slice(0, HR_DISTANCE_STILL_CAP);
-      } else if (replace?.proofId === proofId && existing.length > 0) {
-        const index = Math.min(Math.max(replace.index, 0), existing.length - 1);
-        next = existing.map((item, i) => (i === index ? uri : item));
-      } else if (allows && existing.length > 0) {
-        next = existing.map((item, i) => (i === 0 ? uri : item));
-      } else {
-        next = [uri];
-      }
-      return {
-        ...current,
-        [proofId]: withSlotStills(
-          {
-            ...current[proofId],
-            mimeType,
-            fromLibrary,
-            blob: blob ?? current[proofId]?.blob ?? null,
-            healthWorkoutId: allows ? undefined : current[proofId]?.healthWorkoutId,
-          },
-          next,
-        ),
-      };
-    });
+    const existing = slotStillUris(drafts[proofId]);
+    const allows = slotAllowsMultipleStills(proof, drafts[proofId]);
+    let next: string[];
+    if (append?.proofId === proofId && allows) {
+      next = existing.includes(uri) ? existing : [...existing, uri].slice(0, HR_DISTANCE_STILL_CAP);
+    } else if (replace?.proofId === proofId && existing.length > 0) {
+      const index = Math.min(Math.max(replace.index, 0), existing.length - 1);
+      next = existing.map((item, i) => (i === index ? uri : item));
+    } else if (allows && existing.length > 0) {
+      next = existing.map((item, i) => (i === 0 ? uri : item));
+    } else {
+      next = [uri];
+    }
+    const nextDraft = withSlotStills(
+      {
+        ...drafts[proofId],
+        mimeType,
+        fromLibrary,
+        blob: blob ?? drafts[proofId]?.blob ?? null,
+        healthWorkoutId: allows ? undefined : drafts[proofId]?.healthWorkoutId,
+      },
+      next,
+    );
+    setDrafts((current) => ({
+      ...current,
+      [proofId]: nextDraft,
+    }));
     setError(null);
+    return nextDraft;
   }
 
   function onText(proofId: string, text: string) {
@@ -1052,7 +1053,7 @@ function SubmitWorkoutInner() {
     if (!proof?.id || !uri.trim()) {
       return;
     }
-    onMedia(proof.id, uri, mimeType, fromLibrary === true, blob);
+    const draft = onMedia(proof.id, uri, mimeType, fromLibrary === true, blob);
     // Replacing the attach drops the generated card for this slot instead of leaving it on screen.
     setCardPreview((current) => (current?.proofId === proof.id ? null : current));
     setCaptureId(null);
@@ -1060,6 +1061,12 @@ function SubmitWorkoutInner() {
     setPreferCamera(false);
     if (!fromLibrary) {
       void saveCapturedProofLocally({ uri, fromLibrary: false }).catch(() => undefined);
+    }
+    if (draft) {
+      void persistProof(proof, draft).catch(() => {
+        setError(null);
+        setFailKind(null);
+      });
     }
   }
 
@@ -1186,6 +1193,8 @@ function SubmitWorkoutInner() {
     if (busy) {
       return;
     }
+    setSendLock(true);
+    try {
     for (const proof of blockingProofs.filter((item) => item.method === 'location')) {
       if (partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit))) {
         continue;
@@ -1532,6 +1541,9 @@ function SubmitWorkoutInner() {
       }
       setFailKind(kind === 'permission' ? kind : null);
       setError(getCheckinSubmitMessage(caught));
+    }
+    } finally {
+      setSendLock(false);
     }
   }
 

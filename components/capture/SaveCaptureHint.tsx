@@ -3,7 +3,9 @@ import { Platform, Pressable } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
 import { copy } from '@/lib/copy';
+import { openAppSettings } from '@/lib/mediaPermissions';
 import {
+  lastSaveCapture,
   offerWebSaveCapture,
   watchSaveCapture,
   type SaveCaptureInput,
@@ -16,12 +18,13 @@ type SaveCaptureHintProps = SaveCaptureInput & {
 };
 
 export function SaveCaptureHint({ compact, ...input }: SaveCaptureHintProps) {
-  const [notice, setNotice] = useState<SaveCaptureResult | null>(null);
   const uri = input.uri?.trim() ?? '';
+  const [notice, setNotice] = useState<SaveCaptureResult | null>(() => lastSaveCapture(uri));
 
   useEffect(() => {
+    setNotice(lastSaveCapture(uri));
     return watchSaveCapture((result) => {
-      if (!uri || result.uri === uri) {
+      if (!uri || result.uri === uri || result.copiedUri === uri) {
         setNotice(result);
       }
     });
@@ -54,9 +57,20 @@ export function SaveCaptureHint({ compact, ...input }: SaveCaptureHintProps) {
 
   if (notice?.reason === 'denied' || notice?.reason === 'failed') {
     return (
-      <AppText className="text-[13px]" style={{ color: THEME.textMuted }}>
-        {Platform.OS === 'ios' ? copy('capture.saveDenied') : copy('capture.saveDeniedAndroid')}
-      </AppText>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={copy('capture.saveDenied')}
+        onPress={() => void openAppSettings()}
+        hitSlop={8}
+        style={{
+          alignSelf: compact ? 'flex-start' : 'stretch',
+          minHeight: 36,
+          justifyContent: 'center',
+        }}>
+        <AppText className="text-[13px]" style={{ color: THEME.textMuted }}>
+          {copy('capture.saveDenied')}
+        </AppText>
+      </Pressable>
     );
   }
 

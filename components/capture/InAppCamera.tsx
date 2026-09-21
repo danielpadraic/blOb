@@ -316,22 +316,30 @@ export function InAppCamera({
   }
 
   function finishCapture(media: CapturedMedia) {
+    void finalizeCapture(media);
+  }
+
+  async function finalizeCapture(media: CapturedMedia) {
     if (checkin) {
       holdCheckinBlob(media.uri, media.blob);
     }
-    try {
-      onCaptured(media);
-    } catch (error) {
-      logCameraError(error, 'onCaptured');
-    }
-    killSession();
-    void saveOwnCapture({
+    const saved = await saveOwnCapture({
       uri: media.uri,
       blob: media.blob,
       mimeType: media.mimeType,
       mediaType: media.mediaType,
       fromLibrary: false,
     });
+    const attachUri = saved.copiedUri ?? media.uri;
+    if (checkin && attachUri !== media.uri) {
+      holdCheckinBlob(attachUri, media.blob);
+    }
+    try {
+      onCaptured({ ...media, uri: attachUri });
+    } catch (error) {
+      logCameraError(error, 'onCaptured');
+    }
+    killSession();
   }
 
   function saveSealedClip(media: CapturedMedia) {

@@ -20,11 +20,13 @@ import {
   checkinSendWhyNot,
   checkinStageLabel,
   checkinUploadStayCopy,
+  CHECKIN_SAVE_PERMISSION,
   classifyCheckinError,
   didAdvanceBoard,
   incrementDaysCompleted,
   saveCapturedProofLocally,
 } from '@/lib/checkin';
+import appJson from '../../app.json';
 
 const officialTrio: ChallengeProof[] = BEFORE_AFTER_HR_PRESET.map((item, index) => ({
   id: `proof-${index + 1}`,
@@ -165,6 +167,12 @@ describe('official weekly proofs', () => {
       reason: 'empty',
     });
     expect(checkinUploadStayCopy()).toMatch(/Saved to your photos|Kept on this device/);
+    expect(CHECKIN_SAVE_PERMISSION).toBe('blOb saves videos and photos you record so you can keep them.');
+    expect(appJson.expo.ios.infoPlist.NSPhotoLibraryAddUsageDescription).toBe(CHECKIN_SAVE_PERMISSION);
+    const mediaPlugin = (appJson.expo.plugins ?? []).find(
+      (plugin) => Array.isArray(plugin) && plugin[0] === 'expo-media-library',
+    ) as [string, { savePhotosPermission?: string }] | undefined;
+    expect(mediaPlugin?.[1]?.savePhotosPermission).toBe(CHECKIN_SAVE_PERMISSION);
   });
 
   it('Note proof needs written text; a URL does not count', () => {
@@ -270,6 +278,34 @@ const savedRow = {
 };
 
 describe('check-in composer save', () => {
+  it('does not clear a required slot that still has a file', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: savedRow, error: null });
+    const upload = vi.fn().mockResolvedValue('proofs/c1/pre.jpg');
+    await saveCheckinProofWithClient(
+      {
+        auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
+        rpc,
+      },
+      {
+        challengeId: 'c1',
+        proof: { id: 'pre', name: 'Pre-workout selfie', method: 'photo' },
+        uri: 'file:///cache/blob-save-1.jpg',
+        clearProof: true,
+      },
+      upload,
+      async () => 'https://example.com/pre.jpg',
+    );
+    expect(rpc).toHaveBeenCalledWith(
+      'save_checkin_proof',
+      expect.objectContaining({
+        p_challenge_id: 'c1',
+        p_proof_id: 'pre',
+        p_clear_proof: false,
+      }),
+    );
+    expect(rpc.mock.calls[0][1].p_proof_part).not.toBeNull();
+  });
+
   it('clears a required proof without uploading', async () => {
     const rpc = vi.fn().mockResolvedValue({ data: savedRow, error: null });
     const upload = vi.fn();
