@@ -5,6 +5,8 @@ import {
   boardCompletersCount,
   boardEmptyCopy,
   boardMedalTone,
+  boardMedalWash,
+  initialExpandedBoardIds,
   boardQuantityProgress,
   boardRowTag,
   boardScoreLabel,
@@ -339,7 +341,21 @@ describe('board row chrome', () => {
     expect(boardMedalTone(2)).toBe('silver');
     expect(shortLaneMarkLabel('Rookie')).toBe('Rookie');
     expect(shortLaneMarkLabel('Veteran')).toBe('Veteran');
-    expect(shortLaneMarkLabel('Needs a side')).toBe('—');
+    expect(shortLaneMarkLabel('Needs a side')).toBe('Needs a side');
     expect(formatBoardNestedQty(3500)).toBe('3,500');
+    expect(boardMedalWash('gold')).toBe('rgba(201, 162, 39, 0.08)');
+    expect(boardMedalWash(null)).toBeUndefined();
+    expect(
+      initialExpandedBoardIds(
+        [
+          { userId: '01', rank: 1 },
+          { userId: '03', rank: 1 },
+          { userId: '06', rank: 3 },
+          { userId: '07', rank: 4 },
+        ],
+        'points',
+      ),
+    ).toEqual(['01', '03', '06']);
+    expect(initialExpandedBoardIds([{ userId: '01', rank: 1 }], 'other')).toEqual([]);
   });
 });

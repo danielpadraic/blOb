@@ -51,7 +51,7 @@ export function ScoringLaneChip({
         borderRadius: 999,
         borderWidth: 1,
         borderColor: needsSide ? THEME.border : THEME.accent,
-        backgroundColor: mark || needsSide ? THEME.surface : THEME.accentSoft,
+        backgroundColor: mark ? 'transparent' : needsSide ? THEME.surface : THEME.accentSoft,
         justifyContent: 'center',
         alignItems: 'center',
         opacity: busy ? 0.55 : 1,
@@ -59,7 +59,7 @@ export function ScoringLaneChip({
       <AppText
         className={mark ? 'text-[10px] font-bold' : 'text-[12px] font-semibold'}
         numberOfLines={1}
-        style={{ color: needsSide ? THEME.textMuted : mark ? THEME.textPrimary : THEME.accent }}>
+        style={{ color: needsSide ? THEME.textMuted : mark ? THEME.accent : THEME.accent }}>
         {label}
       </AppText>
     </View>

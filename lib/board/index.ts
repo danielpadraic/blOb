@@ -38,8 +38,10 @@ export {
   boardColumnWidth,
   boardMedalColor,
   boardMedalTone,
+  boardMedalWash,
   formatBoardNestedQty,
   formatBoardPoints,
+  initialExpandedBoardIds,
   shortBoardHeader,
   shortLaneMarkLabel,
 } from './columns';

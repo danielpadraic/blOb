@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { ChallengeLifecycleStatus } from '@/components/challenge/ChallengeLifecycleStatus';
@@ -9,6 +9,7 @@ import { ProfileLink } from '@/components/profile/ProfileLink';
 import { BoardAdjustButton, BoardBulkAdjustButton, useHostAdjustUi } from '@/components/challenge/HostAdjustHost';
 import { ScoringLaneChip } from '@/components/challenge/ScoringLaneChip';
 import { StakeAmount } from '@/components/currency/CurrencyMark';
+import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { MascotState } from '@/components/mascot/MascotState';
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
@@ -27,7 +28,9 @@ import {
   boardEmptyCopy,
   boardMedalColor,
   boardMedalTone,
+  boardMedalWash,
   boardQuantityProgress,
+  initialExpandedBoardIds,
   boardRowTag,
   boardSettledCopy,
   buildBoard,
@@ -41,7 +44,7 @@ import { usesQuantityScoring, usesPointsBoard, usesComparablePointsScoring } fro
 import {
   comparableBoardColumns,
   comparablePointsFromChallenge,
-  formatComparableBoardCell,
+  formatMoneySentenceAmount,
   participantNeedsScoringLane,
   shortComparableBoardLabel,
   type ComparableBoardColumn,
@@ -198,6 +201,18 @@ export function ChallengeBoard({
       ),
     [pointsBoard, quantityBoard, rankedPeople],
   );
+  const seededChallenge = useRef<string | null>(null);
+  useEffect(() => {
+    if (compact || seededChallenge.current === challenge.id) {
+      return;
+    }
+    if (rows.length === 0) {
+      return;
+    }
+    seededChallenge.current = challenge.id;
+    const kind = pointsBoard || comparableColumns.length > 0 ? 'points' : 'other';
+    setOpenIds(new Set(initialExpandedBoardIds(rows, kind)));
+  }, [challenge.id, compact, comparableColumns.length, pointsBoard, rows]);
   const participantById = useMemo(() => {
     const map = new Map<string, ChallengeParticipantWithProfile>();
     for (const row of roster ?? []) {
@@ -222,7 +237,7 @@ export function ChallengeBoard({
         return 'Needs a side';
       }
       if (quantityBoard) {
-        return progressByUser.get(row.userId)?.label?.trim() || '0 / 0 mi';
+        return progressByUser.get(row.userId)?.label?.trim() || '42.1 / 128 mi';
       }
       if (consistencyBoard) {
         return `${Number(row.days) || 0}/${requiredDays}`;
@@ -308,8 +323,10 @@ export function ChallengeBoard({
           : quantityBoard
             ? progress?.label?.trim() ||
               (progress && progress.target > 0
-                ? `${progress.logged} / ${progress.target} ${progress.unit}`.trim()
-                : '0')
+                ? `${formatBoardNestedQty(progress.logged)} / ${formatBoardNestedQty(progress.target)} ${progress.unit}`.trim()
+                : progress
+                  ? formatBoardNestedQty(progress.logged)
+                  : '0')
             : consistencyBoard
               ? `${Number(row.days) || 0}/${requiredDays}`
               : formatBoardPoints(row.points);
@@ -508,7 +525,7 @@ function nestedLines(input: {
     return input.comparableColumns.map((column) => ({
       label: shortComparableBoardLabel(column.label),
       value: column.money
-        ? formatComparableBoardCell(column, input.totals)
+        ? formatMoneySentenceAmount(Number(input.totals?.[column.key]) || 0)
         : formatBoardNestedQty(Number(input.totals?.[column.key]) || 0),
     }));
   }
@@ -517,8 +534,8 @@ function nestedLines(input: {
     const logged = input.progress?.logged ?? 0;
     const goal = input.progress?.target ?? 0;
     return [
-      { label: 'Logged', value: `${formatBoardNestedQty(logged)}${unit}` },
-      { label: 'Goal', value: `${formatBoardNestedQty(goal)}${unit}` },
+      { label: 'Logged', value: `${formatBoardNestedQty(logged)}${unit}`.trim() },
+      { label: 'Goal', value: `${formatBoardNestedQty(goal)}${unit}`.trim() },
     ];
   }
   if (input.consistencyBoard) {
@@ -547,17 +564,41 @@ function ShareLine({
   joined: boolean;
   pointsBoard: boolean;
 }) {
+  if (pointsBoard) {
+    return (
+      <View className="flex-row items-center" style={{ gap: 12 }}>
+        <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+          <FieldNoteLabel
+            note="prizePool"
+            textClassName="text-[13px] font-semibold leading-5 text-muted">
+            {copy('board.totalPrizePool')}
+          </FieldNoteLabel>
+          <StakeAmount
+            amount={prizePool}
+            currency={challenge.currency}
+            size={22}
+            textClassName="text-[22px] font-extrabold text-charcoal"
+            zeroAsNumber
+          />
+          <AppText className="text-[12px] leading-4" style={{ color: THEME.textMuted }}>
+            {copy('board.prizeUntilSettlement')}
+          </AppText>
+        </View>
+        <View style={{ flexShrink: 0, backgroundColor: 'transparent' }}>
+          <BlobMascot variant="wave" size={72} />
+        </View>
+      </View>
+    );
+  }
   return (
     <View className="flex-row flex-wrap items-center" style={{ gap: 6 }}>
       <FieldNoteLabel
-        note={pointsBoard ? 'prizePool' : 'share'}
+        note="share"
         textClassName="text-sm font-semibold leading-5 text-charcoal">
-        {pointsBoard
-          ? copy('board.totalPrizePool')
-          : copy(joined ? 'board.yourShareIfFinish' : 'board.shareIfFinish')}
+        {copy(joined ? 'board.yourShareIfFinish' : 'board.shareIfFinish')}
       </FieldNoteLabel>
       <StakeAmount
-        amount={pointsBoard ? prizePool : share}
+        amount={share}
         currency={challenge.currency}
         size={16}
         textClassName="text-sm font-semibold text-charcoal"
@@ -620,19 +661,19 @@ function BoardHeaderRow({
         #
       </AppText>
       <AppText className="text-[10px] font-semibold" style={{ flex: 1, ...flexChildMin(), ...labelStyle }}>
-        Player
+        PLAYER
       </AppText>
       {hasSide ? (
         <AppText
           className="text-[10px] font-semibold"
           style={{ width: BOARD_SIDE_COL, flexShrink: 0, ...labelStyle }}>
-          Side
+          SIDE
         </AppText>
       ) : null}
       <AppText
         className="text-[10px] font-semibold"
         style={{ width: scoreWidth, flexShrink: 0, textAlign: 'right', ...labelStyle }}>
-        {scoreHeader}
+        {scoreHeader.toUpperCase()}
       </AppText>
       {hasChevron ? <View style={{ width: BOARD_CHEVRON_COL, flexShrink: 0 }} /> : null}
       {showAdjust ? <View style={{ width: BOARD_ADJUST_COL, flexShrink: 0 }} /> : null}
@@ -685,19 +726,20 @@ function BoardRankRow({
   const label = boardRowPlayerName(name, username, you);
   const avatarName = label.replace(/ \(You\)$/, '');
   const rowMin = compact ? BOARD_ROW_MIN_COMPACT : BOARD_ROW_MIN;
-  const nameSize = compact ? 12 : 13;
-  const numSize = compact ? 11 : 12;
+  const nameSize = compact ? 13 : 14;
+  const numSize = compact ? 12 : 13;
   const medalFill = boardMedalColor(medal);
+  const wash = boardMedalWash(medal);
 
   return (
-    <View style={{ borderBottomWidth: 1, borderBottomColor: THEME.border }}>
+    <View style={{ borderBottomWidth: 1, borderBottomColor: THEME.border, backgroundColor: wash ?? THEME.surface }}>
       <Pressable
         accessibilityRole={canExpand ? 'button' : undefined}
         accessibilityLabel={canExpand ? `${label}. ${expanded ? 'Hide details' : 'Show details'}` : label}
         onPress={canExpand ? onToggle : undefined}
         disabled={!canExpand}
         style={{
-          minHeight: canExpand ? 44 : rowMin,
+          minHeight: rowMin,
           paddingVertical: compact ? 6 : 8,
           flexDirection: 'row',
           alignItems: 'center',
@@ -795,16 +837,31 @@ function BoardRankRow({
       </Pressable>
 
       {expanded && nested.length > 0 ? (
-        <View style={{ paddingBottom: 10, paddingLeft: BOARD_RANK_COL + 6, paddingRight: 4, gap: 4 }}>
-          {nested.map((line) => (
-            <View key={line.label} className="flex-row items-center justify-between" style={{ gap: 12 }}>
-              <AppText className="text-[11px] font-semibold" style={{ color: THEME.textMuted }}>
-                {line.label}
-              </AppText>
+        <View
+          className="flex-row"
+          style={{
+            paddingBottom: 10,
+            paddingTop: 2,
+            paddingLeft: BOARD_RANK_COL + 6,
+            paddingRight: canExpand ? BOARD_CHEVRON_COL : 4,
+          }}>
+          {nested.map((line, index) => (
+            <View
+              key={line.label}
+              style={{
+                flex: 1,
+                alignItems: 'center',
+                paddingVertical: 4,
+                borderLeftWidth: index === 0 ? 0 : 1,
+                borderLeftColor: THEME.border,
+              }}>
               <AppText
                 className="text-[12px] font-semibold"
                 style={{ color: ink, fontVariant: ['tabular-nums'] }}>
                 {line.value}
+              </AppText>
+              <AppText className="text-[11px] leading-4" style={{ color: THEME.textMuted }}>
+                {line.label}
               </AppText>
             </View>
           ))}

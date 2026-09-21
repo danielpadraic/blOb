@@ -638,7 +638,8 @@ const STRINGS = {
   'board.challengeLeader': 'Challenge Leader',
   'board.joinToRank': 'Join to rank',
   'board.noLeader': 'No score yet',
-  'board.totalPrizePool': 'Total prize pool:',
+  'board.totalPrizePool': 'Total prize pool',
+  'board.prizeUntilSettlement': 'Final amount determined at settlement.',
   'note.boardPointsTitle': 'Board',
   'note.boardPoints':
     'Contestants are everyone in the challenge. Your Rank is your place by points. Challenge Leader is first place once someone has scored.',
