@@ -22,6 +22,8 @@
 -- 5. SCRIPT C: new empty query. Paste only SCRIPT C. Run once.
 --    Done when Success. Safe to re-run; it reuses blobtest_* users.
 -- 6. SCRIPT D: new empty query. Paste only SCRIPT D. Run.
+--    If a yellow "Potential issues" card appears, click Cancel and paste this
+--    SCRIPT D again (it is read-only now). Do not click Run without RLS.
 --    Done when every fixture row has pass = true, testers = 15,
 --    rookies = 8, veterans = 7, veteran_09_dials_in_score = 0,
 --    host_on_board = false, live title still Rookies vs. Veterans.
@@ -519,35 +521,9 @@ $seed$;
 
 
 -- =============================================================================
--- SCRIPT D — audit grid
+-- SCRIPT D — audit grid (read only — no new tables)
 -- =============================================================================
-create temporary table if not exists ops_blobtest_week_totals (
-  username text primary key,
-  lane text,
-  week_dials numeric,
-  week_pres numeric,
-  week_ap numeric
-) on commit preserve rows;
-
-delete from ops_blobtest_week_totals;
-
-insert into ops_blobtest_week_totals (username, lane, week_dials, week_pres, week_ap)
-select
-  p.username,
-  coalesce(cp.scoring_lane, ''),
-  coalesce(sum((c.metric_values->>'act-dials')::numeric), 0),
-  coalesce(sum((c.metric_values->>'multiplier:presentations')::numeric), 0),
-  coalesce(sum((c.metric_values->>'act-ap')::numeric), 0)
-from public.challenge_participants cp
-join public.profiles p on p.id = cp.user_id
-join public.challenges ch on ch.id = cp.challenge_id
-left join public.challenge_checkins c
-  on c.challenge_id = cp.challenge_id
- and c.user_id = cp.user_id
-where ch.title = 'TEST — Rookies vs. Veterans'
-  and p.username like 'blobtest_%'
-group by p.username, cp.scoring_lane;
-
+-- If Supabase shows "Potential issues", click Cancel. This block only SELECTs.
 with test as (
   select
     c.id,
@@ -556,20 +532,33 @@ with test as (
   where c.title = 'TEST — Rookies vs. Veterans'
   limit 1
 ),
-live as (
-  select c.id, c.title
-  from public.challenges c
-  where c.title = 'Rookies vs. Veterans'
-    and c.starts_at = timestamptz '2026-09-21 00:00:00-05'
+week as (
+  select
+    p.username,
+    p.id as user_id,
+    coalesce(cp.scoring_lane, '') as lane,
+    coalesce(cp.points, 0) as board_points,
+    coalesce(sum((c.metric_values->>'act-dials')::numeric), 0) as week_dials,
+    coalesce(sum((c.metric_values->>'multiplier:presentations')::numeric), 0) as week_pres,
+    coalesce(sum((c.metric_values->>'act-ap')::numeric), 0) as week_ap
+  from public.challenge_participants cp
+  join public.profiles p on p.id = cp.user_id
+  join public.challenges ch on ch.id = cp.challenge_id
+  left join public.challenge_checkins c
+    on c.challenge_id = cp.challenge_id
+   and c.user_id = cp.user_id
+  where ch.title = 'TEST — Rookies vs. Veterans'
+    and p.username like 'blobtest_%'
+  group by p.username, p.id, cp.scoring_lane, cp.points
 ),
 rows as (
   select
-    p.username,
-    t.lane,
-    t.week_dials,
-    t.week_pres,
-    t.week_ap,
-    case p.username
+    w.username,
+    w.lane,
+    w.week_dials,
+    w.week_pres,
+    w.week_ap,
+    case w.username
       when 'blobtest_01' then 26000
       when 'blobtest_02' then 6500
       when 'blobtest_03' then 26000
@@ -581,29 +570,25 @@ rows as (
       else public.comparable_score_window(
         test.config,
         jsonb_build_object(
-          'act-dials', t.week_dials,
-          'act-ap', t.week_ap,
-          'multiplier:presentations', t.week_pres
+          'act-dials', w.week_dials,
+          'act-ap', w.week_ap,
+          'multiplier:presentations', w.week_pres
         ),
-        t.lane
+        w.lane
       )
     end as expected_points,
-    coalesce(cp.points, 0) as board_points,
-    public.score_comparable_participant(test.id, cp.user_id) as sql_score,
+    w.board_points,
+    public.score_comparable_participant(test.id, w.user_id) as sql_score,
     public.comparable_score_window(
       test.config,
       jsonb_build_object(
-        'act-dials', t.week_dials,
-        'multiplier:presentations', t.week_pres,
+        'act-dials', w.week_dials,
+        'multiplier:presentations', w.week_pres,
         'act-ap', 0
       ),
-      t.lane
+      w.lane
     ) as dials_only_score
-  from ops_blobtest_week_totals t
-  join public.profiles p on p.username = t.username
-  join public.challenge_participants cp
-    on cp.user_id = p.id
-   and cp.challenge_id = (select id from test)
+  from week w
   cross join test
 )
 select
@@ -620,6 +605,27 @@ select
 from rows
 order by expected_points desc, username;
 
+with test as (
+  select
+    c.id,
+    coalesce(c.scoring_config, c.comparable_points_config, '{}'::jsonb) as config
+  from public.challenges c
+  where c.title = 'TEST — Rookies vs. Veterans'
+  limit 1
+),
+week09 as (
+  select
+    coalesce(sum((c.metric_values->>'act-dials')::numeric), 0) as week_dials,
+    coalesce(sum((c.metric_values->>'multiplier:presentations')::numeric), 0) as week_pres
+  from public.challenge_participants cp
+  join public.profiles p on p.id = cp.user_id
+  join public.challenges ch on ch.id = cp.challenge_id
+  left join public.challenge_checkins c
+    on c.challenge_id = cp.challenge_id
+   and c.user_id = cp.user_id
+  where ch.title = 'TEST — Rookies vs. Veterans'
+    and p.username = 'blobtest_09'
+)
 select
   (select count(*) from public.profiles p
     join public.challenge_participants cp on cp.user_id = p.id
@@ -643,57 +649,19 @@ select
   ) as host_on_board,
   coalesce((
     select public.comparable_score_window(
-      coalesce(c.scoring_config, c.comparable_points_config, '{}'::jsonb),
+      test.config,
       jsonb_build_object(
-        'act-dials', t.week_dials,
-        'multiplier:presentations', t.week_pres,
+        'act-dials', week09.week_dials,
+        'multiplier:presentations', week09.week_pres,
         'act-ap', 0
       ),
       'veteran'
     )
-    from ops_blobtest_week_totals t
-    cross join public.challenges c
-    where t.username = 'blobtest_09'
-      and c.title = 'TEST — Rookies vs. Veterans'
+    from test, week09
   ), -1) as veteran_09_dials_in_score,
-  'https://blob.mobi/challenges/' || (select id::text from public.challenges where title = 'TEST — Rookies vs. Veterans') as challenge_url,
+  'https://blob.mobi/challenges/' || (select id::text from test) as challenge_url,
   '3500 Dials with 10 Presentations equals 13,000 points, and $13,000 of AP equals 13,000 points.' as mechanics_sentence,
   'Rookies score Dials (with Presentations) and AP. Veterans score AP only.' as lane_subline;
-
-do $audit$
-declare
-  v_bad int := 0;
-  v_dials numeric;
-begin
-  select count(*) into v_bad
-  from ops_blobtest_week_totals t
-  join public.profiles p on p.username = t.username
-  join public.challenge_participants cp on cp.user_id = p.id
-  join public.challenges c on c.id = cp.challenge_id
-  where c.title = 'TEST — Rookies vs. Veterans'
-    and coalesce(cp.points, 0) is distinct from public.score_comparable_participant(c.id, cp.user_id);
-
-  select public.comparable_score_window(
-    coalesce(c.scoring_config, c.comparable_points_config, '{}'::jsonb),
-    jsonb_build_object(
-      'act-dials', t.week_dials,
-      'multiplier:presentations', t.week_pres,
-      'act-ap', 0
-    ),
-    'veteran'
-  ) into v_dials
-  from ops_blobtest_week_totals t
-  cross join public.challenges c
-  where t.username = 'blobtest_09'
-    and c.title = 'TEST — Rookies vs. Veterans';
-
-  if v_bad > 0 or coalesce(v_dials, -1) <> 0 then
-    raise notice 'AUDIT_FAIL pass=false bad_rows=% veteran_09_dials_in_score=%', v_bad, v_dials;
-  else
-    raise notice 'AUDIT_OK every fixture expected_points = board_points. veteran_09_dials_in_score=0';
-  end if;
-end;
-$audit$;
 
 
 -- =============================================================================
