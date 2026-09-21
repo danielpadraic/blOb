@@ -76,7 +76,8 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
   const form = useKeyboardForm();
   const fieldLift = useKeyboardFieldLift();
   const sentence = Boolean(grow || (multiline && numberOfLines !== 1));
-  const webAuthInput = Platform.OS === 'web' && Boolean(inverted) && !sentence;
+  /** Safari: stay a real <input> from first paint. RN-web TextInput remounts on focus and wipes. */
+  const webHtmlInput = Platform.OS === 'web' && !sentence;
   const boxStyle = [
     {
       minHeight: FORM_MIN_HEIGHT,
@@ -96,12 +97,23 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
     setFocused(true);
     form?.setFieldFocused?.(true);
     onFocus?.(event);
-    if (webAuthInput) {
-      const target = (event as unknown as { target?: HTMLElement }).target;
+    if (Platform.OS === 'web') {
+      const target = (event as unknown as { target?: HTMLInputElement | HTMLTextAreaElement }).target;
+      if (target && typeof target.setSelectionRange === 'function') {
+        const len = String(target.value ?? '').length;
+        requestAnimationFrame(() => {
+          try {
+            if (typeof document !== 'undefined' && document.activeElement === target) {
+              target.setSelectionRange(len, len);
+            }
+          } catch {
+            // Some input types reject a selection range.
+          }
+        });
+      }
       if (target?.scrollIntoView) {
         requestAnimationFrame(() => target.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
       }
-      return;
     }
     if (fieldLift) {
       fieldLift();
@@ -158,12 +170,13 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
         <GrowingText
           ref={ref}
           {...shared}
+          name={name}
           minHeight={FORM_MIN_HEIGHT}
           lineHeight={FORM_LINE_HEIGHT}
           maxLines={growMaxLines}
           style={boxStyle}
         />
-      ) : webAuthInput ? (
+      ) : webHtmlInput ? (
         createElement('input', {
           ref: assignRef,
           type: props.secureTextEntry ? 'password' : props.keyboardType === 'email-address' ? 'email' : 'text',

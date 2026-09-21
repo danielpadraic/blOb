@@ -1,12 +1,14 @@
-import { useRef, useState } from 'react';
-import { Alert, Platform, Pressable, View } from 'react-native';
+import { createElement, useRef, useState } from 'react';
+import { Alert, Platform, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 
 import { ChallengeCoverCrop } from '@/components/challenge/create/ChallengeCoverCrop';
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
+import { WebTapButton } from '@/components/ui/WebTapButton';
 import { useAuth } from '@/hooks/useAuth';
+import { COVER_STICK_FAIL, webCoverFile } from '@/lib/challengeCoverPick';
 import { cropLobbyCover } from '@/lib/cropLobbyCover';
 import { LOBBY_COVER_ASPECT } from '@/lib/lobbyCover';
 import {
@@ -57,8 +59,12 @@ export function ChallengePhotoField({ uri, error, onChange, onClear }: Challenge
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingCover | null>(null);
+  const [previewUri, setPreviewUri] = useState<string | null>(null);
   const heldUrlRef = useRef<string | null>(null);
+  const galleryInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const message = error || localError;
+  const displayUri = previewUri || uri;
 
   function releaseHeldUrl() {
     const held = heldUrlRef.current;
@@ -76,6 +82,7 @@ export function ChallengePhotoField({ uri, error, onChange, onClear }: Challenge
     setPending(null);
     setLocalError(null);
     setBusy(false);
+    setPreviewUri(null);
     releaseHeldUrl();
   }
 
@@ -93,7 +100,7 @@ export function ChallengePhotoField({ uri, error, onChange, onClear }: Challenge
       }
     }
     if (!nextUri && !file) {
-      setLocalError('That photo didn’t stick. Pick it again.');
+      setLocalError(COVER_STICK_FAIL);
       return;
     }
     if (!isAllowedImage(asset.mimeType ?? file?.type, nextUri || file?.type)) {
@@ -102,12 +109,42 @@ export function ChallengePhotoField({ uri, error, onChange, onClear }: Challenge
       return;
     }
     setLocalError(null);
+    setPreviewUri(nextUri);
     setPending({
       uri: nextUri,
       width: asset.width,
       height: asset.height,
       mimeType: asset.mimeType ?? file?.type ?? null,
       file,
+    });
+  }
+
+  function takeWebFile(file: File | undefined) {
+    const checked = webCoverFile(file);
+    if (!checked.ok) {
+      setLocalError(checked.message);
+      return;
+    }
+    releaseHeldUrl();
+    let nextUri = '';
+    try {
+      nextUri = URL.createObjectURL(checked.file);
+      heldUrlRef.current = nextUri;
+    } catch {
+      setLocalError(COVER_STICK_FAIL);
+      return;
+    }
+    if (!isAllowedImage(checked.file.type, nextUri)) {
+      setLocalError('Use a JPEG, PNG, WebP, or HEIC photo.');
+      releaseHeldUrl();
+      return;
+    }
+    setLocalError(null);
+    setPreviewUri(nextUri);
+    setPending({
+      uri: nextUri,
+      mimeType: checked.file.type || null,
+      file: checked.file,
     });
   }
 
@@ -135,6 +172,7 @@ export function ChallengePhotoField({ uri, error, onChange, onClear }: Challenge
         blob: cropped.blob,
       });
       onChange(url);
+      setPreviewUri(null);
       closeSheet();
     } catch (err) {
       setLocalError(getCoverPhotoMessage(err));
@@ -143,6 +181,10 @@ export function ChallengePhotoField({ uri, error, onChange, onClear }: Challenge
   }
 
   async function pickGallery() {
+    if (Platform.OS === 'web') {
+      galleryInputRef.current?.click();
+      return;
+    }
     const permission = await ensureLibraryPermission();
     if (!permission.ok) {
       const block = permissionCopy('library');
@@ -158,13 +200,21 @@ export function ChallengePhotoField({ uri, error, onChange, onClear }: Challenge
       quality: 0.92,
       preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
     });
-    if (result.canceled || (!result.assets[0]?.uri && !result.assets[0]?.file)) {
+    if (result.canceled) {
+      return;
+    }
+    if (!result.assets[0]?.uri && !result.assets[0]?.file) {
+      setLocalError(COVER_STICK_FAIL);
       return;
     }
     takeAsset(result.assets[0]);
   }
 
   async function pickCamera() {
+    if (Platform.OS === 'web') {
+      cameraInputRef.current?.click();
+      return;
+    }
     const permission = await ensureCameraPermission();
     if (!permission.ok) {
       const block = permissionCopy('camera');
@@ -181,20 +231,24 @@ export function ChallengePhotoField({ uri, error, onChange, onClear }: Challenge
         allowsEditing: false,
         quality: 0.92,
       });
-      if (result.canceled || (!result.assets[0]?.uri && !result.assets[0]?.file)) {
+      if (result.canceled) {
+        return;
+      }
+      if (!result.assets[0]?.uri && !result.assets[0]?.file) {
+        setLocalError(COVER_STICK_FAIL);
         return;
       }
       takeAsset(result.assets[0]);
     } catch {
-      if (Platform.OS === 'web') {
-        await pickGallery();
-        return;
-      }
       setLocalError('Couldn’t open the camera. Try the gallery.');
     }
   }
 
   function onAdd() {
+    if (Platform.OS === 'web') {
+      galleryInputRef.current?.click();
+      return;
+    }
     Alert.alert(copy('create.photoLabel'), copy('create.photoHelper'), [
       { text: copy('create.photoCamera'), onPress: () => void pickCamera() },
       { text: copy('create.photoGallery'), onPress: () => void pickGallery() },
@@ -205,9 +259,8 @@ export function ChallengePhotoField({ uri, error, onChange, onClear }: Challenge
   return (
     <View className="gap-2">
       <AppText className="text-[13px] font-semibold text-charcoal">{copy('create.photoLabel')}</AppText>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={uri ? copy('create.photoReplace') : copy('create.photoAdd')}
+      <WebTapButton
+        accessibilityLabel={displayUri ? copy('create.photoReplace') : copy('create.photoAdd')}
         disabled={busy}
         onPress={() => void onAdd()}
         style={{
@@ -221,9 +274,9 @@ export function ChallengePhotoField({ uri, error, onChange, onClear }: Challenge
           alignItems: 'center',
           justifyContent: 'center',
         }}>
-        {uri ? (
+        {displayUri ? (
           <Image
-            source={{ uri }}
+            source={{ uri: displayUri }}
             style={{ width: '100%', height: '100%' }}
             contentFit="cover"
             accessibilityLabel={copy('create.photoLabel')}
@@ -236,10 +289,9 @@ export function ChallengePhotoField({ uri, error, onChange, onClear }: Challenge
             </AppText>
           </View>
         )}
-      </Pressable>
+      </WebTapButton>
       <View className="flex-row flex-wrap" style={{ gap: 8 }}>
-        <Pressable
-          accessibilityRole="button"
+        <WebTapButton
           accessibilityLabel={copy('create.photoCamera')}
           disabled={busy}
           onPress={() => void pickCamera()}
@@ -247,9 +299,8 @@ export function ChallengePhotoField({ uri, error, onChange, onClear }: Challenge
           <AppText className="text-[14px] font-semibold" style={{ color: THEME.accent }}>
             {copy('create.photoCamera')}
           </AppText>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
+        </WebTapButton>
+        <WebTapButton
           accessibilityLabel={copy('create.photoGallery')}
           disabled={busy}
           onPress={() => void pickGallery()}
@@ -257,20 +308,65 @@ export function ChallengePhotoField({ uri, error, onChange, onClear }: Challenge
           <AppText className="text-[14px] font-semibold" style={{ color: THEME.accent }}>
             {copy('create.photoGallery')}
           </AppText>
-        </Pressable>
-        {uri ? (
-          <Pressable
-            accessibilityRole="button"
+        </WebTapButton>
+        {displayUri ? (
+          <WebTapButton
             accessibilityLabel={copy('create.photoRemove')}
             disabled={busy}
-            onPress={onClear}
+            onPress={() => {
+              setPreviewUri(null);
+              onClear();
+            }}
             style={{ minHeight: 44, minWidth: 72, justifyContent: 'center' }}>
             <AppText className="text-[14px] font-semibold" style={{ color: THEME.textMuted }}>
               {copy('create.photoRemove')}
             </AppText>
-          </Pressable>
+          </WebTapButton>
         ) : null}
       </View>
+      {Platform.OS === 'web'
+        ? createElement('input', {
+            ref: galleryInputRef,
+            type: 'file',
+            accept: 'image/*',
+            tabIndex: -1,
+            'aria-hidden': true,
+            style: {
+              position: 'absolute',
+              width: 1,
+              height: 1,
+              opacity: 0,
+              overflow: 'hidden',
+              pointerEvents: 'none',
+            },
+            onChange: (event: { currentTarget: HTMLInputElement }) => {
+              takeWebFile(event.currentTarget.files?.[0]);
+              event.currentTarget.value = '';
+            },
+          })
+        : null}
+      {Platform.OS === 'web'
+        ? createElement('input', {
+            ref: cameraInputRef,
+            type: 'file',
+            accept: 'image/*',
+            capture: 'environment',
+            tabIndex: -1,
+            'aria-hidden': true,
+            style: {
+              position: 'absolute',
+              width: 1,
+              height: 1,
+              opacity: 0,
+              overflow: 'hidden',
+              pointerEvents: 'none',
+            },
+            onChange: (event: { currentTarget: HTMLInputElement }) => {
+              takeWebFile(event.currentTarget.files?.[0]);
+              event.currentTarget.value = '';
+            },
+          })
+        : null}
       <AppText className="text-[12px] leading-5 text-muted">{copy('create.photoHelper')}</AppText>
       {!pending && message ? <AppText className="text-sm text-coral-dark">{message}</AppText> : null}
       <ChallengeCoverCrop

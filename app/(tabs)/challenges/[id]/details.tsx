@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Dimensions, Pressable, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChallengePhotoField } from '@/components/challenge/create/ChallengePhotoField';
 import { HeartRateMinutesRow } from '@/components/challenge/create/ExtraTasksEditor';
@@ -10,7 +11,7 @@ import { MascotState } from '@/components/mascot/MascotState';
 import { Button } from '@/components/ui/Button';
 import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
-import { KeyboardFormShell } from '@/components/ui/KeyboardFormShell';
+import { KeyboardField, KeyboardFormShell } from '@/components/ui/KeyboardFormShell';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { useStalled } from '@/hooks/useStalled';
@@ -28,61 +29,20 @@ import {
   proofNameForMethodChange,
   proofRequirementsFrom,
   proofTypeFromMethod,
-  resolveChallengeProofs,
   type ChallengeProof,
   type ChallengeProofMethod,
 } from '@/lib/challengeProofs';
+import { keepDetailsDraft, type DetailsDraft } from '@/lib/detailsDraft';
 import { persistChallengePlaces } from '@/lib/locationPlaces';
 import { descriptionGrowMaxLines } from '@/lib/composerField';
 import { copy } from '@/lib/copy';
 import { canEditOfficialDetails } from '@/lib/officialScoring';
 import { supabase } from '@/lib/supabase';
-import { THEME } from '@/lib/theme';
+import { tabBarLift, THEME } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
 
 const DETAILS_SOURCE_SELECT =
   'title, description, cover_image_url, rules, proofs, proof_type, proof_requirements, sponsor_name, privacy_mode, is_official, created_by, status, min_minutes';
-
-type DetailsDraft = {
-  title: string;
-  description: string;
-  cover_image_url: string;
-  rules: string;
-  sponsor_name: string;
-  proofs: ChallengeProof[];
-};
-
-function cloneProofs(proofs: ChallengeProof[]): ChallengeProof[] {
-  return proofs.map((proof) => ({ ...proof }));
-}
-
-function draftFromSource(source: {
-  title?: string | null;
-  description?: string | null;
-  cover_image_url?: string | null;
-  rules?: string | null;
-  sponsor_name?: string | null;
-  proofs?: unknown;
-  proof_type?: unknown;
-  proof_requirements?: Array<{ type?: string; required?: boolean }> | null;
-  min_minutes?: number | string | null;
-} | null | undefined): DetailsDraft {
-  return {
-    title: source?.title?.trim() ?? '',
-    description: source?.description?.trim() ?? '',
-    cover_image_url: source?.cover_image_url?.trim() ?? '',
-    rules: source?.rules?.trim() ?? '',
-    sponsor_name: source?.sponsor_name?.trim() ?? '',
-    proofs: cloneProofs(
-      resolveChallengeProofs({
-        proofs: source?.proofs,
-        proof_type: source?.proof_type,
-        proof_requirements: source?.proof_requirements,
-        min_minutes: source?.min_minutes,
-      }),
-    ),
-  };
-}
 
 function detailsSaveMessage(error: unknown): string {
   const raw = getErrorMessage(error).toLowerCase();
@@ -103,12 +63,15 @@ export default function OfficialDetailsScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { profile } = useMyProfile();
   const challengeQuery = useChallenge(id);
   const save = useUpdateOfficialChallengeDetails(id);
   const [draft, setDraft] = useState<DetailsDraft | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const userTouchedRef = useRef(false);
+  const seededKeyRef = useRef<string | null>(null);
 
   const detailsSource = useQuery({
     queryKey: ['official-details-source', id],
@@ -141,13 +104,29 @@ export default function OfficialDetailsScreen() {
   const unreadable = queryReady && !merged;
 
   useEffect(() => {
-    if (!queryReady || !merged) {
+    if (seededKeyRef.current && seededKeyRef.current !== id) {
+      userTouchedRef.current = false;
+      seededKeyRef.current = null;
+      setDraft(null);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    if (!queryReady || !merged || !id) {
       return;
     }
-    setDraft((current) => current ?? draftFromSource(merged));
-  }, [merged, queryReady]);
+    if (userTouchedRef.current) {
+      return;
+    }
+    if (seededKeyRef.current === id) {
+      return;
+    }
+    seededKeyRef.current = id;
+    setDraft((current) => keepDetailsDraft(current, merged, userTouchedRef.current));
+  }, [id, merged, queryReady]);
 
   function patch(next: Partial<DetailsDraft>) {
+    userTouchedRef.current = true;
     setDraft((current) => (current ? { ...current, ...next } : current));
     setFormError(null);
   }
@@ -240,6 +219,8 @@ export default function OfficialDetailsScreen() {
   return (
     <KeyboardFormShell
       padded
+      protectFieldFocus
+      closedFooterPad={tabBarLift(insets.bottom, 'sticky')}
       footer={
         <View className="gap-2">
           {formError ? (
@@ -253,43 +234,61 @@ export default function OfficialDetailsScreen() {
           Title, photo, rules, and proofs. Scoring and privacy stay as they are.
         </AppText>
 
-        <Input
-          label={copy('create.titleLabel')}
-          placeholder={copy('create.titlePlaceholder')}
-          value={draft.title}
-          onChangeText={(title) => patch({ title })}
-          maxLength={80}
-        />
-        <Input
-          label={copy('create.descriptionLabel')}
-          placeholder={copy('create.descriptionPlaceholder')}
-          value={draft.description}
-          onChangeText={(description) => patch({ description })}
-          grow
-          growMaxLines={descriptionLines}
-          maxLength={2000}
-        />
+        <KeyboardField>
+          <Input
+            name="challenge-title"
+            label={copy('create.titleLabel')}
+            placeholder={copy('create.titlePlaceholder')}
+            value={draft.title}
+            onChangeText={(title) => patch({ title })}
+            onFocus={() => {
+              userTouchedRef.current = true;
+            }}
+            maxLength={80}
+          />
+        </KeyboardField>
+        <KeyboardField>
+          <Input
+            name="challenge-description"
+            label={copy('create.descriptionLabel')}
+            placeholder={copy('create.descriptionPlaceholder')}
+            value={draft.description}
+            onChangeText={(description) => patch({ description })}
+            onFocus={() => {
+              userTouchedRef.current = true;
+            }}
+            grow
+            growMaxLines={descriptionLines}
+            maxLength={2000}
+          />
+        </KeyboardField>
         <ChallengePhotoField
           uri={draft.cover_image_url}
           onChange={(cover_image_url) => patch({ cover_image_url })}
           onClear={() => patch({ cover_image_url: '' })}
         />
-        <Input
-          label={copy('create.sponsorLabel')}
-          placeholder={copy('create.sponsorPlaceholder')}
-          value={draft.sponsor_name}
-          onChangeText={(sponsor_name) => patch({ sponsor_name })}
-          maxLength={80}
-        />
-        <Input
-          label={copy('create.rulesLabel')}
-          placeholder={copy('create.rulesPlaceholder')}
-          value={draft.rules}
-          onChangeText={(rules) => patch({ rules })}
-          grow
-          growMaxLines={descriptionGrowMaxLines(Dimensions.get('window').height)}
-          maxLength={8000}
-        />
+        <KeyboardField>
+          <Input
+            name="challenge-sponsor"
+            label={copy('create.sponsorLabel')}
+            placeholder={copy('create.sponsorPlaceholder')}
+            value={draft.sponsor_name}
+            onChangeText={(sponsor_name) => patch({ sponsor_name })}
+            maxLength={80}
+          />
+        </KeyboardField>
+        <KeyboardField>
+          <Input
+            name="challenge-rules"
+            label={copy('create.rulesLabel')}
+            placeholder={copy('create.rulesPlaceholder')}
+            value={draft.rules}
+            onChangeText={(rules) => patch({ rules })}
+            grow
+            growMaxLines={descriptionGrowMaxLines(Dimensions.get('window').height)}
+            maxLength={8000}
+          />
+        </KeyboardField>
 
         <View className="gap-2">
           <AppText className="text-[13px] font-semibold text-charcoal">{copy('create.proofs')}</AppText>
@@ -298,19 +297,22 @@ export default function OfficialDetailsScreen() {
               <View key={proof.id} className="gap-2">
                 <View className="flex-row items-center gap-2">
                   <View className="flex-1">
-                    <Input
-                      placeholder={copy('create.proofFallback')}
-                      value={proof.name}
-                      onChangeText={(name) =>
-                        patch({
-                          proofs: draft.proofs.map((item) =>
-                            item.id === proof.id ? { ...item, name } : item,
-                          ),
-                        })
-                      }
-                      grow
-                      maxLength={120}
-                    />
+                    <KeyboardField>
+                      <Input
+                        name={`challenge-proof-${proof.id}`}
+                        placeholder={copy('create.proofFallback')}
+                        value={proof.name}
+                        onChangeText={(name) =>
+                          patch({
+                            proofs: draft.proofs.map((item) =>
+                              item.id === proof.id ? { ...item, name } : item,
+                            ),
+                          })
+                        }
+                        grow
+                        maxLength={120}
+                      />
+                    </KeyboardField>
                   </View>
                   {draft.proofs.length > 1 ? (
                     <Pressable
