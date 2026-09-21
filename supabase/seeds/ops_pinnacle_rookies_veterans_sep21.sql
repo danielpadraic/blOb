@@ -26,7 +26,9 @@
 --    Done when it says Success. If it says ALREADY_EXISTS, leave it — do not run B again
 --    to "fix" anything.
 --    If you see HOST_MISSING, stop.
---    If you see Permission denied, the URL must include tguzdtwsajnnczdxjqyq.
+--    If you see permission denied for session_replication_role, you have an old SCRIPT B.
+--    Copy SCRIPT B from this file again (it no longer sets that).
+--    If you see Permission denied on the table, the URL must include tguzdtwsajnnczdxjqyq.
 -- 6. SCRIPT C last: clear the box. Paste only the block under "SCRIPT C". Click Run.
 --    Done when the grid shows a NEW uuid, title Rookies vs. Veterans, host_username
 --    = danielharder, scoring_method comparable_points, and host_on_board = false.
@@ -184,8 +186,10 @@ begin
     return;
   end if;
 
-  -- Skip friend-notify (no Home leak) and the duration rewrite so ends_at stays Friday 11:59 PM Chicago.
-  perform set_config('session_replication_role', 'replica', true);
+  -- created_by starts null so the friend-notify trigger does not post to Home.
+  -- A follow-up UPDATE sets created_by to @danielharder. Host is not a contestant.
+  -- The duration trigger rewrites ends_at to starts_at + 5 days (Sat 12:00 AM Chicago),
+  -- which is the close of Friday 11:59 PM. SQL Editor cannot set session_replication_role.
 
   insert into public.challenges (
     title,
@@ -245,7 +249,7 @@ begin
     v_rules,
     v_rules,
     'Pinnacle Life Group',
-    v_host,
+    null,
     false,
     false,
     'private_corporate',
@@ -298,13 +302,20 @@ begin
 
   -- Same post-insert pattern as lib/challenges.ts when publish cannot persist scoring_config.
   update public.challenges
-    set scoring_method = 'comparable_points',
+    set created_by = v_host,
+        scoring_method = 'comparable_points',
         scoring_config = v_config,
         comparable_points_config = v_config,
         scoring_version = 1,
         creator_participating = false
     where id = v_id
-      and created_by = v_host;
+      and created_by is null;
+
+  if not exists (
+    select 1 from public.challenges where id = v_id and created_by = v_host
+  ) then
+    raise exception 'HOST_STAMP_FAILED: created_by was not set to danielharder. Stop.';
+  end if;
 
   raise notice 'INSERTED %', v_id;
 end;
