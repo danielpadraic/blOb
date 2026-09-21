@@ -50,6 +50,17 @@ export function officialSponsorName(challenge: {
   return 'blOb';
 }
 
+/** Host-typed sponsor_name on any challenge, else the Official @blob line. */
+export function visibleSponsorName(challenge: {
+  sponsor_name?: string | null;
+  organization_name?: string | null;
+  organization?: string | null;
+  is_official?: boolean | null;
+  created_by?: string | null;
+} | null | undefined): string {
+  return namedOfficialSponsor(challenge) || officialSponsorName(challenge);
+}
+
 export function isDefaultOfficialSponsor(name: string): boolean {
   return UNNAMED_SPONSORS.has(name.trim().toLowerCase());
 }

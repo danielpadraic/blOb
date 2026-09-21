@@ -42,7 +42,7 @@ import { prefetchChallengeDetail, seedChallengeDetailQuery } from '@/lib/challen
 import { pushChallengeHref, pushCheckinSubmit } from '@/lib/challengeNav';
 import { BODY_METRICS_HREF, challengeHref } from '@/lib/routes';
 import { OfficialSponsorLine } from '@/components/challenge/OfficialSponsorLine';
-import { isBlobCreatedOfficial, officialSponsorName } from '@/lib/challengeSponsor';
+import { isBlobCreatedOfficial, visibleSponsorName } from '@/lib/challengeSponsor';
 import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
 import { challengeScheduleState, isLobbyEndedChallenge, scheduleNeedsTick } from '@/lib/lobbyChallenge';
 import { copy } from '@/lib/copy';
@@ -532,7 +532,7 @@ export function ChallengeInviteCard({
               {resultLine}
             </AppText>
           ) : null}
-          {officialSponsorName(challenge) ? (
+          {visibleSponsorName(challenge) ? (
             <OfficialSponsorLine
               challenge={challenge}
               muted={THEME.textMuted}

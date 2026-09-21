@@ -3,7 +3,7 @@ import { Pressable, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { OfficialSponsorLine } from '@/components/challenge/OfficialSponsorLine';
-import { isBlobCreatedOfficial, officialSponsorName } from '@/lib/challengeSponsor';
+import { isBlobCreatedOfficial, visibleSponsorName } from '@/lib/challengeSponsor';
 import { OfficialDayClock } from '@/components/challenge/OfficialDayClock';
 import { OfficialInviteButton } from '@/components/challenge/OfficialInviteButton';
 import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
@@ -175,7 +175,7 @@ export function ChallengeCardVisual({
           numberOfLines={2}>
           {challengeDisplayTitle(challenge)}
         </AppText>
-        {officialSponsorName(challenge) ? (
+        {visibleSponsorName(challenge) ? (
           <View className="mt-1.5">
             <OfficialSponsorLine
               challenge={challenge}

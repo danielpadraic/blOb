@@ -2,7 +2,7 @@ import { View } from 'react-native';
 
 import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { AppText } from '@/components/ui/AppText';
-import { namedOfficialSponsor, officialSponsorName } from '@/lib/challengeSponsor';
+import { namedOfficialSponsor, visibleSponsorName } from '@/lib/challengeSponsor';
 
 export function OfficialSponsorLine({
   challenge,
@@ -22,7 +22,7 @@ export function OfficialSponsorLine({
   compact?: boolean;
 }) {
   const named = namedOfficialSponsor(challenge);
-  const name = officialSponsorName(challenge);
+  const name = visibleSponsorName(challenge);
   if (!name) {
     return null;
   }

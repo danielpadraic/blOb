@@ -14,7 +14,7 @@ import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
-import { isBlobCreatedOfficial, namedOfficialSponsor, officialSponsorName } from '@/lib/challengeSponsor';
+import { isBlobCreatedOfficial, namedOfficialSponsor, visibleSponsorName } from '@/lib/challengeSponsor';
 import { displayChallengePot } from '@/lib/challengePot';
 import {
   challengeTypeIconKey,
@@ -563,7 +563,7 @@ function OfficialHostBlock({
   host?: LobbyListCardHost | null;
 }) {
   const named = namedOfficialSponsor(challenge);
-  const sponsor = officialSponsorName(challenge);
+  const sponsor = visibleSponsorName(challenge);
   return (
     <View className="flex-row items-center" style={{ gap: 6, flexShrink: 1, minWidth: 0 }}>
       {sponsor ? (

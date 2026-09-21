@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { isBlobCreatedOfficial, namedOfficialSponsor, officialSponsorName } from '@/lib/challengeSponsor';
+import {
+  isBlobCreatedOfficial,
+  namedOfficialSponsor,
+  officialSponsorName,
+  visibleSponsorName,
+} from '@/lib/challengeSponsor';
 
 describe('official sponsor', () => {
   it('uses sponsor or organization name and never treats blOb as a named sponsor', () => {
@@ -33,5 +38,7 @@ describe('official sponsor', () => {
       }),
     ).toBe(true);
     expect(isBlobCreatedOfficial({ is_official: true, created_by: 'friend-host' })).toBe(false);
+    expect(visibleSponsorName({ sponsor_name: 'North Gym' })).toBe('North Gym');
+    expect(visibleSponsorName({ is_official: false, sponsor_name: 'North Gym' })).toBe('North Gym');
   });
 });

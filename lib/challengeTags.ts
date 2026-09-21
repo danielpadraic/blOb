@@ -1,5 +1,6 @@
 import { usesComparablePointsScoring, usesConsistencyExperience } from '@/lib/challengeExperience';
 import { isPointsChallenge } from '@/lib/challenges';
+import { isPrivateCorporate, PRIVATE_CORPORATE_LABEL } from '@/lib/privacyMode';
 
 export type ChallengeTagKind =
   | 'official'
@@ -89,10 +90,14 @@ export function challengeCardTags(input: {
   }
 
   const visibility = String(challenge.visibility ?? 'public').toLowerCase();
-  if (visibility === 'private' || visibility === 'invite') {
+  if (isPrivateCorporate(challenge) || visibility === 'private' || visibility === 'invite') {
     tags.push({
       kind: 'private',
-      label: visibility === 'invite' ? 'Invite only' : 'Private',
+      label: isPrivateCorporate(challenge)
+        ? PRIVATE_CORPORATE_LABEL
+        : visibility === 'invite'
+          ? 'Invite only'
+          : 'Private',
     });
   } else {
     tags.push({ kind: 'public', label: 'Public' });

@@ -11,7 +11,7 @@ import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
 import { OfficialFillingStats } from '@/components/challenge/ChallengePosterCard';
 import { OfficialSponsorLine } from '@/components/challenge/OfficialSponsorLine';
-import { isBlobCreatedOfficial, officialSponsorName } from '@/lib/challengeSponsor';
+import { isBlobCreatedOfficial, visibleSponsorName } from '@/lib/challengeSponsor';
 import { ChallengeHeroOverflowButton } from '@/components/challenge/ChallengeDetailOverflow';
 import { OfficialInviteButton } from '@/components/challenge/OfficialInviteButton';
 import { ProofRequirementIcons } from '@/components/challenge/ProofRequirementIcons';
@@ -85,7 +85,7 @@ export function ChallengeHeroCard({
 }: ChallengeHeroCardProps) {
   const official = Boolean(challenge.is_official);
   const blobOfficial = isBlobCreatedOfficial(challenge);
-  const sponsorName = officialSponsorName(challenge);
+  const sponsorName = visibleSponsorName(challenge);
   const callout = Boolean(challenge.is_callout) && !official;
   const chrome = calloutCardChrome(callout);
   const vsLine = calloutPartySubtitle(calloutParty, viewerId);
