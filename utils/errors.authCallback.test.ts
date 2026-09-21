@@ -4,6 +4,7 @@ import { copy } from '@/lib/copy';
 import {
   getAuthCallbackMessage,
   getAuthFormMessage,
+  getCoverPhotoMessage,
   getErrorMessage,
   getProfileSetupSaveMessage,
   logDev,
@@ -49,6 +50,32 @@ describe('getAuthCallbackMessage', () => {
     ]) {
       expect(getAuthCallbackMessage(error).toLowerCase()).not.toContain('photo');
     }
+  });
+});
+
+describe('cover photo errors are never an outage', () => {
+  it('maps a revoked blob fetch to pick-again, not reach-blOb', () => {
+    expect(getCoverPhotoMessage(new TypeError('Failed to fetch'))).toBe(
+      'That photo didn’t stick. Pick it again.',
+    );
+    expect(getCoverPhotoMessage(new Error('Load failed'))).toBe(
+      'That photo didn’t stick. Pick it again.',
+    );
+    expect(getCoverPhotoMessage(new TypeError('Failed to fetch'))).not.toContain('reach blOb');
+    expect(getErrorMessage(new TypeError('Failed to fetch'))).toBe(
+      'We couldn’t reach blOb just now. Try again.',
+    );
+  });
+
+  it('maps crop and storage failures to cover copy', () => {
+    expect(getCoverPhotoMessage(new Error('Couldn’t crop that photo.'))).toBe(
+      'We couldn’t crop that photo. Try a JPEG or PNG.',
+    );
+    expect(getCoverPhotoMessage(new Error('status code 400'))).toBe('We couldn’t save that cover.');
+    expect(getCoverPhotoMessage(new Error('403 forbidden storage'))).toBe('We couldn’t save that cover.');
+    expect(getCoverPhotoMessage(new Error('Supabase storage could not upload image jpeg'))).toBe(
+      'We couldn’t upload that photo. Try again.',
+    );
   });
 });
 

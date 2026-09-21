@@ -12,7 +12,7 @@ import {
   compressImageForUpload,
   type CompressKind,
 } from '@/utils/compressImage';
-import { getErrorMessage, logDev } from '@/utils/errors';
+import { getCoverPhotoMessage, getErrorMessage, logDev } from '@/utils/errors';
 import type { UploadProgressHandler } from '@/lib/uploadProgress';
 
 export type { UploadProgressEvent, UploadProgressHandler } from '@/lib/uploadProgress';
@@ -469,13 +469,17 @@ export async function uploadChallengeCover(input: {
   if (contentType === 'application/pdf' || contentType.includes('pdf') || !allowed.has(contentType)) {
     throw new Error('Use a JPEG, PNG, WebP, or HEIC photo.');
   }
-  return uploadPostMedia({
-    uri: input.uri,
-    userId: input.userId,
-    fileStem: `covers/${Date.now()}`,
-    mimeType: contentType,
-    blob: input.blob,
-  });
+  try {
+    return await uploadPostMedia({
+      uri: input.uri,
+      userId: input.userId,
+      fileStem: `covers/${Date.now()}`,
+      mimeType: contentType,
+      blob: input.blob,
+    });
+  } catch (error) {
+    throw new Error(getCoverPhotoMessage(error));
+  }
 }
 
 export async function uploadStoryMedia(input: {

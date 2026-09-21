@@ -9,11 +9,12 @@ import { THEME } from '@/lib/theme';
 type ChallengeCoverCropProps = {
   uri: string | null;
   busy?: boolean;
+  error?: string | null;
   onCancel: () => void;
   onConfirm: () => void;
 };
 
-export function ChallengeCoverCrop({ uri, busy, onCancel, onConfirm }: ChallengeCoverCropProps) {
+export function ChallengeCoverCrop({ uri, busy, error, onCancel, onConfirm }: ChallengeCoverCropProps) {
   const insets = useSafeAreaInsets();
   if (!uri) {
     return null;
@@ -48,11 +49,15 @@ export function ChallengeCoverCrop({ uri, busy, onCancel, onConfirm }: Challenge
           }}>
           <Image source={{ uri }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
         </View>
+        {error ? (
+          <AppText className="mt-4 text-center text-[13px] leading-5 text-coral-dark">
+            {error}
+          </AppText>
+        ) : null}
         <View className="mt-6 flex-row justify-center" style={{ gap: 12 }}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Cancel crop"
-            disabled={busy}
             onPress={onCancel}
             style={{ minHeight: 44, minWidth: 96, justifyContent: 'center', alignItems: 'center' }}>
             <AppText className="text-[15px] font-semibold" style={{ color: '#FFFFFF' }}>
@@ -74,7 +79,7 @@ export function ChallengeCoverCrop({ uri, busy, onCancel, onConfirm }: Challenge
               opacity: busy ? 0.45 : 1,
             }}>
             <AppText className="text-[15px] font-semibold" style={{ color: THEME.primaryForeground }}>
-              {busy ? 'Saving…' : 'Use photo'}
+              {busy ? 'Uploading…' : 'Use photo'}
             </AppText>
           </Pressable>
         </View>

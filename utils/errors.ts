@@ -58,6 +58,49 @@ export function getErrorMessage(error: unknown): string {
   return humanize(raw);
 }
 
+/** Cover / lobby-card / create photo only. Never “reach blOb” — that is a photo problem. */
+export function getCoverPhotoMessage(error: unknown): string {
+  const raw = extractRawMessage(error);
+  const message = raw.toLowerCase();
+  if (
+    message.includes('couldn’t crop') ||
+    message.includes('could not crop') ||
+    message.includes('try a jpeg or png') ||
+    message.includes('heic') ||
+    message.includes('heif') ||
+    message.includes('decode') ||
+    message.includes('no canvas') ||
+    message.includes('no web image') ||
+    message.includes('toblob')
+  ) {
+    return 'We couldn’t crop that photo. Try a JPEG or PNG.';
+  }
+  if (
+    message.includes('400') ||
+    message.includes('403') ||
+    message.includes('forbidden') ||
+    message.includes('unauthorized') ||
+    message.includes('row-level') ||
+    message.includes('rls') ||
+    message.includes('policy') ||
+    message.includes('42501') ||
+    message.includes('couldn’t save that cover') ||
+    message.includes('could not save that cover')
+  ) {
+    return 'We couldn’t save that cover.';
+  }
+  if (
+    message.includes('upload') ||
+    message.includes('storage') ||
+    message.includes('bucket') ||
+    message.includes('couldn’t upload') ||
+    message.includes('could not upload')
+  ) {
+    return 'We couldn’t upload that photo. Try again.';
+  }
+  return 'That photo didn’t stick. Pick it again.';
+}
+
 export function getDmOpenMessage(error: unknown): string {
   return dmOpenUserMessage(extractRawMessage(error) || getErrorMessage(error));
 }

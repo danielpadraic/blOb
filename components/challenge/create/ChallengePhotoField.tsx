@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Alert, Platform, Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
@@ -18,7 +18,8 @@ import {
 import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 import { coerceImageContentType, uploadChallengeCover } from '@/utils/upload';
-import { getErrorMessage } from '@/utils/errors';
+import { getCoverPhotoMessage } from '@/utils/errors';
+import { localUriFromPickerAsset } from '@/utils/media';
 
 const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic']);
 
@@ -29,29 +30,89 @@ type ChallengePhotoFieldProps = {
   onClear: () => void;
 };
 
+type PendingCover = {
+  uri: string;
+  width?: number;
+  height?: number;
+  mimeType?: string | null;
+  file: Blob | File | null;
+};
+
 function isAllowedImage(mimeType?: string | null, uri?: string): boolean {
   const type = coerceImageContentType(mimeType, uri);
   return ALLOWED.has(type) && !type.includes('pdf');
+}
+
+function pickerFile(asset: ImagePicker.ImagePickerAsset): Blob | File | null {
+  const file = asset.file;
+  if (file && file.size > 0) {
+    return file;
+  }
+  const blob = (asset as { blob?: Blob | null }).blob;
+  return blob && blob.size > 0 ? blob : null;
 }
 
 export function ChallengePhotoField({ uri, error, onChange, onClear }: ChallengePhotoFieldProps) {
   const { user } = useAuth();
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
-  const [pending, setPending] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [pending, setPending] = useState<PendingCover | null>(null);
+  const heldUrlRef = useRef<string | null>(null);
   const message = error || localError;
 
+  function releaseHeldUrl() {
+    const held = heldUrlRef.current;
+    heldUrlRef.current = null;
+    if (held && held.startsWith('blob:') && typeof URL !== 'undefined') {
+      try {
+        URL.revokeObjectURL(held);
+      } catch {
+        // Already revoked.
+      }
+    }
+  }
+
+  function closeSheet() {
+    setPending(null);
+    setLocalError(null);
+    setBusy(false);
+    releaseHeldUrl();
+  }
+
   function takeAsset(asset: ImagePicker.ImagePickerAsset) {
-    if (!isAllowedImage(asset.mimeType ?? asset.file?.type, asset.uri)) {
+    releaseHeldUrl();
+    const file = pickerFile(asset);
+    let nextUri = localUriFromPickerAsset(asset) ?? String(asset.uri ?? '').trim();
+    if (file) {
+      try {
+        const held = URL.createObjectURL(file);
+        heldUrlRef.current = held;
+        nextUri = held;
+      } catch {
+        // Keep the picker uri for the preview frame.
+      }
+    }
+    if (!nextUri && !file) {
+      setLocalError('That photo didn’t stick. Pick it again.');
+      return;
+    }
+    if (!isAllowedImage(asset.mimeType ?? file?.type, nextUri || file?.type)) {
       setLocalError('Use a JPEG, PNG, WebP, or HEIC photo.');
+      releaseHeldUrl();
       return;
     }
     setLocalError(null);
-    setPending(asset);
+    setPending({
+      uri: nextUri,
+      width: asset.width,
+      height: asset.height,
+      mimeType: asset.mimeType ?? file?.type ?? null,
+      file,
+    });
   }
 
   async function confirmCrop() {
-    if (!pending) {
+    if (!pending || busy) {
       return;
     }
     if (!user) {
@@ -63,6 +124,7 @@ export function ChallengePhotoField({ uri, error, onChange, onClear }: Challenge
     try {
       const cropped = await cropLobbyCover({
         uri: pending.uri,
+        blob: pending.file,
         width: pending.width,
         height: pending.height,
       });
@@ -73,10 +135,9 @@ export function ChallengePhotoField({ uri, error, onChange, onClear }: Challenge
         blob: cropped.blob,
       });
       onChange(url);
-      setPending(null);
+      closeSheet();
     } catch (err) {
-      setLocalError(getErrorMessage(err) || 'Couldn’t upload that photo.');
-    } finally {
+      setLocalError(getCoverPhotoMessage(err));
       setBusy(false);
     }
   }
@@ -97,7 +158,7 @@ export function ChallengePhotoField({ uri, error, onChange, onClear }: Challenge
       quality: 0.92,
       preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
     });
-    if (result.canceled || !result.assets[0]?.uri) {
+    if (result.canceled || (!result.assets[0]?.uri && !result.assets[0]?.file)) {
       return;
     }
     takeAsset(result.assets[0]);
@@ -120,7 +181,7 @@ export function ChallengePhotoField({ uri, error, onChange, onClear }: Challenge
         allowsEditing: false,
         quality: 0.92,
       });
-      if (result.canceled || !result.assets[0]?.uri) {
+      if (result.canceled || (!result.assets[0]?.uri && !result.assets[0]?.file)) {
         return;
       }
       takeAsset(result.assets[0]);
@@ -211,11 +272,12 @@ export function ChallengePhotoField({ uri, error, onChange, onClear }: Challenge
         ) : null}
       </View>
       <AppText className="text-[12px] leading-5 text-muted">{copy('create.photoHelper')}</AppText>
-      {message ? <AppText className="text-sm text-coral-dark">{message}</AppText> : null}
+      {!pending && message ? <AppText className="text-sm text-coral-dark">{message}</AppText> : null}
       <ChallengeCoverCrop
         uri={pending?.uri ?? null}
         busy={busy}
-        onCancel={() => setPending(null)}
+        error={pending ? localError : null}
+        onCancel={closeSheet}
         onConfirm={() => void confirmCrop()}
       />
     </View>

@@ -171,7 +171,10 @@ async function compressOnWeb(input: {
     throw new Error('No canvas.');
   }
 
-  const source = input.blob && input.blob.size > 0 ? input.blob : await fetchBlob(input.uri);
+  const source =
+    input.blob && input.blob.size > 0
+      ? input.blob
+      : await fetchBlob(input.uri);
   const bitmap = await loadWebBitmap(source, input.uri);
   const longEdge = Math.max(bitmap.width, bitmap.height);
   if (
@@ -272,7 +275,7 @@ export async function compressImageForUpload(input: {
 
   const preset = PRESET[input.kind];
   try {
-    // A revoked blob: URL cannot be fetched again. Keep the original bytes.
+    // A revoked blob: URL cannot be fetched again. Compress from the held Blob instead.
     if (Platform.OS === 'web' && input.uri.startsWith('blob:') && !(input.blob && input.blob.size > 0)) {
       return originalResult(input.uri, contentType, input.blob);
     }
