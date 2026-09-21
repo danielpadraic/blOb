@@ -209,6 +209,19 @@ export function checkinSubmitHref(
 
 const CHALLENGE_RETRY_SKIP = new Set(['new', 'create', 'callout', 'u']);
 
+/** Edit details Retry. Remount `/challenges/{id}/details`. Never Home, never /capture. */
+export function detailsRetryHref(pathname: string | null | undefined): string {
+  const path = String(pathname ?? '');
+  if (path.includes('/capture')) {
+    return '';
+  }
+  const id = path.match(/\/challenges\/([^/?#]+)\/details/)?.[1];
+  if (!id || CHALLENGE_RETRY_SKIP.has(id)) {
+    return '';
+  }
+  return `/challenges/${id}/details`;
+}
+
 function challengeRetryId(path: string): string | null {
   const match = String(path ?? '').match(/\/challenges\/([^/?#]+)/);
   const id = String(match?.[1] ?? '').trim();
@@ -282,6 +295,10 @@ export function errorRetryHref(pathname: string | null | undefined): string {
   const submitId = path.match(/\/challenges\/([^/?#]+)\/submit/)?.[1];
   if (submitId && !CHALLENGE_RETRY_SKIP.has(submitId)) {
     return `/challenges/${submitId}/submit`;
+  }
+  const details = detailsRetryHref(path);
+  if (details) {
+    return details;
   }
   const challengeId = challengeRetryId(path);
   if (challengeId) {

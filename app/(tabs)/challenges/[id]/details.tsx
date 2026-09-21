@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useLocalSearchParams, usePathname, useRouter, type ErrorBoundaryProps, type Href } from 'expo-router';
+import { Component, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
 import { Dimensions, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -38,6 +38,7 @@ import { descriptionGrowMaxLines } from '@/lib/composerField';
 import { copy } from '@/lib/copy';
 import { canEditOfficialDetails } from '@/lib/officialScoring';
 import { supabase } from '@/lib/supabase';
+import { detailsRetryHref } from '@/lib/routes';
 import { tabBarLift, THEME } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
 
@@ -59,7 +60,70 @@ function detailsSaveMessage(error: unknown): string {
   return copy('error.saveDetails');
 }
 
-export default function OfficialDetailsScreen() {
+class DetailsSafeBoundary extends Component<{ children: ReactNode }, { failed: boolean; nonce: number }> {
+  state = { failed: false, nonce: 0 };
+
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.log('[blob:details]', {
+      error: error.message,
+      stack: [error.stack, info.componentStack].filter(Boolean).join('\n') || null,
+    });
+  }
+
+  remount = () => {
+    this.setState((current) => ({ failed: false, nonce: current.nonce + 1 }));
+  };
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <View className="flex-1" style={{ backgroundColor: THEME.background }}>
+          <MascotState
+            kind="error"
+            title="Something went wrong"
+            body="We couldn’t open these details. Try again."
+            actionLabel="Retry"
+            onAction={this.remount}
+          />
+        </View>
+      );
+    }
+    return (
+      <View key={this.state.nonce} style={{ flex: 1 }}>
+        {this.props.children}
+      </View>
+    );
+  }
+}
+
+/** Leaf route — Retry remounts Edit details. Never /capture, never Home. */
+export function ErrorBoundary({ retry }: ErrorBoundaryProps) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const next = detailsRetryHref(pathname);
+  return (
+    <View className="flex-1" style={{ backgroundColor: THEME.background }}>
+      <MascotState
+        kind="error"
+        title="Something went wrong"
+        body="We couldn’t open these details. Try again."
+        actionLabel="Retry"
+        onAction={() => {
+          if (next) {
+            router.replace(next as Href);
+          }
+          void retry();
+        }}
+      />
+    </View>
+  );
+}
+
+function OfficialDetailsForm() {
   const params = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
@@ -397,5 +461,13 @@ export default function OfficialDetailsScreen() {
         </View>
         </View>
     </KeyboardFormShell>
+  );
+}
+
+export default function OfficialDetailsScreen() {
+  return (
+    <DetailsSafeBoundary>
+      <OfficialDetailsForm />
+    </DetailsSafeBoundary>
   );
 }

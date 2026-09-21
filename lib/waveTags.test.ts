@@ -31,6 +31,10 @@ describe('checkinSubmitHref', () => {
     expect(errorRetryHref('/capture')).toBe('/feed');
     expect(errorRetryHref('/capture?mode=story')).toBe('/feed');
     expect(errorRetryHref('/challenges/abc-1/submit')).toBe('/challenges/abc-1/submit');
+    expect(errorRetryHref('/challenges/abc-1/details')).toBe('/challenges/abc-1/details');
+    expect(errorBoundaryRetryHref('/challenges/abc-1/details')).toBe('/challenges/abc-1/details');
+    expect(errorBoundaryRetryHref('/challenges/abc-1/details')).not.toContain('/capture');
+    expect(errorBoundaryRetryHref('/challenges/abc-1/details')).not.toBe('/feed');
     expect(errorRetryHref('/challenges/abc-1')).toBe('/challenges/abc-1?tab=feed');
     expect(errorRetryHref('/challenges/abc-1?postId=p1')).toBe('/challenges/abc-1?tab=feed');
     expect(errorRetryHref('/challenges/abc-1?tab=overview')).toBe('/challenges/abc-1?tab=overview');

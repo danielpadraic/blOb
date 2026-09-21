@@ -1,5 +1,5 @@
 import { createElement, forwardRef, useEffect, useState } from 'react';
-import { Platform, TextInput, type TextInputProps, type ViewStyle } from 'react-native';
+import { Platform, TextInput, type TextInputProps } from 'react-native';
 
 import {
   COMPOSER_LINE_HEIGHT,
@@ -8,24 +8,7 @@ import {
   composerFieldHeight,
 } from '@/lib/composerField';
 import { THEME } from '@/lib/theme';
-
-function cssFromStyle(style: GrowingTextProps['style']): Record<string, unknown> {
-  const list = Array.isArray(style) ? style : [style];
-  const flat = Object.assign(
-    {},
-    ...list.filter((item): item is object => Boolean(item) && typeof item === 'object'),
-  ) as ViewStyle & { paddingHorizontal?: number; paddingVertical?: number };
-  const { paddingHorizontal, paddingVertical, ...rest } = flat;
-  return {
-    ...rest,
-    ...(paddingHorizontal != null
-      ? { paddingLeft: paddingHorizontal, paddingRight: paddingHorizontal }
-      : null),
-    ...(paddingVertical != null
-      ? { paddingTop: paddingVertical, paddingBottom: paddingVertical }
-      : null),
-  };
-}
+import { flattenWebInputStyle } from '@/lib/webInputStyle';
 
 export type GrowingTextProps = Omit<TextInputProps, 'multiline' | 'numberOfLines'> & {
   collapsed?: boolean;
@@ -126,7 +109,7 @@ export const GrowingText = forwardRef<TextInput, GrowingTextProps>(function Grow
         caretColor: THEME.accent,
         whiteSpace: 'pre-wrap',
         wordWrap: 'break-word',
-        ...cssFromStyle(box),
+        ...flattenWebInputStyle(box),
       },
     });
   }

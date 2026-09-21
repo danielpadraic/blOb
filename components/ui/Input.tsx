@@ -1,11 +1,12 @@
 import { createElement, forwardRef, useRef, useState } from 'react';
-import { Platform, TextInput, View, type TextInputProps, type ViewStyle } from 'react-native';
+import { Platform, TextInput, View, type TextInputProps } from 'react-native';
 
 import { GrowingText } from '@/components/ui/GrowingText';
 import { AppText } from '@/components/ui/AppText';
 import { useKeyboardFieldLift, useKeyboardForm } from '@/components/ui/KeyboardFormShell';
 import { COMPOSER_MAX_LINES, FORM_LINE_HEIGHT, FORM_MIN_HEIGHT } from '@/lib/composerField';
 import { THEME } from '@/lib/theme';
+import { flattenWebInputStyle } from '@/lib/webInputStyle';
 
 type InputProps = TextInputProps & {
   label?: string;
@@ -19,24 +20,6 @@ type InputProps = TextInputProps & {
   grow?: boolean;
   growMaxLines?: number;
 };
-
-function cssFromInputStyle(style: InputProps['style']): Record<string, unknown> {
-  const list = Array.isArray(style) ? style : [style];
-  const flat = Object.assign(
-    {},
-    ...list.filter((item): item is object => Boolean(item) && typeof item === 'object'),
-  ) as ViewStyle & { paddingHorizontal?: number; paddingVertical?: number };
-  const { paddingHorizontal, paddingVertical, ...rest } = flat;
-  return {
-    ...rest,
-    ...(paddingHorizontal != null
-      ? { paddingLeft: paddingHorizontal, paddingRight: paddingHorizontal }
-      : null),
-    ...(paddingVertical != null
-      ? { paddingTop: paddingVertical, paddingBottom: paddingVertical }
-      : null),
-  };
-}
 
 function htmlAutoComplete(autoComplete?: TextInputProps['autoComplete']): string | undefined {
   if (!autoComplete) {
@@ -211,7 +194,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
             borderStyle: 'solid',
             fontFamily: 'inherit',
             caretColor: THEME.accent,
-            ...cssFromInputStyle(boxStyle),
+            ...flattenWebInputStyle(boxStyle),
           },
         })
       ) : (
