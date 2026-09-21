@@ -3,6 +3,7 @@ import { parseProofParts, partSatisfies, proofDisplayName } from '@/lib/challeng
 import type { CheckinPhase } from '@/lib/challengeCheckin';
 import { isCheckinPost } from '@/lib/checkinPost';
 import { checkinHidesHomeShare } from '@/lib/checkinShare';
+import { usesPeriodCheckinGate } from '@/lib/loggable';
 import { isClipSharePost } from '@/lib/roundShare';
 
 type LoggableLike = {
@@ -12,12 +13,22 @@ type LoggableLike = {
   taskLabel?: string | null;
   checkinPhase?: CheckinPhase | null;
   remainingProofLabels?: string[];
+  proofParts?: unknown;
   proofs?: unknown;
   proof_type?: string | null;
   proof_requirements?: unknown;
+  format?: string | null;
+  challenge_type?: string | null;
+  frequency?: string | null;
+  cumulative_target?: number | string | null;
+  cumulative_metric?: string | null;
+  metrics?: unknown;
+  scoring_method?: string | null;
+  comparable_points_config?: unknown;
+  target_count?: number | null;
 };
 
-export type MultiCheckinState = 'empty' | 'started' | 'complete';
+export type MultiCheckinState = 'not_started' | 'in_progress' | 'complete';
 
 export type MultiCheckinRow = {
   id: string;
@@ -56,35 +67,51 @@ export function parseDoneIds(raw: string | string[] | null | undefined): string[
   return [...new Set(value.split(',').map((id) => id.trim()).filter(Boolean))];
 }
 
-export function hubRowState(phase?: CheckinPhase | null, done?: boolean): MultiCheckinState {
-  if (done || phase === 'submitted') {
+/**
+ * Chip from remaining required proofs — not from done= and not from a submitted stamp
+ * on the first selfie. Remaining labels mean the period is not complete.
+ */
+export function hubRowState(
+  phase?: CheckinPhase | null,
+  done?: boolean,
+  remaining?: readonly string[] | null,
+  periodGate?: boolean,
+): MultiCheckinState {
+  const open = (remaining ?? []).map((label) => String(label ?? '').trim()).filter(Boolean);
+  if (open.length > 0) {
+    const started =
+      Boolean(done) || phase === 'in_progress' || phase === 'ready' || phase === 'submitted';
+    return started ? 'in_progress' : 'not_started';
+  }
+  if (periodGate === false) {
+    if (done) {
+      return 'complete';
+    }
+    if (phase === 'in_progress' || phase === 'ready') {
+      return 'in_progress';
+    }
+    return 'not_started';
+  }
+  if (phase === 'submitted' || done) {
     return 'complete';
   }
   if (phase === 'in_progress' || phase === 'ready') {
-    return 'started';
+    return 'in_progress';
   }
-  return 'empty';
+  return 'not_started';
 }
 
 export function remainingProofLabelsOf(
   challenge: Pick<LoggableLike, 'proofs' | 'proof_type' | 'proof_requirements' | 'taskLabel' | 'task'> | null | undefined,
   parts?: unknown,
-  phase?: CheckinPhase | null,
+  _phase?: CheckinPhase | null,
 ): string[] {
-  if (phase === 'submitted') {
-    return [];
-  }
   const proofs = requiredChallengeProofs(challenge as never);
   const parsed = parseProofParts(parts);
-  const remaining = proofs
+  return proofs
     .filter((proof) => proof.method !== 'honor')
     .filter((proof) => !partSatisfies(proof, parsed[proof.id]))
     .map((proof) => proofDisplayName(proof));
-  if (remaining.length > 0) {
-    return remaining;
-  }
-  const fallback = String(challenge?.taskLabel ?? challenge?.task ?? '').trim();
-  return fallback ? [fallback] : [];
 }
 
 export function mergeMultiCheckinRows(
@@ -93,25 +120,35 @@ export function mergeMultiCheckinRows(
   snapshots: Record<string, Pick<MultiCheckinRow, 'title' | 'task' | 'remainingProofLabels'>> = hubSnapshots,
 ): MultiCheckinRow[] {
   const done = new Set(doneIds);
-  const rows: MultiCheckinRow[] = loggable.map((item) => ({
-    id: item.id,
-    title: item.title,
-    task: String(item.taskLabel ?? item.task ?? '').trim(),
-    remainingProofLabels: item.remainingProofLabels ?? remainingProofLabelsOf(item, null, item.checkinPhase),
-    state: hubRowState(item.checkinPhase, done.has(item.id)),
-  }));
+  const rows: MultiCheckinRow[] = loggable.map((item) => {
+    const remaining =
+      item.remainingProofLabels ?? remainingProofLabelsOf(item, item.proofParts, item.checkinPhase);
+    return {
+      id: item.id,
+      title: item.title,
+      task: String(item.taskLabel ?? item.task ?? '').trim(),
+      remainingProofLabels: remaining,
+      state: hubRowState(
+        item.checkinPhase,
+        done.has(item.id),
+        remaining,
+        usesPeriodCheckinGate(item as never),
+      ),
+    };
+  });
   const seen = new Set(rows.map((row) => row.id));
   for (const id of doneIds) {
     if (seen.has(id)) {
       continue;
     }
     const snap = snapshots[id];
+    const remaining = snap?.remainingProofLabels ?? [];
     rows.push({
       id,
       title: snap?.title ?? 'Checked in',
       task: snap?.task ?? '',
-      remainingProofLabels: [],
-      state: 'complete',
+      remainingProofLabels: remaining,
+      state: remaining.length > 0 ? 'in_progress' : 'complete',
     });
   }
   return rows;
@@ -120,7 +157,7 @@ export function mergeMultiCheckinRows(
 export function nextEmptyCheckinId(rows: MultiCheckinRow[], afterId?: string | null): string | null {
   const after = rows.findIndex((row) => row.id === afterId);
   const ordered = after >= 0 ? [...rows.slice(after + 1), ...rows.slice(0, after)] : rows;
-  return ordered.find((row) => row.state === 'empty')?.id ?? null;
+  return ordered.find((row) => row.state === 'not_started' || row.state === 'in_progress')?.id ?? null;
 }
 
 export type HomeCheckinPost = {

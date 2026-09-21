@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
 import { checkinPeriodCacheStamp, normalizePeriodKey, periodKeyFor } from '@/lib/checkinPeriod';
-import { isCheckinPickerRow, isLoggable, loggableStatusLine } from '@/lib/loggable';
+import { isCheckinPickerRow, isLoggable, loggableStatusLine, usesPeriodCheckinGate } from '@/lib/loggable';
 import { supabase } from '@/lib/supabase';
 import type { Challenge, ChallengeParticipant } from '@/lib/types';
 import { checkinCtaTitle, type CheckinPhase } from '@/lib/challengeCheckin';
@@ -117,28 +117,39 @@ export function useLoggableChallenges() {
       for (const challenge of challenges) {
         try {
           const expected = periodKeyFor(challenge, clock);
-          const stamped = submittedThisPeriod(challenge, checkinRows);
-          if (
-            !isLoggable(challenge, { isParticipant: true }, { now: clock, submittedThisPeriod: stamped })
-          ) {
-            continue;
-          }
           const history = historyByChallenge.get(challenge.id) ?? [];
           const proofs = requiredChallengeProofs(challenge as never);
-          const phase = phaseForPeriod(challenge, checkinRows);
+          const rawPhase = phaseForPeriod(challenge, checkinRows);
           const parts = partsForPeriod(challenge, checkinRows);
+          const parsed = parseProofParts(parts);
+          const required = proofs.filter((proof) => proof.method !== 'honor');
+          const taskLabel = checkinTaskLabel(challenge);
+          const remaining = remainingProofLabelsOf({ ...challenge, taskLabel }, parts);
           const blocking = blockingProofsForCheckin(proofs, challenge, {
             now: clock,
             periodKey: expected,
             history,
             proofs,
           });
-          const remaining = blocking
+          const blockingRemaining = blocking
             .filter((proof) => proof.method !== 'honor')
-            .filter((proof) => !partSatisfies(proof, parseProofParts(parts)[proof.id]))
+            .filter((proof) => !partSatisfies(proof, parsed[proof.id]))
             .map((proof) => proofDisplayName(proof));
+          const open = remaining.length > 0 ? remaining : blockingRemaining;
+          const satisfied = required.some((proof) => partSatisfies(proof, parsed[proof.id]));
+          const phase: CheckinPhase =
+            open.length > 0
+              ? satisfied || rawPhase === 'in_progress' || rawPhase === 'ready' || rawPhase === 'submitted'
+                ? 'in_progress'
+                : 'none'
+              : rawPhase;
+          const stamped = open.length === 0 && rawPhase === 'submitted' && usesPeriodCheckinGate(challenge);
+          if (
+            !isLoggable(challenge, { isParticipant: true }, { now: clock, submittedThisPeriod: stamped })
+          ) {
+            continue;
+          }
           const completed = daysCompleted.get(challenge.id) ?? 0;
-          const taskLabel = checkinTaskLabel(challenge);
           rows.push({
             ...challenge,
             daysCompleted: completed,
@@ -146,14 +157,7 @@ export function useLoggableChallenges() {
             checkinPhase: phase,
             ctaTitle: checkinCtaTitle(phase),
             taskLabel,
-            remainingProofLabels:
-              remaining.length > 0
-                ? remaining
-                : remainingProofLabelsOf(
-                    { ...challenge, taskLabel },
-                    parts,
-                    phase === 'submitted' && remaining.length === 0 ? 'submitted' : phase,
-                  ),
+            remainingProofLabels: open,
             proofParts: parts ?? null,
             statusLine: loggableStatusLine({
               ends_at: challenge.ends_at,

@@ -22,9 +22,15 @@ import { LOBBY_HREF, TABS_HREF } from '@/lib/routes';
 import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
 
 const STATE_COPY: Record<MultiCheckinState, string> = {
-  empty: copy('checkin.multiEmpty'),
-  started: copy('checkin.multiStarted'),
+  not_started: copy('checkin.multiEmpty'),
+  in_progress: copy('checkin.multiStarted'),
   complete: copy('checkin.multiComplete'),
+};
+
+const CHIP: Record<MultiCheckinState, { bg: string; fg: string }> = {
+  not_started: { bg: 'rgba(154, 59, 59, 0.14)', fg: THEME.danger },
+  in_progress: { bg: THEME.calloutSoft, fg: '#6B4E12' },
+  complete: { bg: THEME.accentSoft, fg: THEME.accent },
 };
 
 export default function MultiCheckinScreen() {
@@ -134,7 +140,7 @@ export default function MultiCheckinScreen() {
 
 function HubRow({ row, onPress }: { row: MultiCheckinRow; onPress: () => void }) {
   const complete = row.state === 'complete';
-  const started = row.state === 'started';
+  const chip = CHIP[row.state];
   return (
     <Pressable
       accessibilityRole="button"
@@ -169,14 +175,12 @@ function HubRow({ row, onPress }: { row: MultiCheckinRow; onPress: () => void })
         </View>
         <View
           style={{
-            backgroundColor: started || complete ? THEME.accentSoft : THEME.surface2,
+            backgroundColor: chip.bg,
             borderRadius: 999,
             paddingHorizontal: 10,
             paddingVertical: 5,
           }}>
-          <AppText
-            className="text-[12px] font-bold"
-            style={{ color: started || complete ? THEME.accent : THEME.textMuted }}>
+          <AppText className="text-[12px] font-bold" style={{ color: chip.fg }}>
             {STATE_COPY[row.state]}
           </AppText>
         </View>

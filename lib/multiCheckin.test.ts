@@ -5,6 +5,7 @@ import {
   mergeMultiCheckinRows,
   nextEmptyCheckinId,
   parseDoneIds,
+  remainingProofLabelsOf,
   stackHomeCheckinPosts,
   type HomeCheckinPost,
 } from '@/lib/multiCheckin';
@@ -34,19 +35,73 @@ describe('Multi Check-In routing', () => {
 });
 
 describe('Multi Check-In hub rows', () => {
-  it('marks done ids complete and finds the next empty row', () => {
+  const thirtyDayProofs = [
+    { id: 'pre', name: 'Post a pre-workout selfie.', method: 'photo' },
+    { id: 'post', name: 'Post a post-workout selfie.', method: 'photo' },
+    { id: 'hr', name: 'Share proof of at least 30 minutes of elevated heart rate.', method: 'hr' },
+  ];
+
+  it('does not treat done= as period complete when required slots remain', () => {
     const rows = mergeMultiCheckinRows(
       [
-        { id: 'hobby', title: 'Hobby', task: 'Selfie', checkinPhase: 'none' } as never,
-        { id: 'gym', title: 'Gym', task: 'Workout', checkinPhase: 'none' } as never,
+        {
+          id: '30-day',
+          title: '30-Day Consistency',
+          task: 'Workout',
+          format: 'consistency',
+          frequency: 'daily',
+          checkinPhase: 'submitted',
+          remainingProofLabels: ['post-workout selfie', 'heart rate'],
+          proofs: thirtyDayProofs,
+        } as never,
+        {
+          id: 'prayer',
+          title: 'Prayer',
+          task: 'Pray',
+          format: 'points',
+          challenge_type: 'points',
+          checkinPhase: 'none',
+          remainingProofLabels: [],
+        } as never,
       ],
-      ['hobby'],
+      ['30-day'],
     );
-    expect(rows[0]?.state).toBe('complete');
-    expect(rows[1]?.state).toBe('empty');
-    expect(nextEmptyCheckinId(rows, 'hobby')).toBe('gym');
-    expect(hubRowState('in_progress')).toBe('started');
+    expect(rows[0]?.state).toBe('in_progress');
+    expect(rows[0]?.remainingProofLabels).toEqual(['post-workout selfie', 'heart rate']);
+    expect(rows[1]?.state).toBe('not_started');
+    expect(nextEmptyCheckinId(rows, '30-day')).toBe('prayer');
+    expect(hubRowState('submitted', true, ['post-workout selfie', 'heart rate'], true)).toBe(
+      'in_progress',
+    );
+    expect(hubRowState('none', false, [], false)).toBe('not_started');
+    expect(hubRowState('submitted', true, [], true)).toBe('complete');
     expect(parseDoneIds('hobby,gym')).toEqual(['hobby', 'gym']);
+  });
+
+  it('walks Next through In progress, not only Not started', () => {
+    const rows = mergeMultiCheckinRows(
+      [
+        {
+          id: 'done',
+          title: 'Done',
+          remainingProofLabels: [],
+          checkinPhase: 'submitted',
+          format: 'consistency',
+          frequency: 'daily',
+        } as never,
+        {
+          id: 'partial',
+          title: '30-Day',
+          remainingProofLabels: ['heart rate'],
+          checkinPhase: 'in_progress',
+          format: 'consistency',
+          frequency: 'daily',
+        } as never,
+      ],
+      ['done'],
+    );
+    expect(rows[1]?.state).toBe('in_progress');
+    expect(nextEmptyCheckinId(rows, 'done')).toBe('partial');
   });
 
   it('keeps a completed row after it drops out of loggable', () => {
@@ -54,7 +109,36 @@ describe('Multi Check-In hub rows', () => {
       hobby: { title: 'Hobby', task: 'Selfie', remainingProofLabels: [] },
     });
     expect(rows.find((row) => row.id === 'hobby')).toMatchObject({ title: 'Hobby', state: 'complete' });
-    expect(rows.find((row) => row.id === 'gym')?.state).toBe('empty');
+    expect(rows.find((row) => row.id === 'gym')?.state).toBe('not_started');
+  });
+
+  it('keeps remaining labels after a submitted first selfie', () => {
+    const labels = remainingProofLabelsOf(
+      {
+        proofs: thirtyDayProofs,
+      } as never,
+      {
+        pre: { method: 'photo', url: 'https://cdn.test/pre.jpg' },
+      },
+      'submitted',
+    );
+    expect(labels.length).toBeGreaterThan(0);
+    expect(labels.join(' · ').toLowerCase()).toMatch(/post-workout|heart rate|hr/);
+  });
+
+  it('merges a partial 30-Day snapshot as In progress, not Complete', () => {
+    const rows = mergeMultiCheckinRows([], ['30-day'], {
+      '30-day': {
+        title: '30-Day Consistency',
+        task: 'Workout',
+        remainingProofLabels: ['post-workout selfie', 'heart rate'],
+      },
+    });
+    expect(rows[0]).toMatchObject({
+      id: '30-day',
+      state: 'in_progress',
+      remainingProofLabels: ['post-workout selfie', 'heart rate'],
+    });
   });
 });
 
