@@ -90,6 +90,7 @@ export type InviteChallenge = {
   participant_count?: number | null;
   distributed_at?: string | null;
   visibility?: string | null;
+  privacy_mode?: string | null;
   challenge_lane?: unknown;
   category?: string | null;
   challenge_type?: string | null;
@@ -202,7 +203,9 @@ export function resolveInviteMedia(challenge: InviteChallenge, official: boolean
   if (official && sponsor) {
     steps.push({ kind: 'sponsor', uri: sponsor, name: sponsorName });
   }
-  if (official) {
+  const privateRoom =
+    challenge.privacy_mode === 'private' || challenge.privacy_mode === 'private_corporate';
+  if (official && !privateRoom) {
     steps.push({ kind: 'bob' });
   } else if (!cover) {
     steps.push({ kind: 'placeholder', visual: inviteVisualTheme(challenge) });

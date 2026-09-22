@@ -208,18 +208,70 @@ export function isUserJoinStatusOpen(status?: string | null): boolean {
   return JOINABLE_STATUSES.has(value) && !CLOSED_STATUSES.has(value);
 }
 
-export function isJoinWindowOpen(
-  challenge: {
-    status?: string | null;
-    starts_at?: string | null;
-    join_until_at?: string | null;
-    is_official?: boolean | null;
-    series_id?: string | null;
-  },
-  now = new Date(),
-): boolean {
+export type JoinMoneyChallenge = {
+  currency?: string | null;
+  buy_in_amount?: number | string | null;
+};
+
+export type InviteLateJoinChallenge = JoinMoneyChallenge & {
+  status?: string | null;
+  privacy_mode?: string | null;
+  is_official?: boolean | null;
+  series_id?: string | null;
+  settled?: boolean;
+};
+
+/** Participant entry in bucks / USD / cash. Host prize pool alone does not count. */
+export function realMoneyBuyIn(challenge?: JoinMoneyChallenge | null): boolean {
+  if (!challenge) {
+    return false;
+  }
+  const currency = String(challenge.currency ?? 'coins').toLowerCase();
+  const cash = currency === 'bucks' || currency === 'usd' || currency === 'cash';
+  const entry = Math.max(Number(challenge.buy_in_amount) || 0, 0);
+  return cash && entry > 0;
+}
+
+/**
+ * Private / Private Corporate $0 (or coins) rooms stay joinable after start
+ * until settle. Official cash and public rooms keep the stored window.
+ */
+export function inviteJoinOpenAfterStart(challenge?: InviteLateJoinChallenge | null): boolean {
+  if (!challenge) {
+    return false;
+  }
+  const privacy = String(challenge.privacy_mode ?? '').toLowerCase();
+  if (privacy !== 'private' && privacy !== 'private_corporate') {
+    return false;
+  }
+  if (realMoneyBuyIn(challenge)) {
+    return false;
+  }
+  if (isOfficialSeriesChallenge(challenge) || challenge.is_official) {
+    return false;
+  }
   const status = String(challenge.status ?? '').toLowerCase();
-  if (CLOSED_STATUSES.has(status)) {
+  if (challenge.settled || CLOSED_STATUSES.has(status)) {
+    return false;
+  }
+  return (
+    status === 'live' ||
+    status === 'in_progress' ||
+    status === 'open' ||
+    status === 'upcoming' ||
+    status === 'starting'
+  );
+}
+
+type JoinWindowChallenge = InviteLateJoinChallenge & {
+  starts_at?: string | null;
+  join_until_at?: string | null;
+};
+
+/** Stored join_until_at vs now. Null window reads as At start. */
+export function isJoinUntilClockOpen(challenge: JoinWindowChallenge, now = new Date()): boolean {
+  const status = String(challenge.status ?? '').toLowerCase();
+  if (CLOSED_STATUSES.has(status) || challenge.settled) {
     return false;
   }
   if (isOfficialSeriesChallenge(challenge) || (challenge.is_official && challenge.series_id)) {
@@ -238,16 +290,30 @@ export function isJoinWindowOpen(
   return now.getTime() < until.getTime();
 }
 
+export function isJoinWindowOpen(challenge: JoinWindowChallenge, now = new Date()): boolean {
+  const status = String(challenge.status ?? '').toLowerCase();
+  if (CLOSED_STATUSES.has(status) || challenge.settled) {
+    return false;
+  }
+  if (isOfficialSeriesChallenge(challenge) || (challenge.is_official && challenge.series_id)) {
+    return status === 'filling' || status === 'arming';
+  }
+  if (challenge.is_official && !challenge.series_id) {
+    return false;
+  }
+  if (!isUserJoinStatusOpen(status)) {
+    return false;
+  }
+  if (inviteJoinOpenAfterStart(challenge)) {
+    return true;
+  }
+  return isJoinUntilClockOpen(challenge, now);
+}
+
 /** join_challenge gate, in one place for tests and the printed summary. */
-export function joinChallengeGate(challenge: {
-  status?: string | null;
-  starts_at?: string | null;
-  join_until_at?: string | null;
-  is_official?: boolean | null;
-  series_id?: string | null;
+export function joinChallengeGate(challenge: JoinWindowChallenge & {
   max_participants?: number | null;
   participant_count?: number | null;
-  settled?: boolean;
 }, now = new Date()): { ok: boolean; reason: 'ok' | 'JOIN_CLOSED' | 'ALREADY_STARTED' | 'NOT_JOINABLE' | 'LOBBY_FULL' } {
   const status = String(challenge.status ?? '').toLowerCase();
   if (challenge.settled || status === 'settled') {

@@ -4,11 +4,14 @@ import {
   DEFAULT_JOIN_UNTIL_PRESET,
   JOIN_CLOSED_COPY,
   inferJoinUntilPreset,
+  inviteJoinOpenAfterStart,
+  isJoinUntilClockOpen,
   isJoinWindowOpen,
   joinChallengeGate,
   joinOpenUntilLine,
   joinUntilReviewLine,
   periodCountsAsMissForJoiner,
+  realMoneyBuyIn,
   resolveJoinUntilAt,
   storedJoinUntilAt,
 } from '@/lib/joinWindow';
@@ -111,6 +114,72 @@ describe('join until', () => {
     expect(joinUntilReviewLine({ startsAt: start, preset: 'at_start' })).toBe(
       'People can join until the start.',
     );
+  });
+
+  it('lets a private $0 invitee join after start until settle', () => {
+    const pinnacle = {
+      status: 'live',
+      privacy_mode: 'private_corporate',
+      currency: 'coins',
+      buy_in_amount: 0,
+      host_funded: true,
+      prize_pool: 0,
+      starts_at: start.toISOString(),
+      join_until_at: null,
+    };
+    const afterStart = new Date('2026-09-22T16:00:00.000Z');
+    expect(realMoneyBuyIn(pinnacle)).toBe(false);
+    expect(inviteJoinOpenAfterStart(pinnacle)).toBe(true);
+    expect(isJoinUntilClockOpen(pinnacle, afterStart)).toBe(false);
+    expect(isJoinWindowOpen(pinnacle, afterStart)).toBe(true);
+    expect(joinChallengeGate(pinnacle, afterStart).ok).toBe(true);
+    expect(
+      isJoinWindowOpen({ ...pinnacle, status: 'settled' }, afterStart),
+    ).toBe(false);
+  });
+
+  it('keeps public and cash rooms closed after the stored window', () => {
+    const afterStart = new Date('2026-09-11T17:00:00.000Z');
+    expect(
+      isJoinWindowOpen(
+        {
+          status: 'live',
+          privacy_mode: 'public',
+          currency: 'coins',
+          buy_in_amount: 0,
+          starts_at: start.toISOString(),
+          join_until_at: null,
+        },
+        afterStart,
+      ),
+    ).toBe(false);
+    expect(
+      joinChallengeGate(
+        {
+          status: 'live',
+          privacy_mode: 'private',
+          currency: 'bucks',
+          buy_in_amount: 10,
+          starts_at: start.toISOString(),
+          join_until_at: null,
+        },
+        afterStart,
+      ).reason,
+    ).toBe('JOIN_CLOSED');
+    expect(
+      realMoneyBuyIn({ currency: 'bucks', buy_in_amount: 10 }),
+    ).toBe(true);
+    expect(
+      realMoneyBuyIn({ currency: 'bucks', buy_in_amount: 0 }),
+    ).toBe(false);
+    expect(
+      inviteJoinOpenAfterStart({
+        status: 'live',
+        privacy_mode: 'private',
+        currency: 'coins',
+        buy_in_amount: 5,
+      }),
+    ).toBe(true);
   });
 
   it('does not count consistency periods that ended before the joiner arrived', () => {

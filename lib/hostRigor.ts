@@ -1,4 +1,4 @@
-import { isJoinWindowOpen } from '@/lib/joinWindow';
+import { isJoinUntilClockOpen } from '@/lib/joinWindow';
 
 export const HOST_RIGOR_VALUES = ['friendly', 'normal', 'strict'] as const;
 
@@ -265,7 +265,7 @@ export function viewerCanHostAdd(input: {
   if (hostRigorOf(challenge) === 'friendly') {
     return true;
   }
-  return isJoinWindowOpen(challenge, input.now ?? new Date());
+  return isJoinUntilClockOpen(challenge, input.now ?? new Date());
 }
 
 export function viewerCanNormalHostAdjust(input: {
