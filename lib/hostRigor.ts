@@ -1,3 +1,5 @@
+import { isJoinWindowOpen } from '@/lib/joinWindow';
+
 export const HOST_RIGOR_VALUES = ['friendly', 'normal', 'strict'] as const;
 
 export type HostRigor = (typeof HOST_RIGOR_VALUES)[number];
@@ -232,6 +234,38 @@ export function viewerCanFriendlyHostAdd(input: {
     return true;
   }
   return viewerIsChallengeStaff(input) && hostRigorOf(challenge) === 'friendly';
+}
+
+/** @blob anytime until settle. Friendly host/mod until settle. Normal / Strict only while the join window is open. */
+export function viewerCanHostAdd(input: {
+  challenge?: {
+    created_by?: string | null;
+    host_rigor?: string | null;
+    status?: string | null;
+    starts_at?: string | null;
+    join_until_at?: string | null;
+    is_official?: boolean | null;
+    series_id?: string | null;
+  } | null;
+  viewerId?: string | null;
+  moderatorIds?: readonly string[] | null;
+  officialOps?: boolean | null;
+  now?: Date;
+}): boolean {
+  const challenge = input.challenge;
+  if (!challenge || challengeIsSettledForRigor(challenge.status)) {
+    return false;
+  }
+  if (input.officialOps) {
+    return true;
+  }
+  if (!viewerIsChallengeStaff(input)) {
+    return false;
+  }
+  if (hostRigorOf(challenge) === 'friendly') {
+    return true;
+  }
+  return isJoinWindowOpen(challenge, input.now ?? new Date());
 }
 
 export function viewerCanNormalHostAdjust(input: {

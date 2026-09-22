@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { checkinCtaTitle } from '@/lib/challengeCheckin';
+import { checkinCtaTitle, stickyCheckinFooterTitle } from '@/lib/challengeCheckin';
 import { saveCheckinProofWithClient } from '@/lib/checkin/rpc';
 import {
   BEFORE_AFTER_HR_PRESET,
@@ -49,6 +49,8 @@ describe('check-in stages', () => {
     expect(checkinCtaTitle('submitted')).toBe('Checked in');
     expect(checkinStageLabel('none')).toBe('Begin');
     expect(checkinStageLabel('ready')).toBe('Submit');
+    expect(stickyCheckinFooterTitle(false)).toBe('Check in');
+    expect(stickyCheckinFooterTitle(true)).toBe('Checked in');
   });
 });
 

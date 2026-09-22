@@ -63,3 +63,8 @@ export function checkinCtaTitle(phase: CheckinPhase): string {
 export function isCheckinPrimary(phase: CheckinPhase): boolean {
   return phase === 'none' || phase === 'in_progress' || phase === 'ready';
 }
+
+/** Overview / Board footer. Chips stay Begin / Continue / Submit. */
+export function stickyCheckinFooterTitle(locked: boolean): string {
+  return locked ? 'Checked in' : 'Check in';
+}

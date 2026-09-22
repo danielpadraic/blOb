@@ -32,7 +32,7 @@ import { fetchChallengeModeratorIds } from '@/lib/challengeMods';
 import { canHouseEditChallenge, canHostQuickEdit, canHostWizardEdit } from '@/lib/challengeStart';
 import { useOfficialOps } from '@/hooks/useOfficialOps';
 import { canHouseActOnChallenge } from '@/lib/officialOps';
-import { challengeIsSettledForRigor, viewerCanFriendlyHostAdd } from '@/lib/hostRigor';
+import { challengeIsSettledForRigor, viewerCanHostAdd } from '@/lib/hostRigor';
 import { isLiveCompetitor } from '@/lib/challenges';
 import { copy } from '@/lib/copy';
 import { asLiveMute, type LiveMute } from '@/lib/livePush';
@@ -44,7 +44,12 @@ import { getCancelChallengeMessage, getErrorMessage, getLeaveChallengeMessage, g
 
 let overflowVisible = false;
 let openOverflowMenu = (_anchor: MenuAnchor) => {};
+let openHouseAddPeopleFn = () => {};
 const overflowListeners = new Set<() => void>();
+
+export function openHouseAddPeople() {
+  openHouseAddPeopleFn();
+}
 
 function publishOverflow(visible: boolean, openMenu: (anchor: MenuAnchor) => void) {
   overflowVisible = visible;
@@ -99,10 +104,11 @@ export function useChallengeDetailOverflow() {
     }) || canHouseEdit;
   const houseReady = officialOps;
   const houseDisabled = !canHouseActOnChallenge(challenge);
-  const friendlyAdd = viewerCanFriendlyHostAdd({
+  const canHostAdd = viewerCanHostAdd({
     challenge,
     viewerId: user?.id,
-    officialOps: false,
+    moderatorIds: modsQuery.data,
+    officialOps,
   });
   const friendlyAddDisabled = challengeIsSettledForRigor(challenge?.status);
   const canDetails = canEditOfficialDetails({ challenge, viewerId: user?.id, profile });
@@ -116,7 +122,7 @@ export function useChallengeDetailOverflow() {
   });
   const canLeave = canParticipantLeave({ challenge, joined });
   const showOverflow =
-    canWizardEdit || canDetails || canTools || canCancel || canLeave || canMute || houseReady || friendlyAdd;
+    canWizardEdit || canDetails || canTools || canCancel || canLeave || canMute || houseReady || canHostAdd;
   const rollPending = Boolean(challenge?.start_roll_pending) && canHostEdit;
   const rollOpen = rollPending && !rollDismissed;
 
@@ -126,8 +132,13 @@ export function useChallengeDetailOverflow() {
 
   useEffect(() => {
     publishOverflow(showOverflow, openMenu);
+    openHouseAddPeopleFn = () => {
+      setError(null);
+      setHouseAddOpen(true);
+    };
     return () => {
       publishOverflow(false, () => {});
+      openHouseAddPeopleFn = () => {};
     };
   }, [openMenu, showOverflow]);
 
@@ -250,22 +261,12 @@ export function useChallengeDetailOverflow() {
       },
     });
   }
-  if (houseReady) {
+  if (houseReady || canHostAdd) {
     actions.push({
-      key: 'house-add',
-      section: copy('house.section'),
-      label: copy('house.addPerson'),
-      disabled: houseDisabled,
-      onPress: () => {
-        setError(null);
-        setHouseAddOpen(true);
-      },
-    });
-  } else if (friendlyAdd) {
-    actions.push({
-      key: 'host-add',
-      label: copy('create.addPerson'),
-      disabled: friendlyAddDisabled,
+      key: houseReady ? 'house-add' : 'host-add',
+      section: houseReady ? copy('house.section') : undefined,
+      label: copy('house.addPeople'),
+      disabled: houseReady ? houseDisabled : friendlyAddDisabled || !canHostAdd,
       onPress: () => {
         setError(null);
         setHouseAddOpen(true);
@@ -307,7 +308,7 @@ export function useChallengeDetailOverflow() {
     closeCancel: () => setCancelOpen(false),
     leaveOpen,
     houseAddOpen,
-    houseAddHostMode: friendlyAdd && !houseReady,
+    houseAddHostMode: canHostAdd && !houseReady,
     closeHouseAdd: () => setHouseAddOpen(false),
     closeLeave: () => setLeaveOpen(false),
     muteOpen,
@@ -430,6 +431,7 @@ export function ChallengeDetailOverflowHost({
         <HouseAddPersonSheet
           visible={overflow.houseAddOpen}
           challengeId={overflow.challenge.id}
+          challengeTitle={overflow.challenge.title}
           hostMode={overflow.houseAddHostMode}
           disabled={
             overflow.houseAddHostMode

@@ -10,6 +10,7 @@ import {
   viewerCanAssignScoringLane,
   viewerCanEditBoardScore,
   viewerCanFriendlyHostAdd,
+  viewerCanHostAdd,
   viewerCanNormalHostAdjust,
   viewerCanUseHostBoardTools,
 } from '@/lib/hostRigor';
@@ -64,6 +65,64 @@ describe('host rigor', () => {
         currency: 'coins',
       }),
     ).toBe('normal');
+  });
+
+  it('lets @blob add anytime until settle; Normal / Strict only in the join window', () => {
+    const now = new Date('2026-09-22T12:00:00.000Z');
+    const open = {
+      created_by: 'host',
+      status: 'live',
+      starts_at: '2026-09-20T12:00:00.000Z',
+      join_until_at: '2026-09-23T12:00:00.000Z',
+    };
+    const closed = {
+      ...open,
+      join_until_at: '2026-09-21T12:00:00.000Z',
+    };
+    expect(
+      viewerCanHostAdd({
+        challenge: { ...closed, host_rigor: 'normal' },
+        viewerId: 'blob',
+        officialOps: true,
+        now,
+      }),
+    ).toBe(true);
+    expect(
+      viewerCanHostAdd({
+        challenge: { ...closed, host_rigor: 'friendly' },
+        viewerId: 'host',
+        now,
+      }),
+    ).toBe(true);
+    expect(
+      viewerCanHostAdd({
+        challenge: { ...open, host_rigor: 'normal' },
+        viewerId: 'host',
+        now,
+      }),
+    ).toBe(true);
+    expect(
+      viewerCanHostAdd({
+        challenge: { ...closed, host_rigor: 'normal' },
+        viewerId: 'host',
+        now,
+      }),
+    ).toBe(false);
+    expect(
+      viewerCanHostAdd({
+        challenge: { ...closed, host_rigor: 'strict' },
+        viewerId: 'host',
+        now,
+      }),
+    ).toBe(false);
+    expect(
+      viewerCanHostAdd({
+        challenge: { ...open, host_rigor: 'friendly', status: 'settled' },
+        viewerId: 'blob',
+        officialOps: true,
+        now,
+      }),
+    ).toBe(false);
   });
 
   it('lets a Friendly host add after the join window; Normal cannot', () => {

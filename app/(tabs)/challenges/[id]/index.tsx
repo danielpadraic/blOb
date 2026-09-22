@@ -33,7 +33,7 @@ import { HostPrizeTopUp } from '@/components/challenge/HostPrizeTopUp';
 import { FieldNoteLabel, ChallengeNotesProvider } from '@/components/challenge/FieldNote';
 import { OfficialMoneyBoard } from '@/components/challenge/OfficialMoneyBoard';
 import { isTeacher3DayChallenge } from '@/lib/teacher3day';
-import { ChallengeDetailHeaderRight } from '@/components/challenge/ChallengeDetailOverflow';
+import { ChallengeDetailHeaderRight, openHouseAddPeople } from '@/components/challenge/ChallengeDetailOverflow';
 import { useInviteHost } from '@/components/challenge/InviteHost';
 import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
 import { useOfficialDob } from '@/components/interests/OfficialDobHost';
@@ -189,9 +189,10 @@ import {
 import { bucksJoinCta, INSUFFICIENT_JOIN_COPY } from '@/lib/joinCta';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
 import { cashJoinUi, challengeMoneyShape } from '@/lib/geo/eligibility';
-import { isSubmittedCheckin } from '@/lib/challengeCheckin';
+import { isSubmittedCheckin, stickyCheckinFooterTitle } from '@/lib/challengeCheckin';
+import { viewerCanFriendlyHostAdd } from '@/lib/hostRigor';
 import { buildBoard, yourStandingLine } from '@/lib/board';
-import { tabBarLift, THEME } from '@/lib/theme';
+import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
 import { reportAppError, extractPostgrestCode } from '@/lib/appErrors';
 import { challengeLoadKind, firstRouteParam } from '@/lib/challengeLoad';
 import { challengeHasDurationHint, resolveChallengeHero } from '@/lib/challengeOpen';
@@ -1044,9 +1045,7 @@ export default function ChallengeDetailScreen() {
     : multiSubmit
       ? false
       : loggedToday;
-  const logTitle = checkinLocked
-    ? copy('checkin.checkedIn')
-    : (periodCheckin.data?.ctaTitle ?? copy('checkin.begin'));
+  const logTitle = stickyCheckinFooterTitle(checkinLocked);
   const proofHeadline = comparable
     ? proofSteps.length <= 1
       ? 'Proof'
@@ -1149,6 +1148,12 @@ export default function ChallengeDetailScreen() {
     !viewerOut &&
     !waitingToStart &&
     !logsClosed;
+  const stickyStart =
+    isJoined &&
+    !isCalloutObserver &&
+    waitingToStart &&
+    !viewerOut &&
+    !windowEnded;
   const stickyOut =
     isJoined &&
     !isCalloutObserver &&
@@ -1159,15 +1164,23 @@ export default function ChallengeDetailScreen() {
     challenge.status !== 'settled' &&
     challenge.status !== 'cancelled' &&
     !windowEnded &&
-    (stickyJoin || stickyCheckin || stickyOut);
+    (stickyJoin || stickyCheckin || stickyStart || stickyOut);
+  const showAddPeople = viewerCanFriendlyHostAdd({
+    challenge,
+    viewerId: user?.id,
+    moderatorIds: modsQuery.data,
+    officialOps,
+  });
   const tabClearance = tabBarLift(insets.bottom, 'sticky');
   const stickyBlock = stickyOut
     ? 56
-    : showStickyCta
-      ? JOIN_CTA_HEIGHT +
-        (!checkinLocked && watch.visible ? 44 : 12) +
-        (!checkinLocked && periodDueClock ? 40 : 0)
-      : 0;
+    : stickyStart
+      ? JOIN_CTA_HEIGHT + 12
+      : showStickyCta
+        ? JOIN_CTA_HEIGHT +
+          (!checkinLocked && watch.visible ? 44 : 12) +
+          (!checkinLocked && periodDueClock ? 40 : 0)
+        : 0;
 
   return (
     <ChallengeNotesProvider>
@@ -1410,6 +1423,25 @@ export default function ChallengeDetailScreen() {
               missesUsed={periodMisses.data ?? 0}
             />
           </View>
+        ) : null}
+        {pageTab === 'overview' && showAddPeople ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={copy('house.addPeople')}
+            onPress={() => openHouseAddPeople()}
+            className="mt-3 justify-center px-4"
+            style={{
+              minHeight: 48,
+              borderRadius: THEME.radius,
+              backgroundColor: THEME.surface,
+              borderWidth: 1,
+              borderColor: THEME.border,
+              ...themeShadow(),
+            }}>
+            <AppText className="text-[16px] font-semibold" style={{ color: THEME.textPrimary }}>
+              {copy('house.addPeople')}
+            </AppText>
+          </Pressable>
         ) : null}
 
         {moneyPhase === 'ended' && !receipt ? (
@@ -1747,6 +1779,25 @@ export default function ChallengeDetailScreen() {
 
         {pageTab === 'board' && !isCalloutObserver ? (
           <View className="mt-4">
+            {showAddPeople ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={copy('house.addPeople')}
+                onPress={() => openHouseAddPeople()}
+                className="mb-3 justify-center px-4"
+                style={{
+                  minHeight: 48,
+                  borderRadius: THEME.radius,
+                  backgroundColor: THEME.surface,
+                  borderWidth: 1,
+                  borderColor: THEME.border,
+                  ...themeShadow(),
+                }}>
+                <AppText className="text-[16px] font-semibold" style={{ color: THEME.textPrimary }}>
+                  {copy('house.addPeople')}
+                </AppText>
+              </Pressable>
+            ) : null}
             <ChallengeLeaderboard
               challenge={challenge}
               roster={boardRoster}
@@ -1783,6 +1834,7 @@ export default function ChallengeDetailScreen() {
           zIndex: 20,
           paddingHorizontal: 16,
           paddingTop: 8,
+          paddingBottom: tabClearance,
           backgroundColor: THEME.background,
         }}>
         {stickyOut ? (
@@ -1815,6 +1867,12 @@ export default function ChallengeDetailScreen() {
               />
             )}
           </View>
+        ) : stickyStart ? (
+          <Button
+            title={startLine ?? copy('challenge.waitingToStart')}
+            size="md"
+            disabled
+          />
         ) : periodCheckin.isLoading && !checkinStalled ? (
           <Button title="Checking today’s check-in" size="md" loading disabled />
         ) : (
