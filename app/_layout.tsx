@@ -21,7 +21,7 @@ import { WalletProvider } from '@/hooks/useWallet';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useAppOpenPing } from '@/hooks/useAppOpenPing';
 import { installMediaLifecycle, stopMediaUnlessCameraPath } from '@/lib/cameraSession';
-import { takePendingInviteToken } from '@/lib/challengeInvites';
+import { peekPendingInviteToken } from '@/lib/challengeInvites';
 import { inviteHref } from '@/lib/routes';
 import { FEED_COLUMN_MAX, THEME } from '@/lib/theme';
 import { queryClient } from '@/lib/queryClient';
@@ -242,21 +242,24 @@ function RecoveryRedirect({ ready, active }: { ready: boolean; active: boolean }
 function PendingInviteRedirect({ ready }: { ready: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
-  const consumed = useRef(false);
+  const redirecting = useRef(false);
 
   useEffect(() => {
-    if (!ready || consumed.current) {
+    if (!ready || redirecting.current) {
       return;
     }
-    if (pathname.startsWith('/invite') || pathname.startsWith('/challenges')) {
+    if (pathname.startsWith('/invite')) {
       return;
     }
-    consumed.current = true;
     let cancelled = false;
-    void takePendingInviteToken().then((token) => {
+    void peekPendingInviteToken().then((token) => {
       if (cancelled || !token) {
         return;
       }
+      if (pathname.startsWith('/invite')) {
+        return;
+      }
+      redirecting.current = true;
       router.replace(inviteHref(token));
     });
     return () => {

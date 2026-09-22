@@ -1,6 +1,12 @@
 import * as Linking from 'expo-linking';
-import * as SecureStore from 'expo-secure-store';
 
+import {
+  clearPendingInviteToken,
+  peekPendingInviteToken,
+  pendingInviteResumeHref,
+  stashPendingInviteToken,
+  takePendingInviteToken,
+} from '@/lib/pendingInviteToken';
 import { supabase } from '@/lib/supabase';
 import type {
   AcceptChallengeInviteResult,
@@ -10,37 +16,16 @@ import type {
 } from '@/lib/types';
 import { getErrorMessage, getInviteAcceptMessage, isMissingRelationError } from '@/utils/errors';
 
-const PENDING_INVITE_KEY = 'pending_invite_token';
-
-let memoryToken: string | null = null;
+export {
+  clearPendingInviteToken,
+  peekPendingInviteToken,
+  pendingInviteResumeHref,
+  stashPendingInviteToken,
+  takePendingInviteToken,
+};
 
 export function inviteLinkForToken(token: string): string {
   return Linking.createURL(`invite/${token}`);
-}
-
-export async function stashPendingInviteToken(token: string): Promise<void> {
-  const value = token.trim();
-  if (!value) {
-    return;
-  }
-  memoryToken = value;
-  try {
-    await SecureStore.setItemAsync(PENDING_INVITE_KEY, value);
-  } catch {
-    // In-memory is enough for the same session (sign-in then accept).
-  }
-}
-
-export async function takePendingInviteToken(): Promise<string | null> {
-  const fromMemory = memoryToken?.trim() || null;
-  memoryToken = null;
-  try {
-    const stored = (await SecureStore.getItemAsync(PENDING_INVITE_KEY))?.trim() || null;
-    await SecureStore.deleteItemAsync(PENDING_INVITE_KEY);
-    return fromMemory ?? stored;
-  } catch {
-    return fromMemory;
-  }
 }
 
 export async function createChallengeInvite(

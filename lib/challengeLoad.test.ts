@@ -65,6 +65,16 @@ describe('classifyChallengeLoadFailure', () => {
     );
   });
 
+  it('treats access_reason private as private even without a snapshot', () => {
+    expect(classifyChallengeLoadFailure({ accessReason: 'private' })).toBe('private');
+    expect(
+      classifyChallengeLoadFailure({
+        accessReason: 'hidden',
+        snapshot: { privacy_mode: 'private_corporate' },
+      }),
+    ).toBe('private');
+  });
+
   it('treats empty / RLS deny as unavailable', () => {
     expect(classifyChallengeLoadFailure({ accessReason: 'hidden' })).toBe('unavailable');
     expect(classifyChallengeLoadFailure({ error: { code: 'PGRST116', message: '0 rows' } })).toBe(

@@ -40,6 +40,7 @@ export function useAcceptChallengeInvite() {
       void queryClient.invalidateQueries({ queryKey: ['lobby-joined'] });
       void queryClient.invalidateQueries({ queryKey: ['lobby-discover'] });
       void queryClient.invalidateQueries({ queryKey: ['challenges'] });
+      void queryClient.invalidateQueries({ queryKey: ['challenge'] });
     },
   });
 }

@@ -52,6 +52,7 @@ import { ensureOwnProfileRow, pickCropProfilePhoto } from '@/lib/profilePhoto';
 import type { PostAudience } from '@/lib/postAudience';
 import { mergeSelfProfilePatch } from '@/lib/completeProfileRow';
 import { AUTH_LOGIN_PATH } from '@/lib/authRedirect';
+import { pendingInviteResumeHref } from '@/lib/challengeInvites';
 import { TABS_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import type { WeightUnit } from '@/lib/types';
@@ -385,7 +386,7 @@ export function ProfileSetupWizard() {
           mergeSelfProfilePatch(current ?? profile, user.id, patch),
         );
       }
-      router.replace(TABS_HREF);
+      router.replace((await pendingInviteResumeHref()) ?? TABS_HREF);
     } catch (error) {
       const message = getProfileSetupSaveMessage(error);
       if (isUsernameTakenError(error)) {
