@@ -448,6 +448,7 @@ export function ChallengeInviteCard({
       challengeTitle: displayTitle,
       allowSendToPeople: true,
       defaultAudience: 'public',
+      privacyMode: challenge.privacy_mode,
     });
   }
 

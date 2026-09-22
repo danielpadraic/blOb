@@ -8,6 +8,7 @@ import { THEME } from '@/lib/theme';
 type OfficialInviteButtonProps = {
   challengeId: string;
   challengeTitle?: string;
+  privacyMode?: string | null;
   onOpenPicker?: () => void;
   tone?: 'card' | 'hero';
   embedded?: boolean;
@@ -16,6 +17,7 @@ type OfficialInviteButtonProps = {
 export function OfficialInviteButton({
   challengeId,
   challengeTitle,
+  privacyMode,
   onOpenPicker,
   tone = 'card',
   embedded = false,
@@ -37,6 +39,7 @@ export function OfficialInviteButton({
       challengeTitle: challengeTitle?.trim() || 'this challenge',
       allowSendToPeople: true,
       defaultAudience: 'public',
+      privacyMode,
     });
   }
 

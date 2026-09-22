@@ -297,6 +297,7 @@ export function ChallengeCardVisual({
             <OfficialInviteButton
               challengeId={challenge.id}
               challengeTitle={challengeDisplayTitle(challenge)}
+              privacyMode={challenge.privacy_mode}
               tone={dark ? 'hero' : 'card'}
               embedded
             />

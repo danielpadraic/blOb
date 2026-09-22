@@ -3,11 +3,11 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
-import { Alert, View } from 'react-native';
-import * as Clipboard from 'expo-clipboard';
+import { TextInput, View } from 'react-native';
 
 import { InviteToChallengeModal } from '@/components/challenge/InviteToChallengeModal';
 import { CircleShareSheet } from '@/components/circles/CircleShareSheet';
@@ -18,10 +18,10 @@ import { AppText } from '@/components/ui/AppText';
 import { useMyCircles } from '@/hooks/useCircles';
 import { useCreatePost } from '@/hooks/useFeed';
 import { challengeAnnounceCopy } from '@/lib/challengeFeedPost';
-import { copy } from '@/lib/copy';
 import { mintChallengeInviteLink } from '@/lib/challengeInvites';
-import { challengeInviteShareUrl, needsInviteShareLink } from '@/lib/challengeInviteShare';
-import { challengeShareUrl } from '@/lib/officialShare';
+import { needsInviteShareLink, resolveChallengeCopyUrl } from '@/lib/challengeInviteShare';
+import { copyTextToClipboard } from '@/lib/clipboardCopy';
+import { copy } from '@/lib/copy';
 import { isPrivateCorporate } from '@/lib/privacyMode';
 import type { PostAudience } from '@/lib/postAudience';
 import type { FeedChallengePreview } from '@/lib/social';
@@ -58,15 +58,67 @@ export function InviteHost({ children }: { children: ReactNode }) {
   const [target, setTarget] = useState<ChallengeShareTarget | null>(null);
   const [panel, setPanel] = useState<Panel>('menu');
   const [toast, setToast] = useState<string | null>(null);
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const inviteTokenRef = useRef<string | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
+  const [manualUrl, setManualUrl] = useState<string | null>(null);
+  const mintInFlight = useRef<Promise<string> | null>(null);
+  const mintForId = useRef<string | null>(null);
   const createPost = useCreatePost();
   const myCircles = useMyCircles();
   const inACircle = (myCircles.data ?? []).length > 0;
   const corporateBlocked = isPrivateCorporate(target?.privacyMode);
 
-  const open = useCallback((next: ChallengeShareTarget) => {
-    setTarget(next);
-    setPanel('menu');
+  const rememberToken = useCallback((token: string) => {
+    inviteTokenRef.current = token;
+    setInviteToken(token);
   }, []);
+
+  const ensureInviteToken = useCallback((challengeId: string) => {
+    if (inviteTokenRef.current) {
+      return Promise.resolve(inviteTokenRef.current);
+    }
+    if (mintInFlight.current) {
+      return mintInFlight.current;
+    }
+    const pending = mintChallengeInviteLink(challengeId)
+      .then((row) => {
+        const token = String(row.token ?? '').trim();
+        if (!token) {
+          throw new Error('Couldn’t copy that invite.');
+        }
+        if (mintForId.current === challengeId) {
+          rememberToken(token);
+        }
+        return token;
+      })
+      .finally(() => {
+        if (mintInFlight.current === pending) {
+          mintInFlight.current = null;
+        }
+      });
+    mintInFlight.current = pending;
+    return pending;
+  }, [rememberToken]);
+
+  const open = useCallback(
+    (next: ChallengeShareTarget) => {
+      setTarget(next);
+      setPanel('menu');
+      setCopyError(null);
+      setManualUrl(null);
+      inviteTokenRef.current = null;
+      setInviteToken(null);
+      mintInFlight.current = null;
+      mintForId.current = next.challengeId;
+      if (needsInviteShareLink(next.privacyMode)) {
+        void ensureInviteToken(next.challengeId).catch(() => {
+          // Copy Link will mint again in the tap, or show the URL if it still fails.
+        });
+      }
+    },
+    [ensureInviteToken],
+  );
 
   const value = useMemo(() => ({ open }), [open]);
 
@@ -78,26 +130,42 @@ export function InviteHost({ children }: { children: ReactNode }) {
   function close() {
     setTarget(null);
     setPanel('menu');
+    setCopyError(null);
+    setManualUrl(null);
   }
 
   async function copyLink() {
     if (!target) {
       return;
     }
+    setCopyError(null);
+    setManualUrl(null);
+    let token = inviteTokenRef.current ?? inviteToken;
     try {
-      if (needsInviteShareLink(target.privacyMode)) {
-        const minted = await mintChallengeInviteLink(target.challengeId);
-        await Clipboard.setStringAsync(challengeInviteShareUrl(target.challengeId, minted.token));
-        close();
-        showToast(copy('challenge.inviteCopied'));
-        return;
+      if (needsInviteShareLink(target.privacyMode) && !token) {
+        token = await ensureInviteToken(target.challengeId);
       }
-      await Clipboard.setStringAsync(challengeShareUrl(target.challengeId));
-      close();
-      showToast('Link copied.');
     } catch (error) {
-      Alert.alert('Couldn’t copy that', getErrorMessage(error));
+      setCopyError(getErrorMessage(error) || 'Couldn’t copy. Hold to select.');
+      return;
     }
+    const url = resolveChallengeCopyUrl({
+      challengeId: target.challengeId,
+      privacyMode: target.privacyMode,
+      inviteToken: token,
+    });
+    if (!url) {
+      setCopyError('Couldn’t copy. Hold to select.');
+      return;
+    }
+    const copied = await copyTextToClipboard(url);
+    if (copied) {
+      close();
+      showToast('Link copied');
+      return;
+    }
+    setManualUrl(url);
+    setCopyError('Couldn’t copy. Hold to select.');
   }
 
   const preview: FeedChallengePreview | null = target
@@ -154,6 +222,32 @@ export function InviteHost({ children }: { children: ReactNode }) {
               />
             ) : null}
             <Button title="Copy link" size="lg" variant="outline" onPress={() => void copyLink()} />
+            {copyError ? (
+              <AppText className="mt-1 text-sm leading-5 text-coral-dark">{copyError}</AppText>
+            ) : null}
+            {manualUrl ? (
+              <TextInput
+                value={manualUrl}
+                editable={false}
+                selectTextOnFocus
+                autoFocus
+                multiline
+                selection={{ start: 0, end: manualUrl.length }}
+                accessibilityLabel="Challenge link"
+                style={{
+                  marginTop: 4,
+                  minHeight: 44,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: THEME.border,
+                  backgroundColor: THEME.surface,
+                  color: THEME.textPrimary,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  fontSize: 13,
+                }}
+              />
+            ) : null}
             <Button title="Close" variant="ghost" onPress={close} />
           </View>
         </View>

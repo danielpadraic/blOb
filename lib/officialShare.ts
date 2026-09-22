@@ -1,17 +1,17 @@
 import { Platform, Share } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import * as Linking from 'expo-linking';
 
 import { officialBob } from '@/copy/officialBob';
 import {
   challengeInviteShareUrl,
+  challengePublicShareUrl,
   needsInviteShareLink,
 } from '@/lib/challengeInviteShare';
 
-export { challengeInviteShareUrl, needsInviteShareLink };
+export { challengeInviteShareUrl, challengePublicShareUrl, needsInviteShareLink };
 
 export function challengeShareUrl(challengeId: string): string {
-  return Linking.createURL(`challenges/${challengeId}`);
+  return challengePublicShareUrl(challengeId);
 }
 
 export async function shareOfficialChallenge(challengeId: string): Promise<'shared' | 'copied'> {
