@@ -12,6 +12,8 @@ import { parseMetricValues } from '../comparablePoints';
 import { normalizePeriodKey } from '../checkinPeriod';
 import { clampProofCaption } from '../checkinShare';
 import { isVendorHealthSlot } from '../health/ocrBackfill';
+import { isRecapCardUrl } from '../health/postWorkoutCard';
+import { proofPartMediaUrls } from './unionAttachments';
 import { hashCheckinProof } from './hashProof';
 import { mapCheckinRpcError } from './errors';
 
@@ -173,11 +175,21 @@ async function proofPartFor(
   }
   if (proof.method === 'distance') {
     const uri = input.uri?.trim() ?? '';
-    const healthWorkoutId = uri.startsWith('health:') ? uri.slice('health:'.length) : null;
-    const uploaded = healthWorkoutId
-      ? []
-      : await resolveProofStillUrls(input, userId, upload, resolveUrl, captureTypeForMethod(proof.method));
-    const url = uploaded[0] ?? '';
+    const healthWorkoutId = uri.startsWith('health:')
+      ? uri.slice('health:'.length)
+      : input.healthWorkoutId?.trim() || null;
+    const uploaded = await resolveProofStillUrls(
+      input,
+      userId,
+      upload,
+      resolveUrl,
+      input.cardVersion != null ? 'workout_card' : captureTypeForMethod(proof.method),
+    );
+    const media = proofPartMediaUrls({
+      uploaded,
+      recap: uploaded.find((url) => isRecapCardUrl(url, null)) ?? null,
+    });
+    const url = media[0] ?? '';
     const meters = input.health?.distanceMeters ?? parseSessionDistanceText(input.text);
     const contentHash = await hashCheckinProof({
       uri: uploaded[0] ?? uri,
@@ -192,7 +204,7 @@ async function proofPartFor(
           method: 'distance',
           text: (input.text ?? '').trim() || null,
           url,
-          urls: uploaded,
+          urls: media,
           healthWorkoutId,
           health: input.health ?? null,
           distanceMeters: meters,
@@ -204,8 +216,10 @@ async function proofPartFor(
     };
   }
   const uri = input.uri?.trim() ?? '';
-  if (uri.startsWith('health:')) {
-    const healthWorkoutId = uri.slice('health:'.length);
+  const healthFromUri = uri.startsWith('health:') ? uri.slice('health:'.length) : '';
+  const healthWorkoutId = input.healthWorkoutId?.trim() || healthFromUri || null;
+  const hasStills = proofInputHasFile(input);
+  if (healthFromUri && !hasStills) {
     const contentHash = await hashCheckinProof({ healthWorkoutId });
     return {
       id: proof.id,
@@ -213,6 +227,7 @@ async function proofPartFor(
         {
           method: proof.method,
           url: '',
+          urls: [],
           healthWorkoutId,
           health: input.health ?? null,
           contentHash: contentHash || null,
@@ -232,20 +247,21 @@ async function proofPartFor(
     resolveUrl,
     input.cardVersion != null ? 'workout_card' : captureTypeForMethod(proof.method),
   );
-  const healthWorkoutId = input.healthWorkoutId?.trim() || null;
   const vendor = isVendorHealthSlot({
     health: input.health,
     healthWorkoutId,
   });
-  const media = vendor ? uploaded.slice(0, 1) : uploaded;
+  const recap = uploaded.find((url) => isRecapCardUrl(url, null)) ?? (input.cardVersion != null ? uploaded[uploaded.length - 1] : null);
+  const media = vendor ? proofPartMediaUrls({ uploaded, recap }) : uploaded;
   const url = media[0] ?? '';
-  if (!url) {
+  if (!url && !healthWorkoutId) {
     throw new Error('Add that proof to continue.');
   }
   const contentHash = await hashCheckinProof({
     uri: uploaded[0] ?? uri,
     blob: input.blob,
     url,
+    healthWorkoutId,
   });
   return {
     id: proof.id,
@@ -255,8 +271,6 @@ async function proofPartFor(
         url,
         urls: media,
         fromLibrary: input.fromLibrary === true,
-        // A generated workout card is an image AND the Health receipt for this slot. A plain
-        // camera still carries neither key.
         ...(healthWorkoutId ? { healthWorkoutId } : null),
         ...(input.health ? { health: input.health } : null),
         contentHash: contentHash || null,

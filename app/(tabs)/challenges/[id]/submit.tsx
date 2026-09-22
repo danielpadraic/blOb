@@ -102,6 +102,7 @@ import {
   partSatisfies,
   proofDisplayName,
   existingUrlsForProof,
+  proofImageUrls,
   proofSlotNeedsRewrite,
   proofsAreHonorOnly,
   uniqueProofUrls,
@@ -148,6 +149,8 @@ import {
   toCheckinHealthProof,
   type CheckinHealthProof,
 } from '@/lib/health/attachProof';
+import { workoutOverlapsLiftWindow } from '@/lib/checkin/unionAttachments';
+import { isRecapCardUrl } from '@/lib/health/postWorkoutCard';
 import { upsertHealthWorkout } from '@/lib/health/remote';
 import type { WorkoutRoute } from '@/lib/health/route';
 import {
@@ -466,6 +469,8 @@ function SubmitWorkoutInner() {
   /** Context on the check-in post. Never counted toward the proof this challenge requires. */
   const [attachedLift, setAttachedLift] = useState<LiftSessionSummary | null>(null);
   const [liftPickerOpen, setLiftPickerOpen] = useState(false);
+  const recapWaitRef = useRef<((ready: boolean) => void) | null>(null);
+  const recapUriRef = useRef<string | null>(null);
   const liftParam = firstRouteParam(params.lift);
   const [sendLock, setSendLock] = useState(false);
   const [logDraft, setLogDraft] = useState<ComparableLogDraft>(emptyComparableLogDraft);
@@ -506,6 +511,36 @@ function SubmitWorkoutInner() {
       live = false;
     };
   }, [liftParam]);
+
+  useEffect(() => {
+    const checkinId = String(checkinQuery.data?.id ?? '').trim();
+    if (!checkinId) {
+      return;
+    }
+    let live = true;
+    void supabase
+      .from('posts')
+      .select('lift_session_id')
+      .eq('checkin_id', checkinId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+      .then(async (res) => {
+        const liftId = String((res.data as { lift_session_id?: string } | null)?.lift_session_id ?? '').trim();
+        if (!live || !liftId) {
+          return;
+        }
+        const draft = await fetchLiftSession(liftId).catch(() => null);
+        if (!live || !draft) {
+          return;
+        }
+        setAttachedLift((current) => current ?? draftSummary(draft));
+      });
+    return () => {
+      live = false;
+    };
+  }, [checkinQuery.data?.id]);
 
   const challenge = challengeQuery.data;
   const comparableConfig = comparablePointsFromChallenge(challenge);
@@ -1101,10 +1136,7 @@ function SubmitWorkoutInner() {
       throw new Error(CHECKIN_REACH_STAY);
     }
     const stills = slotStillUris(draft);
-    const vendor = Boolean(draft?.healthWorkoutId) ||
-      draft?.health?.source === 'healthkit' ||
-      draft?.health?.source === 'health_connect';
-    const urls = vendor ? stills.slice(0, 1) : stills;
+    const urls = stills;
     const uri = urls[0] ?? draft?.uri;
     const blob = draft?.blob ?? getHeldCheckinBlob(uri);
     const payload = {
@@ -1361,6 +1393,20 @@ function SubmitWorkoutInner() {
       const body = comparableNotes ?? checkinPostBody(caption.text);
       let saved: ChallengeCheckin | null = checkinQuery.data ?? null;
       let savedParts = { ...(checkinQuery.data?.proof_parts ?? {}) };
+      const failedExtras: string[] = [];
+      const recapBuilding = proofSteps.some((proof) => drafts[proof.id]?.building) || Boolean(cardRequest);
+      if (recapBuilding) {
+        const recapReady = await new Promise<boolean>((resolve) => {
+          const timer = setTimeout(() => resolve(false), 8000);
+          recapWaitRef.current = (ready) => {
+            clearTimeout(timer);
+            resolve(ready);
+          };
+        });
+        if (!recapReady) {
+          failedExtras.push(copy('checkin.workoutFailed'));
+        }
+      }
       for (const proof of proofSteps) {
         if (proof.method === 'honor') {
           continue;
@@ -1369,32 +1415,53 @@ function SubmitWorkoutInner() {
         const nextCaption = clampProofCaption(proofCaptions[proof.id] ?? '');
         const savedCaption = clampProofCaption(savedParts[proof.id]?.caption ?? '');
         const withStats = draftWithReadStats(proof, draft);
+        const savedStills = proofImageUrls(savedParts[proof.id]);
+        const draftStills = slotStillUris(withStats);
+        const mergedStills = uniqueProofUrls([...savedStills, ...draftStills, recapUriRef.current]);
+        const persistDraft: SlotDraft | undefined = withStats
+          ? {
+              ...withStats,
+              uri: mergedStills[0] ?? withStats.uri,
+              uris: mergedStills,
+            }
+          : mergedStills[0]
+            ? { uri: mergedStills[0], uris: mergedStills }
+            : undefined;
         const healthPending =
-          Boolean(withStats?.health) &&
-          JSON.stringify(savedParts[proof.id]?.health ?? null) !== JSON.stringify(withStats?.health ?? null);
+          Boolean(persistDraft?.health) &&
+          JSON.stringify(savedParts[proof.id]?.health ?? null) !== JSON.stringify(persistDraft?.health ?? null);
+        const persistPart = slotPart(proof, persistDraft, distanceUnit);
         if (
           partSatisfies(proof, savedParts[proof.id], { sessionDistance }) &&
-          partSatisfies(proof, slotPart(proof, withStats, distanceUnit), { sessionDistance }) &&
-          !proofSlotNeedsRewrite(withStats?.uri, savedParts[proof.id]?.url) &&
+          partSatisfies(proof, persistPart, { sessionDistance }) &&
+          !proofSlotNeedsRewrite(persistDraft?.uri, savedParts[proof.id]?.url) &&
           nextCaption === savedCaption &&
           !healthPending
         ) {
           continue;
         }
-        if (!partSatisfies(proof, slotPart(proof, withStats, distanceUnit), { sessionDistance })) {
+        if (!partSatisfies(proof, persistPart, { sessionDistance }) && !healthPending) {
           continue;
         }
-        const row = await persistProof(proof, withStats, body);
-        if (row) {
-          saved = row;
-        }
-        if (row?.proof_parts) {
-          savedParts = row.proof_parts;
+        try {
+          const row = await persistProof(proof, persistDraft, body);
+          if (row) {
+            saved = row;
+          }
+          if (row?.proof_parts) {
+            savedParts = row.proof_parts;
+          }
+        } catch (persistError) {
+          if (healthPending && partSatisfies(proof, savedParts[proof.id], { sessionDistance })) {
+            failedExtras.push(copy('checkin.workoutFailed'));
+            logCheckinPhase('save', 'health-soft-fail', getErrorMessage(persistError));
+            continue;
+          }
+          throw persistError;
         }
       }
       const uploadedExtras: CheckinExtra[] = [];
       const extraUrls: string[] = [];
-      const failedExtras: string[] = [];
       if (uid) {
         for (const [index, extra] of extras.entries()) {
           if (extra.remoteUrl) {
@@ -1423,6 +1490,9 @@ function SubmitWorkoutInner() {
             console.log('[blob:checkin-extra]', getErrorMessage(uploadError));
           }
         }
+        if (recapUriRef.current && !extraUrls.includes(recapUriRef.current)) {
+          extraUrls.push(recapUriRef.current);
+        }
         if (uploadedExtras.length) {
           setExtras(uploadedExtras);
         }
@@ -1449,13 +1519,24 @@ function SubmitWorkoutInner() {
           return;
         }
       }
-      // Extra photos/videos/GIFs never block Send. Board counts required proof.
-      const extraWarning =
-        failedExtras.length === 0
-          ? null
-          : failedExtras.length === 1
-            ? copy('checkin.extraFailed')
-            : interpolateCopy(copy('checkin.extraFailedMany'), { n: failedExtras.length });
+      const attachmentWarning = () => {
+        const liftFailed = failedExtras.includes(copy('checkin.liftFailed'));
+        const workoutFailed = failedExtras.includes(copy('checkin.workoutFailed'));
+        const photoFails = failedExtras.filter(
+          (line) => line !== copy('checkin.liftFailed') && line !== copy('checkin.workoutFailed'),
+        );
+        return [
+          liftFailed ? copy('checkin.liftFailed') : null,
+          workoutFailed ? copy('checkin.workoutFailed') : null,
+          photoFails.length === 0
+            ? null
+            : photoFails.length === 1
+              ? copy('checkin.extraFailed')
+              : interpolateCopy(copy('checkin.extraFailedMany'), { n: photoFails.length }),
+        ]
+          .filter(Boolean)
+          .join(' ') || null;
+      };
       const alreadySubmitted = checkinQuery.data?.phase === 'submitted';
       const sending = (honorOnly || readyNow) && (multiSubmit || !alreadySubmitted);
       const submitted = sending ? await submitCheckin.mutateAsync() : null;
@@ -1506,25 +1587,35 @@ function SubmitWorkoutInner() {
           const checkinStats = (post.data as { checkin_stats?: unknown } | null)?.checkin_stats ?? null;
           if (postId) {
             const captions = mediaCaptionsForUrls(mediaUrls, proofSteps, savedParts, proofCaptions);
-            await supabase
-              .from('posts')
-              .update({
-                hidden_from_home: !shareHome,
-                media_captions: captions,
-                // The lift rides on the check-in post as context. It is deliberately not written
-                // into proof_parts, so the challenge's photo or heart-rate requirement is decided
-                // by exactly the same check it always was.
-                ...(attachedLift ? { lift_session_id: attachedLift.id } : null),
-              })
-              .eq('id', postId);
+            const postPatch: Record<string, unknown> = {
+              hidden_from_home: !shareHome,
+              media_captions: captions,
+            };
+            if (attachedLift) {
+              postPatch.lift_session_id = attachedLift.id;
+              postPatch.checkin_stats = {
+                ...(checkinStats && typeof checkinStats === 'object' ? checkinStats : {}),
+                lift_session_id: attachedLift.id,
+              };
+            }
+            const patch = await supabase.from('posts').update(postPatch).eq('id', postId);
+            if (patch.error && attachedLift) {
+              failedExtras.push(copy('checkin.liftFailed'));
+            }
             const liftDraft = attachedLift
               ? await fetchLiftSession(attachedLift.id).catch(() => null)
               : null;
-            if (attachedLift) {
-              await linkSessionToPost(attachedLift.id, postId);
-              if (liftDraft) {
-                await persistLiftSnapshotOnPost(postId, liftDraft);
+            if (attachedLift && !patch.error) {
+              try {
+                await linkSessionToPost(attachedLift.id, postId);
+                if (liftDraft) {
+                  await persistLiftSnapshotOnPost(postId, liftDraft);
+                }
+              } catch {
+                failedExtras.push(copy('checkin.liftFailed'));
               }
+            } else if (attachedLift && !liftDraft) {
+              failedExtras.push(copy('checkin.liftFailed'));
             }
             const author = sessionAuthor(
               isProxy ? subjectRow?.profile ?? { id: subjectId, username: '', display_name: proxyName, avatar_url: null } : profile,
@@ -1547,6 +1638,7 @@ function SubmitWorkoutInner() {
                 media_urls: mediaUrls,
                 checkin_stats: {
                   ...(checkinStats && typeof checkinStats === 'object' ? checkinStats : {}),
+                  ...(attachedLift ? { lift_session_id: attachedLift.id } : null),
                   ...(isProxy ? { logged_by: uid, logged_by_name: actorName } : null),
                 },
                 source: 'checkin',
@@ -1562,7 +1654,17 @@ function SubmitWorkoutInner() {
             }
           }
         } catch {
-          // Home hide / lift snapshot stay best-effort. Mentions are required below.
+          if (attachedLift) {
+            failedExtras.push(copy('checkin.liftFailed'));
+          }
+        }
+        if (attachedLift && !postId) {
+          failedExtras.push(copy('checkin.liftFailed'));
+        }
+        const wantedHealth = proofSteps.some((proof) => Boolean(draftWithReadStats(proof, drafts[proof.id])?.health));
+        const savedHealth = Object.values(savedParts).some((part) => Boolean(part?.health));
+        if (wantedHealth && !savedHealth && !failedExtras.includes(copy('checkin.workoutFailed'))) {
+          failedExtras.push(copy('checkin.workoutFailed'));
         }
         const mentionIds = [
           ...new Set(caption.chips.map((chip) => chip.userId).filter((chipId) => chipId && chipId !== user?.id)),
@@ -1658,6 +1760,7 @@ function SubmitWorkoutInner() {
         });
       }
       // A failed extra never rolls back the required slot — warn, do not block.
+      const extraWarning = attachmentWarning();
       if (extraWarning) {
         setFailKind(null);
         setError(extraWarning);
@@ -1705,6 +1808,7 @@ function SubmitWorkoutInner() {
     if (!id || busy) {
       return;
     }
+    recapUriRef.current = null;
     setError(null);
     const target =
       proof ??
@@ -1737,8 +1841,11 @@ function SubmitWorkoutInner() {
       // What this heart looked like doing this work, for comparison against this account's own history
       // later. Fire and forget: it never blocks the attach.
       void recordHrSignature({ userId: uid, workout: enriched, samples });
+      const keptStills = slotStillUris(drafts[target.id]);
       const draft: SlotDraft = {
-        uri: `health:${healthWorkoutId}`,
+        ...drafts[target.id],
+        uri: keptStills[0] ?? `health:${healthWorkoutId}`,
+        uris: keptStills,
         health: snapshot,
         healthWorkoutId,
       };
@@ -1749,16 +1856,60 @@ function SubmitWorkoutInner() {
       if (vendorMiles) {
         draft.text = vendorMiles;
       }
-      setDrafts((current) => ({ ...current, [target.id]: { ...current[target.id], ...draft } }));
+      setDrafts((current) => ({
+        ...current,
+        [target.id]: { ...current[target.id], ...draft, uris: slotStillUris(current[target.id]) },
+      }));
       setCaptureId(null);
       setSkippedAuto(true);
       setPreferCamera(false);
-      await persistProof(target, draft);
-      // The attach already counts. Turning it into a real image is a follow-up that must not
-      // strand the slot if rasterizing fails.
+      await persistProof(target, { ...draft, uris: keptStills, uri: keptStills[0] ?? `health:${healthWorkoutId}` });
+      // Recap is an extra slide. A photo selfie slot still gets one when HK numbers exist.
       void buildWorkoutCard(target, enriched, healthWorkoutId, samples);
     } catch (caught) {
       setError(getErrorMessage(caught));
+    }
+  }
+
+  async function attachMatchingHealthForLift(session: LiftSessionSummary) {
+    if (attachedHealth()) {
+      return;
+    }
+    try {
+      const draft = await fetchLiftSession(session.id);
+      if (!draft) {
+        return;
+      }
+      const provider = getHealthProvider();
+      if (!provider?.fetchWorkouts || Platform.OS === 'web') {
+        return;
+      }
+      const start = new Date(draft.performedAt);
+      if (Number.isNaN(start.getTime())) {
+        return;
+      }
+      const end = draft.completedAt
+        ? new Date(draft.completedAt)
+        : new Date(start.getTime() + 90 * 60 * 1000);
+      const workouts = await provider.fetchWorkouts({
+        from: new Date(start.getTime() - 30 * 60 * 1000),
+        to: new Date(end.getTime() + 30 * 60 * 1000),
+      });
+      const match = workouts.find((workout) =>
+        workoutOverlapsLiftWindow({
+          workoutStartedAt: workout.startedAt,
+          workoutEndedAt: workout.endedAt,
+          liftPerformedAt: draft.performedAt,
+          liftCompletedAt: draft.completedAt,
+          providerWorkoutId: workout.providerWorkoutId,
+          liftHealthkitUuid: draft.healthkitWorkoutUuid,
+        }),
+      );
+      if (match) {
+        await onAttachHealth(match);
+      }
+    } catch {
+      // Lift still rides on the check-in. HealthKit is extra.
     }
   }
 
@@ -1801,11 +1952,8 @@ function SubmitWorkoutInner() {
     healthWorkoutId: string,
     samples: HeartRateSample[],
   ) {
-    // The card is workout/device proof only. A required selfie slot keeps asking for a selfie.
+    // Recap is an extra slide. Photo / selfie slots keep their still and still earn a card.
     if (Platform.OS === 'web' || !challenge) {
-      return;
-    }
-    if (target.method !== 'hr' && target.method !== 'distance') {
       return;
     }
     setDrafts((current) => ({
@@ -1863,9 +2011,11 @@ function SubmitWorkoutInner() {
         return;
       }
       const proof = proofSteps.find((item) => item.id === pending.proofId);
+      const kept = slotStillUris(drafts[pending.proofId]).filter((uri) => !isRecapCardUrl(uri, fileUri));
+      const mergedUris = uniqueProofUrls([...kept, fileUri]);
       const draft: SlotDraft = {
-        uri: fileUri,
-        uris: [fileUri],
+        uri: mergedUris[0] ?? fileUri,
+        uris: mergedUris,
         mimeType: 'image/png',
         health: pending.health,
         healthWorkoutId: pending.healthWorkoutId,
@@ -1878,7 +2028,7 @@ function SubmitWorkoutInner() {
           ...current[pending.proofId],
           ...draft,
           uris: uniqueProofUrls([
-            ...(current[pending.proofId]?.uris ?? []).filter((uri) => !uri.startsWith('health:')),
+            ...slotStillUris(current[pending.proofId]).filter((uri) => !isRecapCardUrl(uri, fileUri)),
             fileUri,
           ]),
         },
@@ -1897,6 +2047,9 @@ function SubmitWorkoutInner() {
           },
         ];
       });
+      recapUriRef.current = fileUri;
+      recapWaitRef.current?.(true);
+      recapWaitRef.current = null;
       if (!proof) {
         return;
       }
@@ -1920,6 +2073,8 @@ function SubmitWorkoutInner() {
       ...current,
       [pending.proofId]: { ...current[pending.proofId], building: false },
     }));
+    recapWaitRef.current?.(false);
+    recapWaitRef.current = null;
   }, []);
 
   overlayOpenRef.current = false;
@@ -2466,6 +2621,7 @@ function SubmitWorkoutInner() {
         onPick={(session) => {
           setAttachedLift(session);
           setLiftPickerOpen(false);
+          void attachMatchingHealthForLift(session);
         }}
       />
     </Screen>

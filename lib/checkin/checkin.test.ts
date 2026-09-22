@@ -454,6 +454,7 @@ describe('check-in composer save', () => {
         p_proof_part: {
           method: 'hr',
           url: '',
+          urls: [],
           healthWorkoutId: 'hw-1',
           health,
           contentHash: 'health:hw-1',
@@ -504,7 +505,7 @@ describe('check-in composer save', () => {
     expect(call.p_health_workout_id).toBe('hw-1');
   });
 
-  it('writes exactly one HealthKit card and does not keep a cloned URL', async () => {
+  it('keeps the selfie and adds the recap when HealthKit is attached', async () => {
     const rpc = vi.fn().mockResolvedValue({ data: savedRow, error: null });
     await saveCheckinProofWithClient(
       {
@@ -513,10 +514,13 @@ describe('check-in composer save', () => {
       },
       {
         challengeId: 'c1',
-        proof: { id: 'hr', name: 'Heart rate', method: 'hr' },
-        uri: 'https://example.com/hr_monitor-1.jpg',
-        urls: ['https://example.com/hr_monitor-1.jpg', 'https://example.com/hr_monitor-2.jpg'],
-        health: { source: 'healthkit', durationSec: 600, activityType: 'walking' },
+        proof: { id: 'photo', name: 'Photo', method: 'photo' },
+        uri: 'https://example.com/selfie.jpg',
+        urls: [
+          'https://example.com/selfie.jpg',
+          'https://example.com/u1/c1/workout_card-1.jpg',
+        ],
+        health: { source: 'healthkit', durationSec: 600, activityType: 'traditional_strength_training' },
         healthWorkoutId: 'hw-1',
       },
       async () => {
@@ -528,8 +532,41 @@ describe('check-in composer save', () => {
       string,
       unknown
     >;
-    expect(part.url).toBe('https://example.com/hr_monitor-1.jpg');
-    expect(part.urls).toEqual(['https://example.com/hr_monitor-1.jpg']);
+    expect(part.url).toBe('https://example.com/selfie.jpg');
+    expect(part.urls).toEqual([
+      'https://example.com/selfie.jpg',
+      'https://example.com/u1/c1/workout_card-1.jpg',
+    ]);
+    expect(part.healthWorkoutId).toBe('hw-1');
+  });
+
+  it('does not wipe a selfie when the Health attach is only a health: token', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: savedRow, error: null });
+    await saveCheckinProofWithClient(
+      {
+        auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
+        rpc,
+      },
+      {
+        challengeId: 'c1',
+        proof: { id: 'photo', name: 'Photo', method: 'photo' },
+        uri: 'health:hw-1',
+        urls: ['https://example.com/selfie.jpg'],
+        health: { source: 'healthkit', durationSec: 2100, activityType: 'traditional_strength_training' },
+        healthWorkoutId: 'hw-1',
+      },
+      async () => {
+        throw new Error('should not upload');
+      },
+      async () => 'https://example.com/unused.jpg',
+    );
+    const part = (rpc.mock.calls[0]?.[1] as Record<string, unknown>).p_proof_part as Record<
+      string,
+      unknown
+    >;
+    expect(part.url).toBe('https://example.com/selfie.jpg');
+    expect(part.urls).toEqual(['https://example.com/selfie.jpg']);
+    expect(part.healthWorkoutId).toBe('hw-1');
   });
 
   it('leaves a plain camera still with no Health fields', async () => {
