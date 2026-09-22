@@ -67,7 +67,7 @@ describe('host rigor', () => {
     ).toBe('normal');
   });
 
-  it('lets @blob add anytime until settle; Normal / Strict only in the join window', () => {
+  it('lets host and mods add on Friendly / Normal until settle; Strict stays join-window', () => {
     const now = new Date('2026-09-22T12:00:00.000Z');
     const open = {
       created_by: 'host',
@@ -107,10 +107,25 @@ describe('host rigor', () => {
         viewerId: 'host',
         now,
       }),
-    ).toBe(false);
+    ).toBe(true);
+    expect(
+      viewerCanHostAdd({
+        challenge: { ...closed, host_rigor: 'normal' },
+        viewerId: 'courtney',
+        moderatorIds: ['courtney'],
+        now,
+      }),
+    ).toBe(true);
     expect(
       viewerCanHostAdd({
         challenge: { ...closed, host_rigor: 'strict' },
+        viewerId: 'host',
+        now,
+      }),
+    ).toBe(false);
+    expect(
+      viewerCanHostAdd({
+        challenge: { ...open, host_rigor: 'strict', is_official: true, currency: 'bucks' },
         viewerId: 'host',
         now,
       }),

@@ -51,7 +51,7 @@ import { excuseOverConfirmLine, missesOver } from '@/lib/missDuty';
 import { fetchChallengeModeratorIds, proxyCheckinBlockedReason, viewerCanProxyCheckin } from '@/lib/challengeMods';
 import { fetchCurrentPeriodCheckin } from '@/hooks/useChallengeCheckin';
 import { checkinPeriodComplete } from '@/lib/loggable';
-import { viewerCanEditBoardScore, viewerCanFriendlyHostAdd } from '@/lib/hostRigor';
+import { viewerCanEditBoardScore, viewerCanRosterManage } from '@/lib/hostRigor';
 import { checkinSubmitHref } from '@/lib/routes';
 import { usesPointsBoard, usesQuantityScoring } from '@/lib/challengeExperience';
 import { liveListKey } from '@/lib/feedListKeys';
@@ -195,7 +195,7 @@ export function HostAdjustProvider({ children }: { children: ReactNode }) {
   );
   const canAdjust = viewerCanAdjustBoard(challenge, user?.id, moderatorIds, officialOps);
   const canHouseRemove = viewerCanHouseRemove(challenge, officialOps);
-  const canFriendlyRemove = viewerCanFriendlyHostAdd({
+  const canFriendlyRemove = viewerCanRosterManage({
     challenge,
     viewerId: user?.id,
     moderatorIds,
@@ -407,6 +407,24 @@ function HostAdjustSheets({
   const actorName = hostAdjustActorName(profileQuery.data);
   const [noteStep, setNoteStep] = useState(false);
   const [houseRemove, setHouseRemove] = useState<Target | null>(null);
+  const [staffRemove, setStaffRemove] = useState<Target | null>(null);
+  const staffRemoveMut = useMutation({
+    mutationFn: async (target: Target) => {
+      const { error } = await supabase.rpc('host_remove_participant', {
+        p_challenge_id: challengeId,
+        p_user_id: target.userId,
+      });
+      if (error) {
+        throw new Error(getErrorMessage(error));
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['challenge-participants', challengeId] });
+      void queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
+      void queryClient.invalidateQueries({ queryKey: ['my-participation', challengeId] });
+      setStaffRemove(null);
+    },
+  });
   const [scoreTarget, setScoreTarget] = useState<Target | null>(null);
   const [scoreValue, setScoreValue] = useState('');
   const [scoreError, setScoreError] = useState<string | null>(null);
@@ -578,26 +596,15 @@ function HostAdjustSheets({
                 },
               },
             ]
-          : canFriendlyRemove
+          : canFriendlyRemove && menu.userId !== challengeQuery.data?.created_by
             ? [
                 {
                   key: 'host-remove',
                   label: copy('board.removePerson'),
                   danger: true,
                   onPress: () => {
-                    void (async () => {
-                      const { error } = await supabase.rpc('host_remove_participant', {
-                        p_challenge_id: challengeId,
-                        p_user_id: menu.userId,
-                      });
-                      if (error) {
-                        console.warn('[blob:host-remove]', error.message);
-                        return;
-                      }
-                      void queryClient.invalidateQueries({ queryKey: ['challenge-participants', challengeId] });
-                      void queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
-                      onCloseMenu();
-                    })();
+                    setStaffRemove({ userId: menu.userId, displayName: menu.displayName });
+                    onCloseMenu();
                   },
                 },
               ]
@@ -626,6 +633,42 @@ function HostAdjustSheets({
         disabled={houseDisabled}
         onClose={() => setHouseRemove(null)}
       />
+      <ChromeOverlay
+        visible={Boolean(staffRemove)}
+        onClose={staffRemoveMut.isPending ? undefined : () => setStaffRemove(null)}>
+        <Pressable
+          className="px-5 pb-8 pt-5"
+          style={{
+            backgroundColor: THEME.background,
+            borderTopLeftRadius: THEME.radiusLg,
+            borderTopRightRadius: THEME.radiusLg,
+          }}
+          onPress={(event) => event.stopPropagation()}>
+          <AppText className="text-2xl font-bold text-charcoal">{copy('board.removePerson')}</AppText>
+          <AppText className="mt-2 text-muted">
+            Remove {staffRemove?.displayName ?? 'this person'}? They cannot rejoin with the invite link.
+            A host or moderator can add them back.
+          </AppText>
+          {staffRemoveMut.error ? (
+            <AppText className="mt-3 text-sm text-coral-dark">{staffRemoveMut.error.message}</AppText>
+          ) : null}
+          <View className="mt-6 gap-3">
+            <Button
+              title={copy('board.removePerson')}
+              variant="danger"
+              size="lg"
+              loading={staffRemoveMut.isPending}
+              onPress={() => staffRemove && staffRemoveMut.mutate(staffRemove)}
+            />
+            <Button
+              title="Not now"
+              variant="ghost"
+              onPress={() => setStaffRemove(null)}
+              disabled={staffRemoveMut.isPending}
+            />
+          </View>
+        </Pressable>
+      </ChromeOverlay>
       <ChromeOverlay visible={Boolean(scoreTarget)} onClose={() => setScoreTarget(null)}>
         <Pressable
           className="px-5 pb-8 pt-5"

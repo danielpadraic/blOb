@@ -40,6 +40,7 @@ const roster = [
   { user_id: 'b', days_completed: 7, status: 'active', display_name: 'Bea' },
   { user_id: 'c', days_completed: 2, status: 'eliminated', eliminated_at: '2026-01-01', display_name: 'Cam' },
   { user_id: 'd', days_completed: 0, status: 'refunded_pre_start', display_name: 'Dee' },
+  { user_id: 'e', days_completed: 1, status: 'withdrawn', display_name: 'Eve' },
 ];
 
 describe('live board buckets', () => {

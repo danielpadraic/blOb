@@ -58,6 +58,7 @@ const RPC_MESSAGES: Record<string, string> = {
   DOB_REQUIRED: 'Add your birth date to enter Official Challenges.',
   UNDERAGE: 'Official Challenges are for 18 and up.',
   ALREADY_JOINED: 'You already joined this challenge.',
+  REMOVED_NO_REJOIN: 'You were removed from this challenge. Ask the host to add you back.',
   LOBBY_FULL: 'This challenge is full.',
   NOT_INVITED: 'This challenge is private. Ask the host for an invite.',
   JOIN_CLOSED: 'Sorry, this Challenge isn’t taking new people.',

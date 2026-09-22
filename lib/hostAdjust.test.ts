@@ -87,6 +87,7 @@ describe('host Board adjust gates', () => {
     expect(participantCanBeAdjusted('eliminated')).toBe(true);
     expect(participantCanBeAdjusted('joined')).toBe(true);
     expect(participantCanBeAdjusted('refunded_pre_start')).toBe(false);
+    expect(participantCanBeAdjusted('withdrawn')).toBe(false);
   });
 
   it('only offers Excuse when misses are tracked', () => {

@@ -5,7 +5,9 @@ import {
   allowsSelfModeratorCheckbox,
   emptyJoinRolePicks,
   isRosterObserver,
+  isRosterRemoved,
   joinRoleReady,
+  REMOVED_NO_REJOIN_COPY,
   usesJoinRoleSheet,
 } from '@/lib/joinRole';
 
@@ -81,6 +83,14 @@ describe('join role sheet', () => {
     expect(
       joinRoleReady({ rosterRole: 'observer', scoringLane: null, selfModerator: true }, pinnacle),
     ).toBe(true);
+  });
+
+  it('treats a withdrawn seat as removed, not a rejoinable join', () => {
+    expect(isRosterRemoved({ status: 'withdrawn' })).toBe(true);
+    expect(isRosterRemoved({ status: 'refunded_pre_start' })).toBe(true);
+    expect(isRosterRemoved({ status: 'active' })).toBe(false);
+    expect(isRosterRemoved({ status: 'joined' })).toBe(false);
+    expect(REMOVED_NO_REJOIN_COPY).toMatch(/ask the host to add you back/i);
   });
 
   it('treats missing roster_role as a participant', () => {

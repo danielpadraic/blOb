@@ -81,6 +81,14 @@ export function joinLaneLabel(lane: ScoringLane): string {
   return scoringLaneName(lane) || lane.id;
 }
 
+export const REMOVED_NO_REJOIN_COPY =
+  'You were removed from this challenge. Ask the host to add you back.';
+
+export function isRosterRemoved(row?: { status?: string | null } | null): boolean {
+  const status = String(row?.status ?? '').toLowerCase();
+  return status === 'withdrawn' || status === 'refunded_pre_start';
+}
+
 export function isRosterObserver(row?: { roster_role?: string | null } | null): boolean {
   return String(row?.roster_role ?? '').toLowerCase() === ROSTER_ROLE_OBSERVER;
 }

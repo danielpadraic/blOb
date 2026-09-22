@@ -246,6 +246,9 @@ export function getJoinChallengeMessage(error: unknown): string {
   if (/BAD_ROSTER_ROLE/i.test(joined)) {
     return 'Pick Participant or Observer.';
   }
+  if (/REMOVED_NO_REJOIN/i.test(joined)) {
+    return 'You were removed from this challenge. Ask the host to add you back.';
+  }
   return text;
 }
 
@@ -1258,6 +1261,9 @@ function humanize(raw: string): string {
   }
   if (message.includes('lms_not_finished')) {
     return 'Last Man Standing is not down to one person yet.';
+  }
+  if (message.includes('removed_no_rejoin') || message.includes('removed from this challenge')) {
+    return 'You were removed from this challenge. Ask the host to add you back.';
   }
   if (message.includes('already joined') || message.includes('already_joined') || message.includes('already in this challenge')) {
     return 'You’re already in this challenge.';

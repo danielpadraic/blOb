@@ -106,7 +106,7 @@ import { ChallengePageTabs, challengeTabsForViewer, asChallengePageTab, type Cha
 import { challengeMentionMemberIds, fetchChallengeModeratorIds } from '@/lib/challengeMods';
 import { useOfficialOps } from '@/hooks/useOfficialOps';
 import { useChallengeInviteLink, inviteTokenFromParam } from '@/hooks/useChallengeInviteLink';
-import { isRosterObserver } from '@/lib/joinRole';
+import { isRosterObserver, isRosterRemoved, REMOVED_NO_REJOIN_COPY } from '@/lib/joinRole';
 import { canSeeChallengeLobby, canSeeCorporateLive } from '@/lib/privacyMode';
 import { needsInviteShareLink } from '@/lib/challengeInviteShare';
 import { LiveAlertsButton } from '@/components/challenge/LiveMuteSheet';
@@ -193,7 +193,7 @@ import { bucksJoinCta, INSUFFICIENT_JOIN_COPY } from '@/lib/joinCta';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
 import { cashJoinUi, challengeMoneyShape } from '@/lib/geo/eligibility';
 import { isSubmittedCheckin, stickyCheckinFooterTitle } from '@/lib/challengeCheckin';
-import { viewerCanFriendlyHostAdd } from '@/lib/hostRigor';
+import { viewerCanRosterManage } from '@/lib/hostRigor';
 import { buildBoard, yourStandingLine } from '@/lib/board';
 import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
 import { reportAppError, extractPostgrestCode } from '@/lib/appErrors';
@@ -493,7 +493,7 @@ export default function ChallengeDetailScreen() {
     () => roster.data?.find((row) => row.user_id === user?.id) ?? null,
     [roster.data, user?.id],
   );
-  const isJoined = Boolean(participation);
+  const isJoined = Boolean(participation) && !isRosterRemoved(participation);
   const viewerOut = isViewerOutOfPrize(participation);
   const viewerMissesOver = missesOver({
     missedPeriods: periodMisses.data ?? 0,
@@ -612,6 +612,9 @@ export default function ChallengeDetailScreen() {
     if (!challenge || isJoined) {
       return null;
     }
+    if (isRosterRemoved(participation)) {
+      return REMOVED_NO_REJOIN_COPY;
+    }
     if (isCalloutObserver || challenge.is_callout) {
       return CALLOUT_WATCHING_LINE;
     }
@@ -646,7 +649,7 @@ export default function ChallengeDetailScreen() {
       return `You need ${formatWalletAmount(buyIn, challenge.currency)} to join. You have ${formatWalletAmount(held, challenge.currency)}.`;
     }
     return null;
-  }, [challenge, isCalloutObserver, isHost, isJoined, profile]);
+  }, [challenge, isCalloutObserver, isHost, isJoined, participation, profile]);
 
   const canJoinBase = Boolean(challenge) && !isJoined && !isHost && !joinBlocked;
   const needsBodyMetrics = joinBlocked === BODY_METRICS_JOIN_COPY;
@@ -1155,12 +1158,19 @@ export default function ChallengeDetailScreen() {
       : null;
   const joinUntilLine = challenge && !isJoined && !isHost ? joinOpenUntilLine(challenge, new Date(nowMs)) : null;
   const joinClosed = joinBlocked === JOIN_CLOSED_COPY;
+  const joinRemoved = joinBlocked === REMOVED_NO_REJOIN_COPY;
   const stickyJoin =
     !isTeacher3DayChallenge(challenge) &&
     !isHost &&
     !isCalloutObserver &&
     !isJoined &&
-    (needsBodyMetrics || canJoin || needsTopUp || geoJoinBlocked || geoNeedsRegion || joinClosed);
+    (needsBodyMetrics ||
+      canJoin ||
+      needsTopUp ||
+      geoJoinBlocked ||
+      geoNeedsRegion ||
+      joinClosed ||
+      joinRemoved);
   const stickyCheckin =
     isJoined &&
     !isCalloutObserver &&
@@ -1187,7 +1197,7 @@ export default function ChallengeDetailScreen() {
     challenge.status !== 'cancelled' &&
     !windowEnded &&
     (stickyJoin || stickyCheckin || stickyStart || stickyOut);
-  const showAddPeople = viewerCanFriendlyHostAdd({
+  const showAddPeople = viewerCanRosterManage({
     challenge,
     viewerId: user?.id,
     moderatorIds: modsQuery.data,
@@ -1365,6 +1375,9 @@ export default function ChallengeDetailScreen() {
         ) : null}
         {joinUntilLine ? (
           <AppText className="mt-2 text-[13px] leading-5 text-muted">{joinUntilLine}</AppText>
+        ) : null}
+        {joinRemoved ? (
+          <AppText className="mt-2 text-[13px] leading-5 text-muted">{REMOVED_NO_REJOIN_COPY}</AppText>
         ) : null}
         {pageTab === 'overview' && hostRoundPrompt.visible && !isCalloutObserver ? (
           <View className="mt-3">
@@ -1878,8 +1891,12 @@ export default function ChallengeDetailScreen() {
               />
             ) : geoJoinBlocked ? (
               <Button title="View" size="md" onPress={() => setPageTab('overview')} />
-            ) : joinClosed ? (
-              <Button title={JOIN_CLOSED_COPY} size="md" disabled />
+            ) : joinClosed || joinRemoved ? (
+              <Button
+                title={joinRemoved ? REMOVED_NO_REJOIN_COPY : JOIN_CLOSED_COPY}
+                size="md"
+                disabled
+              />
             ) : (
               <JoinCtaButton
                 currency={challenge.currency}

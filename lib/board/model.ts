@@ -111,7 +111,8 @@ function isDropped(row: BoardParticipant): boolean {
 }
 
 function neverOnBoard(row: BoardParticipant): boolean {
-  return String(row.status ?? '') === 'refunded_pre_start';
+  const status = String(row.status ?? '');
+  return status === 'refunded_pre_start' || status === 'withdrawn';
 }
 
 export function buildBoard(input: {

@@ -236,16 +236,17 @@ export function viewerCanFriendlyHostAdd(input: {
   return viewerIsChallengeStaff(input) && hostRigorOf(challenge) === 'friendly';
 }
 
-/** @blob anytime until settle. Friendly host/mod until settle. Normal / Strict only while the join window is open. */
-export function viewerCanHostAdd(input: {
+/** Host or moderator add/remove until settle. Strict stays join-window only. Official cash is @blob only. */
+export function viewerCanRosterManage(input: {
   challenge?: {
     created_by?: string | null;
     host_rigor?: string | null;
     status?: string | null;
+    is_official?: boolean | null;
+    currency?: string | null;
+    challenge_lane?: string | null;
     starts_at?: string | null;
     join_until_at?: string | null;
-    is_official?: boolean | null;
-    series_id?: string | null;
   } | null;
   viewerId?: string | null;
   moderatorIds?: readonly string[] | null;
@@ -259,13 +260,37 @@ export function viewerCanHostAdd(input: {
   if (input.officialOps) {
     return true;
   }
+  if (isOfficialCashChallenge(challenge)) {
+    return false;
+  }
   if (!viewerIsChallengeStaff(input)) {
     return false;
   }
-  if (hostRigorOf(challenge) === 'friendly') {
-    return true;
+  if (hostRigorOf(challenge) === 'strict') {
+    return isJoinUntilClockOpen(challenge, input.now ?? new Date());
   }
-  return isJoinUntilClockOpen(challenge, input.now ?? new Date());
+  return true;
+}
+
+/** @blob anytime until settle. Host/mod on Friendly or Normal until settle. Strict only while the join window is open. */
+export function viewerCanHostAdd(input: {
+  challenge?: {
+    created_by?: string | null;
+    host_rigor?: string | null;
+    status?: string | null;
+    starts_at?: string | null;
+    join_until_at?: string | null;
+    is_official?: boolean | null;
+    currency?: string | null;
+    challenge_lane?: string | null;
+    series_id?: string | null;
+  } | null;
+  viewerId?: string | null;
+  moderatorIds?: readonly string[] | null;
+  officialOps?: boolean | null;
+  now?: Date;
+}): boolean {
+  return viewerCanRosterManage(input);
 }
 
 export function viewerCanNormalHostAdjust(input: {

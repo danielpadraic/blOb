@@ -133,7 +133,8 @@ export function viewerCanAdjustBoard(
 }
 
 export function participantCanBeAdjusted(status?: string | null): boolean {
-  return String(status ?? '') !== 'refunded_pre_start';
+  const value = String(status ?? '');
+  return value !== 'refunded_pre_start' && value !== 'withdrawn';
 }
 
 export function challengeTracksMissesForExcuse(challenge?: HostAdjustChallenge | null): boolean {
