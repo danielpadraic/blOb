@@ -24,6 +24,7 @@ import { HostRoundPromptChip } from '@/components/challenge/HostRoundPromptChip'
 import { PeriodCheckinDue } from '@/components/challenge/PeriodCheckinDue';
 import { ChallengeHeroCard } from '@/components/challenge/ChallengeHeroCard';
 import { ChallengeInvitesCard } from '@/components/challenge/ChallengeInvitesCard';
+import { ChallengeMembersCard } from '@/components/challenge/ChallengeMembersCard';
 import { ChallengeModeratorsCard } from '@/components/challenge/ChallengeModeratorsCard';
 import { ChallengeLeaderboard } from '@/components/challenge/ChallengeLeaderboard';
 import { ChallengePrizeLine } from '@/components/challenge/ChallengePrizeLine';
@@ -128,7 +129,12 @@ import { allowsMultiCheckin, usesPeriodCheckinGate } from '@/lib/loggable';
 import { methodLabel, proofDisplayName } from '@/lib/challengeProofs';
 import { resolveTaskCadence, taskCadenceLabel } from '@/lib/taskCadence';
 import { parseLocationPlace } from '@/lib/locationProof';
-import { challengeRuleCopy, challengeSignupLines } from '@/lib/challengeRuleCopy';
+import {
+  challengeRuleCopy,
+  challengeSignupLines,
+  hostAuthoredRuleParagraphs,
+  usesHostAuthoredRules,
+} from '@/lib/challengeRuleCopy';
 import {
   challengeTargetCount,
   countLiveCompetitors,
@@ -1052,6 +1058,8 @@ export default function ChallengeDetailScreen() {
   const multiSubmit = allowsMultiCheckin(challenge);
   const periodGate = usesPeriodCheckinGate(challenge);
   const ruleCopy = challengeRuleCopy(challenge);
+  const hostRules = usesHostAuthoredRules(challenge);
+  const authoredRuleParagraphs = hostAuthoredRuleParagraphs(challenge);
   const previewHero = Boolean(challenge.preview_hero);
   const checkinTarget = challengeTargetCount(challenge);
   // Overview ring uses saved duration_days (30 stays 30) — no ring rather than a fake 6.
@@ -1679,29 +1687,46 @@ export default function ChallengeDetailScreen() {
               <MissBudgetLines challenge={challenge} used={periodMisses.data ?? 0} />
             </View>
           ) : null}
-          {isPoints ? null : ruleCopy.primary ? (
-            <AppText className="mt-2 leading-6 text-ink">{ruleCopy.primary}</AppText>
-          ) : null}
-          {isPoints ? null : ruleCopy.extras.length > 0 ? (
-            <View className="mt-3 gap-2">
-              {ruleCopy.extras.map((line, index) => (
-                <RuleLine key={`${index}-${line}`} text={line} />
-              ))}
-            </View>
-          ) : null}
-          {isPoints || !ruleCopy.totalHint ? null : (
-            <AppText className="mt-2 text-sm leading-5 text-muted">{ruleCopy.totalHint}</AppText>
+          {hostRules ? (
+            authoredRuleParagraphs.length > 0 ? (
+              <View className="mt-2 gap-2">
+                {authoredRuleParagraphs.map((line, index) => (
+                  <AppText
+                    key={`${index}-${line}`}
+                    className="leading-6"
+                    style={{ color: THEME.textPrimary }}>
+                    {line}
+                  </AppText>
+                ))}
+              </View>
+            ) : null
+          ) : (
+            <>
+              {isPoints ? null : ruleCopy.primary ? (
+                <AppText className="mt-2 leading-6 text-ink">{ruleCopy.primary}</AppText>
+              ) : null}
+              {isPoints ? null : ruleCopy.extras.length > 0 ? (
+                <View className="mt-3 gap-2">
+                  {ruleCopy.extras.map((line, index) => (
+                    <RuleLine key={`${index}-${line}`} text={line} />
+                  ))}
+                </View>
+              ) : null}
+              {isPoints || !ruleCopy.totalHint ? null : (
+                <AppText className="mt-2 text-sm leading-5 text-muted">{ruleCopy.totalHint}</AppText>
+              )}
+              {isUnlimited ? (
+                <View className="mt-3">
+                  <RuleLine text={lastManStandingRequirement(challenge)} />
+                </View>
+              ) : null}
+              {voidRuleLine ? (
+                <View className="mt-3">
+                  <RuleLine text={voidRuleLine} />
+                </View>
+              ) : null}
+            </>
           )}
-          {isUnlimited ? (
-            <View className="mt-3">
-              <RuleLine text={lastManStandingRequirement(challenge)} />
-            </View>
-          ) : null}
-          {voidRuleLine ? (
-            <View className="mt-3">
-              <RuleLine text={voidRuleLine} />
-            </View>
-          ) : null}
           {challenge.rules_video_url ? (
             <Pressable
               onPress={() => void Linking.openURL(challenge.rules_video_url!)}
@@ -1757,6 +1782,13 @@ export default function ChallengeDetailScreen() {
           <ChallengeModeratorsCard
             challenge={challenge}
             participantIds={(roster.data ?? []).map((row) => row.user_id)}
+          />
+        )}
+        {wasCancelled ? null : (
+          <ChallengeMembersCard
+            challenge={challenge}
+            roster={boardRoster}
+            moderatorIds={modsQuery.data}
           />
         )}
 

@@ -157,6 +157,21 @@ describe('points board ranking', () => {
     expect(rankBoardRows(laneProof.people, 'points').map((row) => row.userId)).toEqual(['01', '09']);
   });
 
+  it('keeps a never-logged participant on the points board at 0', () => {
+    const view = buildBoard({
+      status: 'live',
+      participants: [
+        { user_id: 'zero', points: 0, status: 'joined', display_name: 'Zero' },
+        { user_id: 'scored', points: 12, status: 'joined', display_name: 'Scored' },
+      ],
+    });
+    const rows = rankBoardRows(view.people, 'points');
+    expect(rows.map((row) => [row.userId, row.score, formatBoardPoints(row.points)])).toEqual([
+      ['scored', 12, '12'],
+      ['zero', 0, '0'],
+    ]);
+  });
+
   it('has no challenge leader until someone scores', () => {
     const view = buildBoard({
       status: 'live',
@@ -332,6 +347,7 @@ describe('board row chrome', () => {
     expect(boardMedalTone(3)).toBe('bronze');
     expect(boardMedalTone(4)).toBeNull();
     expect(formatBoardPoints(26000)).toBe('26,000');
+    expect(formatBoardPoints(0)).toBe('0');
     expect(shortBoardHeader('Presentations')).toBe('Pres');
     expect(shortBoardHeader('miles')).toBe('mi');
   });

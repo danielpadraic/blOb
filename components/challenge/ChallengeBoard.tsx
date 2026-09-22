@@ -46,12 +46,11 @@ import {
   shortBoardHeader,
 } from '@/lib/board';
 import { usesQuantityScoring, usesPointsBoard, usesComparablePointsScoring } from '@/lib/challengeExperience';
-import { isRosterObserver } from '@/lib/joinRole';
+import { isRosterObserver, isRosterRemoved } from '@/lib/joinRole';
 import {
   comparableBoardColumns,
   comparablePointsFromChallenge,
   formatComparableBoardCell,
-  participantNeedsScoringLane,
   shortComparableBoardLabel,
   type ComparableBoardColumn,
 } from '@/lib/comparablePoints';
@@ -101,11 +100,7 @@ export function ChallengeBoard({
   const compact = variant === 'compact';
   const quantityBoard = usesQuantityScoring(challenge);
   const racingRoster = useMemo(
-    () => (roster ?? []).filter((row) => !isRosterObserver(row)),
-    [roster],
-  );
-  const observerRoster = useMemo(
-    () => (roster ?? []).filter((row) => isRosterObserver(row)),
+    () => (roster ?? []).filter((row) => !isRosterObserver(row) && !isRosterRemoved(row)),
     [roster],
   );
   const view = useMemo(
@@ -253,11 +248,6 @@ export function ChallengeBoard({
       : 'Pts';
   const scoreWidth = useMemo(() => {
     const samples = rows.map((row) => {
-      const participant = participantById.get(row.userId);
-      const needsLane = participantNeedsScoringLane(comparableConfig, participant?.scoring_lane);
-      if (needsLane) {
-        return '—';
-      }
       if (quantityBoard) {
         return progressByUser.get(row.userId)?.label?.trim() || '42.1 / 128 mi';
       }
@@ -276,9 +266,7 @@ export function ChallengeBoard({
     return BOARD_PTS_COL;
   }, [
     compact,
-    comparableConfig,
     consistencyBoard,
-    participantById,
     progressByUser,
     quantityBoard,
     requiredDays,
@@ -330,22 +318,19 @@ export function ChallengeBoard({
   ) : (
     rows.map((row) => {
       const participant = participantById.get(row.userId);
-      const needsLane = participantNeedsScoringLane(comparableConfig, participant?.scoring_lane);
       const dropped = row.bucket === 'dropped';
-      const displayRank = row.rank == null || needsLane || dropped ? null : row.rank;
+      const displayRank = row.rank == null || dropped ? null : row.rank;
       const progress = progressByUser.get(row.userId);
-      const score = needsLane
-        ? '—'
-        : quantityBoard
-          ? progress?.label?.trim() ||
-            (progress && progress.target > 0
-              ? `${formatBoardNestedQty(progress.logged)} / ${formatBoardNestedQty(progress.target)} ${progress.unit}`.trim()
-              : progress
-                ? formatBoardNestedQty(progress.logged)
-                : '0')
-          : consistencyBoard
-            ? `${Number(row.days) || 0}/${requiredDays}`
-            : formatBoardPoints(row.points);
+      const score = quantityBoard
+        ? progress?.label?.trim() ||
+          (progress && progress.target > 0
+            ? `${formatBoardNestedQty(progress.logged)} / ${formatBoardNestedQty(progress.target)} ${progress.unit}`.trim()
+            : progress
+              ? formatBoardNestedQty(progress.logged)
+              : '0')
+        : consistencyBoard
+          ? `${Number(row.days) || 0}/${requiredDays}`
+          : formatBoardPoints(row.points);
       const nested = nestedLines({
         comparableColumns,
         totals: participant?.metric_totals ?? null,
@@ -366,7 +351,7 @@ export function ChallengeBoard({
           key={row.userId}
           compact={compact}
           rank={displayRank == null ? '—' : String(displayRank)}
-          medal={dropped || needsLane ? null : boardMedalTone(displayRank)}
+          medal={dropped ? null : boardMedalTone(displayRank)}
           name={row.name}
           you={row.you}
           username={row.username}
@@ -494,25 +479,6 @@ export function ChallengeBoard({
           {standingRows}
         </StandingsBody>
       )}
-      {observerRoster.length > 0 ? (
-        <View className="mt-3 gap-2" style={{ borderTopWidth: 1, borderTopColor: THEME.line, paddingTop: 12 }}>
-          <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
-            Observers
-          </AppText>
-          {observerRoster.map((row) => {
-            const name = row.profile?.display_name?.trim() || row.profile?.username || 'Observer';
-            return (
-              <View key={row.user_id} className="flex-row items-center" style={{ gap: 10, minHeight: 44 }}>
-                <Avatar uri={row.profile?.avatar_url} name={name} size={32} />
-                <AppText className="flex-1 font-semibold text-charcoal" numberOfLines={1}>
-                  {name}
-                </AppText>
-                <AppText className="text-[12px] text-muted">Watching</AppText>
-              </View>
-            );
-          })}
-        </View>
-      ) : null}
       {onOpenBoard ? (
         <Pressable
           accessibilityRole="button"

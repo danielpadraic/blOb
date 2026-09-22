@@ -47,6 +47,8 @@ type RuleChallenge = {
   metrics?: unknown;
   title?: string | null;
   description?: string | null;
+  buy_in_amount?: number | null;
+  privacy_mode?: string | null;
 };
 
 export type ChallengeRuleCopy = {
@@ -426,6 +428,32 @@ function storedRulesLookBroken(primary: string): boolean {
     /competitors must log/i.test(primary) ||
     /any_exercise/i.test(primary)
   );
+}
+
+/** Split a host-typed rules string into equal body paragraphs. No bullets. */
+export function hostAuthoredRuleParagraphs(challenge: RuleChallenge): string[] {
+  const rulesText = (challenge.rules ?? '').trim();
+  if (!rulesText) {
+    return [];
+  }
+  return rulesText
+    .split(/\n\s*\n/)
+    .flatMap((block) => block.split(/\n/))
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+/** comparable_points, $0 corporate, or any stored host rules string — never a mint bullet. */
+export function usesHostAuthoredRules(challenge: RuleChallenge): boolean {
+  if (usesComparablePointsScoring(challenge)) {
+    return true;
+  }
+  const corporate = String(challenge.privacy_mode ?? '').toLowerCase() === 'private_corporate';
+  const buyIn = Math.max(Number(challenge.buy_in_amount) || 0, 0);
+  if (corporate && buyIn <= 0) {
+    return true;
+  }
+  return Boolean((challenge.rules ?? '').trim());
 }
 
 /** Host description, then task. Never invent honor when either is set. */

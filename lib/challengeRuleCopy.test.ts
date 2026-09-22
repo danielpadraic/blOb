@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { challengeRuleCopy, challengeSignupLines } from '@/lib/challengeRuleCopy';
+import {
+  challengeRuleCopy,
+  challengeSignupLines,
+  hostAuthoredRuleParagraphs,
+  usesHostAuthoredRules,
+} from '@/lib/challengeRuleCopy';
 import { nobodyFinishedRuleCopy } from '@/lib/settlement/receipts';
 
 const pinnacle = {
@@ -35,6 +40,11 @@ describe('Overview signup + rules', () => {
     const copy = challengeRuleCopy(pinnacle);
     expect(copy.primary).toBe('Team with the most points is winner of September Rookies vs. Veterans.');
     expect(copy.extras).toEqual(['Overall High Scorer wins the Prize (see KC for Prize details)!']);
+    expect(hostAuthoredRuleParagraphs(pinnacle)).toEqual([
+      'Team with the most points is winner of September Rookies vs. Veterans.',
+      'Overall High Scorer wins the Prize (see KC for Prize details)!',
+    ]);
+    expect(usesHostAuthoredRules(pinnacle)).toBe(true);
     expect([copy.primary, ...copy.extras].join(' ')).not.toMatch(/Win by reaching 5 points/i);
     expect([copy.primary, ...copy.extras].join(' ')).not.toMatch(/honor/i);
   });
