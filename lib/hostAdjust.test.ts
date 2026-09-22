@@ -13,6 +13,7 @@ import {
   hostAdjustLiveBody,
   hostAdjustLivePostRow,
   hostAdjustSkipLines,
+  hostExcuseStillAvailable,
   participantCanBeAdjusted,
   planHostAdjustBulk,
   viewerCanAdjustBoard,
@@ -91,6 +92,15 @@ describe('host Board adjust gates', () => {
   it('only offers Excuse when misses are tracked', () => {
     expect(challengeTracksMissesForExcuse(liveUser)).toBe(true);
     expect(challengeTracksMissesForExcuse({ ...liveUser, format: 'cumulative' })).toBe(false);
+  });
+
+  it('lets Friendly / Normal hosts excuse, not Official cash or Strict', () => {
+    expect(hostExcuseStillAvailable(liveUser)).toBe(true);
+    expect(hostExcuseStillAvailable({ ...liveUser, host_rigor: 'friendly' })).toBe(true);
+    expect(hostExcuseStillAvailable({ ...liveUser, host_rigor: 'strict' })).toBe(false);
+    expect(hostExcuseStillAvailable({ ...liveUser, is_official: true, series_id: 'week_10' })).toBe(false);
+    expect(hostExcuseStillAvailable({ ...liveUser, host_budget: 10 })).toBe(false);
+    expect(hostExcuseStillAvailable({ ...liveUser, status: 'settled' })).toBe(false);
   });
 
   it('maps RPC errors to the locked lines and never dumps SQLSTATE', () => {

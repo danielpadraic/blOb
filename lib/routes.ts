@@ -186,7 +186,7 @@ export function checkinPickerHref(
 /** Check In / Begin / Continue only. Literal path — object `{ pathname, params }` breaks Safari. Never `/capture`. */
 export function checkinSubmitHref(
   id: string,
-  extra?: { from?: 'multi'; done?: string[] | string | null; for?: string | null },
+  extra?: { from?: 'multi'; done?: string[] | string | null; for?: string | null; lift?: string | null },
 ): Href {
   const path = `/challenges/${String(id ?? '').trim()}/submit`;
   const params = new URLSearchParams();
@@ -202,6 +202,10 @@ export function checkinSubmitHref(
   const forUser = String(extra?.for ?? '').trim();
   if (forUser) {
     params.set('for', forUser);
+  }
+  const lift = String(extra?.lift ?? '').trim();
+  if (lift) {
+    params.set('lift', lift);
   }
   const query = params.toString();
   return (query ? `${path}?${query}` : path) as Href;

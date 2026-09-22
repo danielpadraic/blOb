@@ -47,6 +47,7 @@ import {
   type HostAdjustDay,
   type HostAdjustResult,
 } from '@/lib/hostAdjust';
+import { excuseOverConfirmLine, missesOver } from '@/lib/missDuty';
 import { fetchChallengeModeratorIds, proxyCheckinBlockedReason, viewerCanProxyCheckin } from '@/lib/challengeMods';
 import { fetchCurrentPeriodCheckin } from '@/hooks/useChallengeCheckin';
 import { checkinPeriodComplete } from '@/lib/loggable';
@@ -105,6 +106,13 @@ function patchParticipant(
   challengeId: string,
   result: HostAdjustResult,
 ) {
+  const nextStatus = (result.status as ChallengeParticipantWithProfile['status']) || undefined;
+  const nextEliminated =
+    result.status === 'eliminated'
+      ? new Date().toISOString()
+      : result.status === 'joined' || result.status === 'active' || result.status === 'completed'
+        ? null
+        : undefined;
   queryClient.setQueriesData<ChallengeParticipantWithProfile[]>(
     { queryKey: ['challenge-participants', challengeId] },
     (current) =>
@@ -113,16 +121,55 @@ function patchParticipant(
           ? {
               ...row,
               days_completed: result.days_completed,
-              status: (result.status as ChallengeParticipantWithProfile['status']) || row.status,
+              status: nextStatus || row.status,
               eliminated_at:
-                result.status === 'eliminated'
-                  ? row.eliminated_at ?? new Date().toISOString()
-                  : result.status === 'joined' || result.status === 'active' || result.status === 'completed'
+                nextEliminated === undefined
+                  ? row.eliminated_at
+                  : nextEliminated === null
                     ? null
-                    : row.eliminated_at,
+                    : row.eliminated_at ?? nextEliminated,
             }
           : row,
       ),
+  );
+  queryClient.setQueriesData<ChallengeParticipantWithProfile | ChallengeParticipantWithProfile[] | null>(
+    { queryKey: ['my-participation', challengeId] },
+    (current) => {
+      if (!current) {
+        return current;
+      }
+      if (Array.isArray(current)) {
+        return current.map((row) =>
+          row.user_id === result.user_id
+            ? {
+                ...row,
+                days_completed: result.days_completed,
+                status: nextStatus || row.status,
+                eliminated_at:
+                  nextEliminated === undefined
+                    ? row.eliminated_at
+                    : nextEliminated === null
+                      ? null
+                      : row.eliminated_at ?? nextEliminated,
+              }
+            : row,
+        );
+      }
+      if (current.user_id && current.user_id !== result.user_id) {
+        return current;
+      }
+      return {
+        ...current,
+        days_completed: result.days_completed,
+        status: nextStatus || current.status,
+        eliminated_at:
+          nextEliminated === undefined
+            ? current.eliminated_at
+            : nextEliminated === null
+              ? null
+              : current.eliminated_at ?? nextEliminated,
+      };
+    },
   );
 }
 
@@ -435,6 +482,8 @@ function HostAdjustSheets({
       void queryClient.invalidateQueries({ queryKey: ['live', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['feed', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
+      void queryClient.invalidateQueries({ queryKey: ['challenge-participants', challengeId] });
+      void queryClient.invalidateQueries({ queryKey: ['my-participation', challengeId] });
       onCloseSheet();
       router.setParams({ tab: 'feed' });
     },
@@ -730,9 +779,17 @@ function HostAdjustSheets({
             <>
               <AppText className="text-2xl font-bold text-charcoal">{adjustSheetTitle(sheet)}</AppText>
               <AppText className="mt-2 text-muted">
-                {sheet?.action === 'excuse_miss'
-                  ? copy('board.excuseMissConfirm', 'gentle', { name })
-                  : sheet?.action === 'remove_counted'
+                {excuseOverConfirmLine(
+                  name,
+                  missesOver({
+                    missedPeriods: days.data?.misses_used ?? 0,
+                    allowedMisses: days.data?.misses_allowed ?? 0,
+                  }),
+                )}
+              </AppText>
+              {sheet?.action === 'excuse_miss' ? null : (
+                <AppText className="mt-2 text-muted">
+                  {sheet?.action === 'remove_counted'
                     ? copy('board.removeDayConfirm', 'gentle', {
                         n: confirmDay?.day_n ?? '',
                         name,
@@ -741,7 +798,8 @@ function HostAdjustSheets({
                         n: confirmDay?.day_n ?? '',
                         name,
                       })}
-              </AppText>
+                </AppText>
+              )}
               <View className="mt-6 gap-3">
                 <Button
                   title={
@@ -972,6 +1030,8 @@ function HostAdjustBulkSheet({
       void queryClient.invalidateQueries({ queryKey: ['host-adjust-days', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['live', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
+      void queryClient.invalidateQueries({ queryKey: ['challenge-participants', challengeId] });
+      void queryClient.invalidateQueries({ queryKey: ['my-participation', challengeId] });
       onClose();
       router.setParams({ tab: 'feed' });
     },
@@ -996,6 +1056,19 @@ function HostAdjustBulkSheet({
 
   const confirmNames = plan.apply.map((row) => row.displayName);
   const confirmLine = hostAdjustConfirmLine(action, plan.applyCount, confirmNames);
+  const overLines =
+    action === 'excuse_miss'
+      ? bulkPeople.map((row) => {
+          const days = daysQuery.data?.[row.userId];
+          return excuseOverConfirmLine(
+            row.displayName,
+            missesOver({
+              missedPeriods: days?.misses_used ?? row.openMisses,
+              allowedMisses: days?.misses_allowed ?? 0,
+            }),
+          );
+        })
+      : [];
   const pending = mutate.isPending;
 
   return (
@@ -1044,6 +1117,11 @@ function HostAdjustBulkSheet({
           ) : step === 'confirm' ? (
             <>
               <AppText className="mt-2 text-muted">{confirmLine}</AppText>
+              {overLines.map((line) => (
+                <AppText key={line} className="mt-2 text-sm text-muted">
+                  {line}
+                </AppText>
+              ))}
               {skipLines.map((line) => (
                 <AppText key={line} className="mt-2 text-sm text-muted">
                   {line}

@@ -73,7 +73,7 @@ describe('complete gate', () => {
   });
 
   it('explains leftover work in the copy the footer uses', () => {
-    expect(COMPLETE_LEFTOVER_HINT).toBe('Check Done or remove leftover sets and rounds.');
+    expect(COMPLETE_LEFTOVER_HINT).toBe('Check or remove the leftover sets first.');
   });
 });
 

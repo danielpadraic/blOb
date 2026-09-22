@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, TextInput, View } from 'react-native';
+import { InputAccessoryView, Keyboard, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
+import { DismissKeyboard } from '@/components/ui/DismissKeyboard';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { KeyboardSheet } from '@/components/ui/KeyboardSheet';
 import {
@@ -54,6 +55,8 @@ type AddExerciseSheetProps = {
   /** Hands off to the timed logger, which asks a different set of questions. */
   onPickTimed: (result: { kind: 'cardio' | 'rest'; methodId: string | null; muscle: MuscleKey }) => void;
 };
+
+const EXERCISE_SEARCH_ACCESSORY = 'blob-exercise-search';
 
 export function AddExerciseSheet({
   visible,
@@ -129,6 +132,7 @@ export function AddExerciseSheet({
           borderTopRightRadius: 22,
           minHeight: 0,
           flexGrow: 1,
+          flex: 1,
           ...themeShadow('card'),
         }}>
         <View style={{ alignItems: 'center', paddingTop: 8 }}>
@@ -161,6 +165,58 @@ export function AddExerciseSheet({
             style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
             <Glyph name={GLYPH.close} color={THEME.textPrimary} size={16} />
           </Pressable>
+        </View>
+
+        <View style={{ paddingHorizontal: 16, paddingBottom: 10 }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+              height: 48,
+              paddingHorizontal: 14,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: THEME.border,
+              backgroundColor: THEME.background,
+            }}>
+            <Glyph name={GLYPH.search} color={THEME.textMuted} size={16} />
+            <TextInput
+              ref={inputRef}
+              value={query}
+              onChangeText={setQuery}
+              placeholder={
+                filter
+                  ? `Search ${muscleShortLabel(filter)}, cardio, or rest`
+                  : 'Search exercises, cardio, or rest'
+              }
+              placeholderTextColor={THEME.textMuted}
+              autoCorrect={false}
+              autoCapitalize="words"
+              returnKeyType="done"
+              onSubmitEditing={() => Keyboard.dismiss()}
+              inputAccessoryViewID={Platform.OS === 'ios' ? EXERCISE_SEARCH_ACCESSORY : undefined}
+              accessibilityLabel="Search exercises"
+              selectionColor={THEME.accent}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                fontSize: 16,
+                color: THEME.textPrimary,
+                paddingVertical: 0,
+              }}
+            />
+            {query ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Clear search"
+                hitSlop={10}
+                onPress={() => setQuery('')}
+                style={{ width: 28, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+                <Glyph name={GLYPH.close} color={THEME.textMuted} size={13} />
+              </Pressable>
+            ) : null}
+          </View>
         </View>
 
         <ScrollView
@@ -200,61 +256,11 @@ export function AddExerciseSheet({
           })}
         </ScrollView>
 
-        <View style={{ paddingHorizontal: 16, paddingBottom: 10 }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 8,
-              height: 48,
-              paddingHorizontal: 14,
-              borderRadius: 14,
-              borderWidth: 1,
-              borderColor: THEME.border,
-              backgroundColor: THEME.background,
-            }}>
-            <Glyph name={GLYPH.search} color={THEME.textMuted} size={16} />
-            <TextInput
-              ref={inputRef}
-              value={query}
-              onChangeText={setQuery}
-              placeholder={
-                filter
-                  ? `Search ${muscleShortLabel(filter)}, cardio, or rest`
-                  : 'Search exercises, cardio, or rest'
-              }
-              placeholderTextColor={THEME.textMuted}
-              autoCorrect={false}
-              autoCapitalize="words"
-              returnKeyType="search"
-              accessibilityLabel="Search exercises"
-              selectionColor={THEME.accent}
-              style={{
-                flex: 1,
-                minWidth: 0,
-                fontSize: 16,
-                color: THEME.textPrimary,
-                paddingVertical: 0,
-              }}
-            />
-            {query ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Clear search"
-                hitSlop={10}
-                onPress={() => setQuery('')}
-                style={{ width: 28, height: 44, alignItems: 'center', justifyContent: 'center' }}>
-                <Glyph name={GLYPH.close} color={THEME.textMuted} size={13} />
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
-
         <ScrollView
-          style={{ flexGrow: 1, minHeight: 0 }}
+          style={{ flex: 1, minHeight: 0 }}
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="none"
-          contentContainerStyle={{ paddingBottom: 8 }}>
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          contentContainerStyle={{ paddingBottom: 24, flexGrow: 1 }}>
           {/* With nothing typed they are browsing, so cardio and rest are offered by name. This is
               the only thing that makes intervals discoverable: bench, rest, sprint, rest, bench —
               all added from inside Chest, without leaving for a screen of their own. */}
@@ -362,6 +368,7 @@ export function AddExerciseSheet({
               </AppText>
             </View>
           ) : null}
+          <DismissKeyboard style={{ flexGrow: 1, minHeight: 48 }} />
         </ScrollView>
 
         {supersetPartnerName ? (
@@ -408,6 +415,28 @@ export function AddExerciseSheet({
         ) : null}
       </View>
       </KeyboardSheet>
+      {Platform.OS === 'ios' ? (
+        <InputAccessoryView nativeID={EXERCISE_SEARCH_ACCESSORY}>
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'flex-end',
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              backgroundColor: THEME.surface,
+              borderTopWidth: 1,
+              borderTopColor: THEME.border,
+            }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Done"
+              onPress={() => Keyboard.dismiss()}
+              style={{ minHeight: 36, justifyContent: 'center', paddingHorizontal: 8 }}>
+              <AppText style={{ fontSize: 16, fontWeight: '700', color: THEME.accent }}>Done</AppText>
+            </Pressable>
+          </View>
+        </InputAccessoryView>
+      ) : null}
     </ChromeOverlay>
   );
 }

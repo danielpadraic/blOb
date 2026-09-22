@@ -101,3 +101,35 @@ export function missesAllowedCopy(allowed: number): string {
 export function missesUsedCopy(used: number): string {
   return `Misses used: ${Math.max(Math.trunc(used) || 0, 0)}`;
 }
+
+/** How many excuses (or counted days) are still needed to be back in. Never negative. */
+export function missesOver(input: {
+  missedPeriods: number;
+  allowedMisses: number;
+  excused?: number;
+}): number {
+  const missed = Math.max(Math.trunc(Number(input.missedPeriods) || 0), 0);
+  const allowed = Math.max(Math.trunc(Number(input.allowedMisses) || 0), 0);
+  const excused = Math.max(Math.trunc(Number(input.excused) || 0), 0);
+  return Math.max(0, missed - allowed - excused);
+}
+
+export function excuseOverConfirmLine(name: string, over: number): string {
+  const who = String(name ?? '').trim() || 'Someone';
+  const n = Math.max(Math.trunc(Number(over) || 0), 0);
+  if (n <= 0) {
+    return `${who} is still in. This excuse is extra room, not required.`;
+  }
+  if (n === 1) {
+    return `${who} is 1 miss over. Excuse this miss or Count that day to put them back in.`;
+  }
+  return `${who} is ${n} misses over. Excuse ${n} more to put them back in, or Count the missing day.`;
+}
+
+export function viewerMissesOverLine(over: number): string {
+  const n = Math.max(Math.trunc(Number(over) || 0), 0);
+  if (n <= 1) {
+    return 'You’re 1 miss over. A host can excuse 1 or count a missed day.';
+  }
+  return `You’re ${n} misses over. A host can excuse ${n} or count a missed day.`;
+}

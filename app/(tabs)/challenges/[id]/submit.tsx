@@ -11,6 +11,7 @@ import {
 } from '@/components/challenge/ComparablePointsLogFields';
 import { LiftPickerSheet } from '@/components/lift/LiftPickerSheet';
 import { fetchLiftSession } from '@/lib/lift/api';
+import { draftSummary } from '@/lib/lift/session';
 import { persistLiftSnapshotOnPost } from '@/lib/lift/persistSnapshot';
 import { linkSessionToPost } from '@/lib/lift/share';
 import { buildLiftSnapshot } from '@/lib/lift/snapshot';
@@ -342,7 +343,7 @@ export default function SubmitWorkoutScreen() {
 }
 
 function SubmitWorkoutInner() {
-  const params = useLocalSearchParams<{ id: string; from?: string; done?: string; tab?: string; for?: string }>();
+  const params = useLocalSearchParams<{ id: string; from?: string; done?: string; tab?: string; for?: string; lift?: string }>();
   const rawId = firstRouteParam(params.id);
   const id = isChallengeRouteId(rawId) ? rawId : '';
   const forParam = firstRouteParam(params.for);
@@ -466,6 +467,7 @@ function SubmitWorkoutInner() {
   /** Context on the check-in post. Never counted toward the proof this challenge requires. */
   const [attachedLift, setAttachedLift] = useState<LiftSessionSummary | null>(null);
   const [liftPickerOpen, setLiftPickerOpen] = useState(false);
+  const liftParam = firstRouteParam(params.lift);
   const [sendLock, setSendLock] = useState(false);
   const [logDraft, setLogDraft] = useState<ComparableLogDraft>(emptyComparableLogDraft);
   const lobbyLocked = checkinHidesHomeShare(challengeQuery.data);
@@ -478,6 +480,33 @@ function SubmitWorkoutInner() {
       stopAllLiveMedia();
     };
   }, []);
+
+  useEffect(() => {
+    const sessionId = String(liftParam ?? '').trim();
+    if (!sessionId) {
+      return;
+    }
+    let live = true;
+    void fetchLiftSession(sessionId)
+      .then((draft) => {
+        if (!live) {
+          return;
+        }
+        if (!draft) {
+          setError("Couldn't add that to the check-in.");
+          return;
+        }
+        setAttachedLift(draftSummary(draft));
+      })
+      .catch(() => {
+        if (live) {
+          setError("Couldn't add that to the check-in.");
+        }
+      });
+    return () => {
+      live = false;
+    };
+  }, [liftParam]);
 
   const challenge = challengeQuery.data;
   const comparableConfig = comparablePointsFromChallenge(challenge);

@@ -479,6 +479,7 @@ export function useSubmitCheckin(challengeId: string | undefined, forUserId?: st
       void queryClient.invalidateQueries({ queryKey: ['logged-workout-days', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['challenge-participants', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['my-participation', challengeId] });
+      void queryClient.invalidateQueries({ queryKey: ['period-misses', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['my-challenge-progress'] });
       void queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['loggable-challenge'] });

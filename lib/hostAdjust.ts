@@ -140,6 +140,23 @@ export function challengeTracksMissesForExcuse(challenge?: HostAdjustChallenge |
   return challengeShowsMissBudget(challenge);
 }
 
+/** Friendly / Normal host can still excuse. Official cash and Strict stay locked. */
+export function hostExcuseStillAvailable(challenge?: HostAdjustChallenge | null): boolean {
+  if (!challengeTracksMissesForExcuse(challenge)) {
+    return false;
+  }
+  if (challengeIsEndedForAdjust(challenge)) {
+    return false;
+  }
+  if (hostRigorOf(challenge) === 'strict') {
+    return false;
+  }
+  if (challengeIsOfficialLocked(challenge)) {
+    return false;
+  }
+  return true;
+}
+
 function asDay(row: Record<string, unknown>): HostAdjustDay {
   return {
     day_n: Math.max(Math.trunc(Number(row.day_n) || 0), 0),

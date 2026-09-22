@@ -1,12 +1,16 @@
 import type { ReactNode } from 'react';
-import { View, type StyleProp, type ViewStyle } from 'react-native';
+import { Keyboard, Pressable, type StyleProp, type ViewStyle } from 'react-native';
 
 type DismissKeyboardProps = {
-  children: ReactNode;
+  children?: ReactNode;
   style?: StyleProp<ViewStyle>;
 };
 
-/** Layout wrapper only. A parent Pressable blurs web TextInputs on tap (iOS Safari). */
+/** Tap empty canvas to hide keys. Does not clear the field or leave the screen. */
 export function DismissKeyboard({ children, style }: DismissKeyboardProps) {
-  return <View style={style}>{children}</View>;
+  return (
+    <Pressable accessible={false} style={style} onPress={Keyboard.dismiss}>
+      {children}
+    </Pressable>
+  );
 }

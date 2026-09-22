@@ -85,7 +85,7 @@ export function Screen({
             keyboardShouldPersistTaps="handled"
             onScroll={onScroll}
             scrollEventThrottle={onScroll ? 16 : undefined}
-            keyboardDismissMode="none"
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
             showsVerticalScrollIndicator={false}>
             {children}
           </ScrollView>

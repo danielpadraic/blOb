@@ -3,9 +3,12 @@ import { describe, expect, it } from 'vitest';
 import {
   challengeHasDailyCheckinDuty,
   challengeShowsMissBudget,
+  excuseOverConfirmLine,
   missesAllowedCap,
   missesAllowedCopy,
+  missesOver,
   missesUsedCopy,
+  viewerMissesOverLine,
 } from '@/lib/missDuty';
 
 describe('challengeHasDailyCheckinDuty', () => {
@@ -123,5 +126,32 @@ describe('miss budget copy', () => {
     expect(missesAllowedCap({ ...daily, max_misses: 6 })).toBe(6);
     expect(missesAllowedCap({ ...daily, consistency: { misses: 6 } })).toBe(6);
     expect(missesAllowedCap({ ...daily, misses_allowed: 6, allowed_misses: 0 })).toBe(6);
+  });
+});
+
+describe('misses over', () => {
+  it('subtracts allowed and excused from missed periods', () => {
+    expect(missesOver({ missedPeriods: 3, allowedMisses: 1, excused: 0 })).toBe(2);
+    expect(missesOver({ missedPeriods: 3, allowedMisses: 1, excused: 2 })).toBe(0);
+    expect(missesOver({ missedPeriods: 1, allowedMisses: 2 })).toBe(0);
+  });
+
+  it('prints the host confirm line for n over', () => {
+    expect(excuseOverConfirmLine('Daniel', 2)).toBe(
+      'Daniel is 2 misses over. Excuse 2 more to put them back in, or Count the missing day.',
+    );
+    expect(excuseOverConfirmLine('Daniel', 1)).toBe(
+      'Daniel is 1 miss over. Excuse this miss or Count that day to put them back in.',
+    );
+    expect(excuseOverConfirmLine('Daniel', 0)).toBe(
+      'Daniel is still in. This excuse is extra room, not required.',
+    );
+  });
+
+  it('prints the participant Overview line without eliminated', () => {
+    expect(viewerMissesOverLine(2)).toBe(
+      'You’re 2 misses over. A host can excuse 2 or count a missed day.',
+    );
+    expect(viewerMissesOverLine(1)).not.toMatch(/eliminated/i);
   });
 });

@@ -1,5 +1,5 @@
 import { createElement, forwardRef, useRef, useState } from 'react';
-import { Platform, TextInput, View, type TextInputProps } from 'react-native';
+import { Keyboard, Platform, TextInput, View, type TextInputProps } from 'react-native';
 
 import { GrowingText } from '@/components/ui/GrowingText';
 import { AppText } from '@/components/ui/AppText';
@@ -46,6 +46,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
     growMaxLines = COMPOSER_MAX_LINES,
     onFocus,
     onBlur,
+    onSubmitEditing,
     style,
     numberOfLines,
     multiline,
@@ -113,14 +114,24 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
     onBlur?.(event);
   }
 
+  function handleSubmitEditing(event: Parameters<NonNullable<TextInputProps['onSubmitEditing']>>[0]) {
+    if (!sentence) {
+      Keyboard.dismiss();
+    }
+    onSubmitEditing?.(event);
+  }
+
   const shared = {
     placeholderTextColor: THEME.textMuted,
     keyboardAppearance: 'light' as const,
     selectionColor: THEME.accent,
     className,
+    ...props,
     onFocus: handleFocus,
     onBlur: handleBlur,
-    ...props,
+    onSubmitEditing: handleSubmitEditing,
+    blurOnSubmit: props.blurOnSubmit ?? !sentence,
+    returnKeyType: props.returnKeyType ?? (sentence ? 'default' : 'done'),
   };
 
   function assignRef(node: TextInput | HTMLInputElement | null) {

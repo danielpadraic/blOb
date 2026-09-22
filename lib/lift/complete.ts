@@ -13,7 +13,7 @@ import type { WeightUnit } from '@/lib/types';
  * leftover set and cardio round is Done or gone.
  */
 
-export const COMPLETE_LEFTOVER_HINT = 'Check Done or remove leftover sets and rounds.';
+export const COMPLETE_LEFTOVER_HINT = 'Check or remove the leftover sets first.';
 
 export type LiftSessionStatus = 'open' | 'saved' | 'completed';
 

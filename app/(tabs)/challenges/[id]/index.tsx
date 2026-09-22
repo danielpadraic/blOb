@@ -99,7 +99,8 @@ import { isChallengeRealtimeId } from '@/lib/challengeBoardRealtime';
 import { usePeriodCheckin, useSubmittedCheckinCount } from '@/hooks/useChallengeCheckin';
 import { useViewerPeriodMisses } from '@/hooks/usePeriodMisses';
 import { currentRequiredPeriodWindow } from '@/lib/checkinPeriod';
-import { challengeShowsMissBudget } from '@/lib/missDuty';
+import { challengeShowsMissBudget, missesAllowedCap, missesOver, viewerMissesOverLine } from '@/lib/missDuty';
+import { hostExcuseStillAvailable } from '@/lib/hostAdjust';
 import { usePeriodCompletions } from '@/hooks/useWorkoutSubmission';
 import { ChallengePageTabs, challengeTabsForViewer, asChallengePageTab, type ChallengePageTab } from '@/components/challenge/ChallengePageTabs';
 import { challengeMentionMemberIds, fetchChallengeModeratorIds } from '@/lib/challengeMods';
@@ -487,6 +488,14 @@ export default function ChallengeDetailScreen() {
   );
   const isJoined = Boolean(participation);
   const viewerOut = isViewerOutOfPrize(participation);
+  const viewerMissesOver = missesOver({
+    missedPeriods: periodMisses.data ?? 0,
+    allowedMisses: missesAllowedCap(challenge) ?? 0,
+  });
+  const viewerOutCopy =
+    viewerOut && hostExcuseStillAvailable(challenge)
+      ? viewerMissesOverLine(Math.max(viewerMissesOver, 1))
+      : copy('challenge.outWatchLive');
   const isHost = Boolean(challenge && user?.id && challenge.created_by === user.id);
   const officialOps = useOfficialOps().data === true;
   const modsQuery = useQuery({
@@ -1347,6 +1356,13 @@ export default function ChallengeDetailScreen() {
         {pageTab === 'overview' && calloutQuery.data && isCalloutFighterViewer ? (
           <CalloutWatchers callout={calloutQuery.data} me={user?.id} isFighter />
         ) : null}
+        {pageTab === 'overview' && viewerOut && isJoined && !isCalloutObserver ? (
+          <View className="mt-3">
+            <AppText className="text-[14px] leading-5" style={{ color: THEME.textMuted }}>
+              {viewerOutCopy}
+            </AppText>
+          </View>
+        ) : null}
         {pageTab === 'overview' && periodGate && !loggedToday && !isCalloutObserver && !viewerOut ? (
           <View className="mt-3">
             <PeriodCheckinDue challenge={challenge} submitted={false} nowMs={nowMs} />
@@ -1773,7 +1789,7 @@ export default function ChallengeDetailScreen() {
           <AppText
             className="text-center text-[13px] leading-5"
             style={{ color: THEME.textMuted, paddingBottom: 12 }}>
-            {copy('challenge.outWatchLive')}
+            {viewerOutCopy}
           </AppText>
         ) : stickyJoin ? (
           <View className="gap-1.5">

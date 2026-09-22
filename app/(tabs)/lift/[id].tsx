@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, Platform, Pressable, ScrollView, TextInput, useWindowDimensions, View, ActivityIndicator } from 'react-native';
+import { AppState, Platform, Pressable, TextInput, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AddExerciseSheet, type AddExerciseResult } from '@/components/lift/AddExerciseSheet';
 import { AddTimedRowSheet, type TimedRowResult } from '@/components/lift/AddTimedRowSheet';
 import { ExerciseCard } from '@/components/lift/ExerciseCard';
+import { LiftDoneSheet } from '@/components/lift/LiftDoneSheet';
+import { LiftDraftFooter, LiftSavedFooter } from '@/components/lift/LiftLoggingFooter';
 import { rowPlaySpec, useLiftPlay } from '@/components/lift/LiftPlayHost';
 import { TimedRowCard } from '@/components/lift/TimedRowCard';
 import { LiftHealthKitSheet } from '@/components/lift/LiftHealthKitSheet';
 import { LiftShareSheet, type LiftShareChoice } from '@/components/lift/LiftShareSheet';
 import { OverloadSheet } from '@/components/lift/OverloadSheet';
+import { KeyboardFormShell } from '@/components/ui/KeyboardFormShell';
 import { MascotState } from '@/components/mascot/MascotState';
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
@@ -31,11 +34,7 @@ import {
   useSaveLiftSession,
   useShareLiftSession,
 } from '@/hooks/useLift';
-import {
-  canCompleteSession,
-  COMPLETE_LEFTOVER_HINT,
-  sessionWeightMoved,
-} from '@/lib/lift/complete';
+import { canCompleteSession, COMPLETE_LEFTOVER_HINT, leftoverIncompleteWork, sessionWeightMoved } from '@/lib/lift/complete';
 import { rankHealthKitWorkouts } from '@/lib/lift/healthkit';
 import { bumpSessionInPlace, canOverloadSession, overloadChipLabel } from '@/lib/lift/overload';
 import { hasShareableWork, sessionCardioSeconds } from '@/lib/lift/recap';
@@ -52,7 +51,7 @@ import {
   useGetOrCreateConversation,
   useSendMessage,
 } from '@/hooks/useSocial';
-import { challengeDetailHref, circleDetailHref } from '@/lib/routes';
+import { challengeDetailHref, checkinSubmitHref, circleDetailHref } from '@/lib/routes';
 import { MUSCLE_KEYS, isTimedMuscle, muscleLabel, muscleShortLabel, type MuscleKey } from '@/lib/lift/muscles';
 import { recentExerciseOptions, rememberRecentExercise } from '@/lib/lift/recents';
 import {
@@ -84,7 +83,7 @@ import type { LiftOverloadPlan, LiftSessionDraft, LiftSetKind } from '@/lib/lift
 import { firstRouteParam } from '@/lib/challengeLoad';
 import { copy } from '@/lib/copy';
 import { LIFT_START_HREF, LIFTS_HISTORY_HREF, liftSessionHref } from '@/lib/routes';
-import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
+import { tabBarLift, THEME } from '@/lib/theme';
 
 /**
  * The session screen.
@@ -166,6 +165,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
   const [titleText, setTitleText] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [doneSheet, setDoneSheet] = useState(false);
 
   const dirty = useRef(false);
   const draftRef = useRef<LiftSessionDraft | null>(null);
@@ -337,9 +337,11 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
               }),
         );
       }
-      setPickerOpen(false);
-      setSheetMuscle(null);
-      setSwapFor(null);
+      if (swapKey) {
+        setPickerOpen(false);
+        setSheetMuscle(null);
+        setSwapFor(null);
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not add that exercise.');
     }
@@ -403,7 +405,20 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
       return;
     }
     setDraft(done);
+    setDoneSheet(true);
     void offerHealthKitLink(done);
+  }
+
+  function onAddToCheckin(challengeId: string) {
+    if (!draft) {
+      return;
+    }
+    try {
+      setDoneSheet(false);
+      router.push(checkinSubmitHref(challengeId, { lift: draft.id }));
+    } catch {
+      setError("Couldn't add that to the check-in.");
+    }
   }
 
   async function offerHealthKitLink(session: LiftSessionDraft) {
@@ -641,24 +656,57 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
     );
   }
 
-  // The quiet background write, as opposed to the one they asked for by pressing Save.
-  const autosaving = save.isPending && !finishing;
   const workSets = countWorkSets(draft);
   const doneSets = draft.exercises.reduce(
     (total, row) => total + row.sets.filter((set) => set.completedAt).length,
     0,
   );
 
+  const leftover = leftoverIncompleteWork(draft);
+  const leftoverOpen = leftover.sets > 0 || leftover.rounds > 0;
+  const canFinish = canCompleteSession(draft);
+
   return (
     <Screen padded={false} edges={TAB_ROOT_EDGES} keyboardAvoiding={false}>
       <Stack.Screen options={{ ...backHeader, title: readOnly ? 'Lift' : 'Logging' }} />
-      <View style={{ flex: 1, minHeight: 0 }}>
-        <ScrollView
-          style={{ flex: 1 }}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="none"
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}>
+      <KeyboardFormShell
+        padded
+        closedFooterPad={tabBarLift(insets.bottom, 'sticky')}
+        footer={
+          readOnly ? (
+            <LiftSavedFooter
+              canShare={hasShareableWork(draft)}
+              confirmingDelete={confirmDelete}
+              busy={save.isPending || remove.isPending}
+              onShare={() => {
+                setSharedPostId(null);
+                setShareOpen(true);
+              }}
+              onStartAgain={() => void onStartAgain()}
+              onAskDelete={() => setConfirmDelete(true)}
+              onKeep={() => setConfirmDelete(false)}
+              onDelete={() => void onDelete()}
+            />
+          ) : (
+            <TourAnchor id="tour-lift-log">
+              <LiftDraftFooter
+                canPlay={Boolean(playableRow)}
+                canComplete={canFinish}
+                leftover={leftoverOpen}
+                saving={finishing}
+                completing={completing}
+                statusLine={error}
+                onPlay={() => {
+                  if (playableRow) {
+                    startPlay(rowPlaySpec(playableRow));
+                  }
+                }}
+                onSave={() => void onSave()}
+                onComplete={() => void onComplete()}
+              />
+            </TourAnchor>
+          )
+        }>
           <View style={{ paddingTop: 4, paddingBottom: 12 }}>
             {renaming ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -1069,76 +1117,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
               </View>
             );
           })}
-        </ScrollView>
-
-        <View
-          style={{
-            paddingHorizontal: 16,
-            paddingTop: 8,
-            gap: 8,
-            backgroundColor: THEME.surface,
-            borderTopWidth: 1,
-            borderTopColor: THEME.border,
-            paddingBottom: tabBarLift(insets.bottom, 'sticky'),
-            ...themeShadow('bar'),
-          }}>
-          <View style={{ height: 16, justifyContent: 'center' }}>
-            {error ? (
-              <AppText numberOfLines={1} style={{ fontSize: 13, fontWeight: '600', color: THEME.danger }}>
-                {error}
-              </AppText>
-            ) : autosaving ? (
-              <AppText style={{ fontSize: 12, color: THEME.textMuted }}>Saving…</AppText>
-            ) : null}
-          </View>
-
-          {readOnly ? (
-            <SavedFooter
-              canShare={hasShareableWork(draft)}
-              confirmingDelete={confirmDelete}
-              busy={save.isPending || remove.isPending}
-              onShare={() => {
-                setSharedPostId(null);
-                setShareOpen(true);
-              }}
-              onStartAgain={() => void onStartAgain()}
-              onAskDelete={() => setConfirmDelete(true)}
-              onKeep={() => setConfirmDelete(false)}
-              onDelete={() => void onDelete()}
-            />
-          ) : (
-            <TourAnchor id="tour-lift-log">
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <TourAnchor id="tour-lift-play" style={{ flex: 1 }}>
-              <FooterBtn
-                title="Play"
-                variant="play"
-                disabled={!playableRow}
-                onPress={() => {
-                  if (playableRow) {
-                    startPlay(rowPlaySpec(playableRow));
-                  }
-                }}
-              />
-              </TourAnchor>
-              <FooterBtn
-                title="Save"
-                variant="save"
-                loading={finishing}
-                onPress={() => void onSave()}
-              />
-              <FooterBtn
-                title="Complete"
-                variant="save"
-                dimmed={!canCompleteSession(draft)}
-                loading={completing}
-                onPress={() => void onComplete()}
-              />
-            </View>
-            </TourAnchor>
-          )}
-        </View>
-      </View>
+      </KeyboardFormShell>
 
       <AddExerciseSheet
         visible={pickerOpen || swapFor != null}
@@ -1198,6 +1177,20 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
         }}
       />
 
+      <LiftDoneSheet
+        visible={doneSheet}
+        challenges={liftingChallenges}
+        busy={attach.isPending}
+        error={error}
+        onDone={() => setDoneSheet(false)}
+        onShare={() => {
+          setDoneSheet(false);
+          setSharedPostId(null);
+          setShareOpen(true);
+        }}
+        onAddToCheckin={onAddToCheckin}
+      />
+
       {Platform.OS === 'ios' ? (
         <LiftHealthKitSheet
           visible={hkOpen}
@@ -1212,131 +1205,6 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
         />
       ) : null}
     </Screen>
-  );
-}
-
-const FOOTER_H = 44;
-
-function SavedFooter({
-  canShare,
-  confirmingDelete,
-  busy,
-  onShare,
-  onStartAgain,
-  onAskDelete,
-  onKeep,
-  onDelete,
-}: {
-  canShare: boolean;
-  confirmingDelete: boolean;
-  busy: boolean;
-  onShare: () => void;
-  onStartAgain: () => void;
-  onAskDelete: () => void;
-  onKeep: () => void;
-  onDelete: () => void;
-}) {
-  const { width } = useWindowDimensions();
-  const trashOnly = width < 360;
-
-  if (confirmingDelete) {
-    return (
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <FooterBtn title="Keep" variant="outline" onPress={onKeep} />
-        <FooterBtn title="Delete" variant="danger" loading={busy} onPress={onDelete} />
-      </View>
-    );
-  }
-
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-      <FooterBtn title="Share" variant="share" disabled={!canShare} onPress={onShare} />
-      <FooterBtn title="Start again" variant="outline" loading={busy} onPress={onStartAgain} />
-      <FooterBtn
-        title="Delete"
-        variant="outline"
-        glyph={trashOnly}
-        onPress={onAskDelete}
-      />
-    </View>
-  );
-}
-
-function FooterBtn({
-  title,
-  variant,
-  disabled,
-  dimmed,
-  loading,
-  glyph,
-  onPress,
-}: {
-  title: string;
-  variant: 'play' | 'save' | 'share' | 'outline' | 'danger';
-  disabled?: boolean;
-  dimmed?: boolean;
-  loading?: boolean;
-  glyph?: boolean;
-  onPress: () => void;
-}) {
-  const isDisabled = Boolean(disabled || loading);
-  const grey = Boolean(dimmed && !loading);
-  const fill =
-    variant === 'play'
-      ? THEME.accent
-      : variant === 'save' || variant === 'share'
-        ? THEME.primary
-        : variant === 'danger'
-          ? THEME.danger
-          : THEME.surface;
-  const labelColor =
-    variant === 'outline'
-      ? title === 'Delete'
-        ? THEME.danger
-        : THEME.textPrimary
-      : THEME.primaryForeground;
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={title}
-      accessibilityState={{ disabled: isDisabled || grey, busy: Boolean(loading) }}
-      disabled={isDisabled}
-      onPress={onPress}
-      style={({ pressed }) => ({
-        flex: 1,
-        minWidth: 0,
-        minHeight: FOOTER_H,
-        height: FOOTER_H,
-        paddingHorizontal: 8,
-        borderRadius: 14,
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexDirection: 'row',
-        gap: 4,
-        backgroundColor: fill,
-        borderWidth: variant === 'outline' ? 1 : 0,
-        borderColor: variant === 'outline' ? THEME.border : 'transparent',
-        opacity: isDisabled || grey ? 0.38 : pressed ? 0.88 : 1,
-      })}>
-      {loading ? (
-        <ActivityIndicator color={labelColor} />
-      ) : glyph ? (
-        <Glyph name={GLYPH.trash} color={THEME.danger} size={16} />
-      ) : (
-        <AppText
-          numberOfLines={1}
-          ellipsizeMode="tail"
-          style={{
-            fontSize: 14,
-            fontWeight: '700',
-            color: labelColor,
-            includeFontPadding: false,
-          }}>
-          {title}
-        </AppText>
-      )}
-    </Pressable>
   );
 }
 
