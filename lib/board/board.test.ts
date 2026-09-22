@@ -23,6 +23,12 @@ import {
   rankBoardRows,
   shortBoardHeader,
   shortLaneMarkLabel,
+  boardHeaderSharesDetailsRow,
+  boardLaneSideTotals,
+  boardStatusHeaderLine,
+  comparableLaneHeaderLine,
+  consistencyBoardHeaderLine,
+  pointsBoardHeaderLine,
 } from '@/lib/board';
 import { checkinPointValue } from '@/lib/challengePoints';
 import { challengeGoalLabel } from '@/lib/challengeGoal';
@@ -379,5 +385,70 @@ describe('board row chrome', () => {
     expect(shortLaneMarkLabel('Veteran')).toBe('Veteran');
     expect(formatBoardPoints(26000)).toBe('26,000');
     expect(formatBoardNestedQty(3500)).toBe('3,500');
+  });
+});
+
+describe('board status header', () => {
+  const lanes = [
+    { id: 'rookie', label: 'Rookie' },
+    { id: 'veteran', label: 'Veteran' },
+  ];
+  const rows = [
+    { userId: 'a', points: 52000, bucket: 'remaining' },
+    { userId: 'b', points: 20000, bucket: 'remaining' },
+    { userId: 'c', points: 16839, bucket: 'caught_up' },
+    { userId: 'd', points: 9000, bucket: 'dropped' },
+    { userId: 'e', points: 4000, bucket: 'remaining' },
+  ];
+  const laneOf = (userId: string) =>
+    ({ a: 'rookie', b: 'veteran', c: 'veteran', d: 'rookie', e: null })[userId] ?? null;
+
+  it('sums racing Pts per Side and skips Dropped / Needs a side', () => {
+    const totals = boardLaneSideTotals({ rows, laneOf, lanes });
+    expect(totals).toEqual([
+      { id: 'rookie', label: 'Rookie', points: 52000 },
+      { id: 'veteran', label: 'Veteran', points: 36839 },
+    ]);
+    expect(comparableLaneHeaderLine(totals)).toBe('Rookie 52,000 · Veteran 36,839');
+    expect(boardStatusHeaderLine({ format: 'lanes', racingCount: 4, laneTotals: totals })).toBe(
+      'Rookie 52,000 · Veteran 36,839',
+    );
+    expect(boardStatusHeaderLine({ format: 'lanes', racingCount: 4, laneTotals: totals })).not.toMatch(
+      /Completers/,
+    );
+  });
+
+  it('reads every ranked racing row, not the expanded nest set', () => {
+    const openOnly = rows.filter((row) => row.userId === 'a');
+    expect(boardLaneSideTotals({ rows: openOnly, laneOf, lanes })[0]?.points).toBe(52000);
+    expect(boardLaneSideTotals({ rows, laneOf, lanes })[0]?.points).toBe(52000);
+    expect(boardLaneSideTotals({ rows, laneOf, lanes })[1]?.points).toBe(36839);
+  });
+
+  it('prints In / Leading on plain points and never Completers', () => {
+    expect(pointsBoardHeaderLine(15, 0)).toBe('15 racing');
+    expect(pointsBoardHeaderLine(15, 26000)).toBe('In 15 · Leading 26,000');
+    expect(boardStatusHeaderLine({ format: 'points', racingCount: 15, leadingScore: 26000 })).not.toMatch(
+      /Completers/,
+    );
+  });
+
+  it('keeps Remaining / Caught Up / Dropped on consistency', () => {
+    expect(consistencyBoardHeaderLine(12, 3, 1)).toBe('Remaining 12 · Caught Up 3 · Dropped 1');
+    expect(boardStatusHeaderLine({ format: 'consistency', racingCount: 15, remainingCount: 12, caughtUpCount: 3, droppedCount: 1 })).toMatch(
+      /Remaining|Caught Up|Dropped/,
+    );
+  });
+
+  it('keeps quantity In / Done and never Completers', () => {
+    expect(quantityBoardHeaderLine(2, 0, 0)).toBe('In 2');
+    expect(boardStatusHeaderLine({ format: 'quantity', racingCount: 2, inCount: 2, doneCount: 0 })).not.toMatch(
+      /Completers/,
+    );
+  });
+
+  it('puts long Side totals on their own row next to Show details', () => {
+    expect(boardHeaderSharesDetailsRow('Rookie 52,000 · Veteran 36,839', true)).toBe(true);
+    expect(boardHeaderSharesDetailsRow('Sides · Rookie 52,000 · Veteran 36,839', true)).toBe(false);
   });
 });

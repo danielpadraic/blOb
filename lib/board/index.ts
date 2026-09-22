@@ -7,6 +7,16 @@ export {
   quantityBoardHeaderLine,
 } from './copy';
 export {
+  boardHeaderSharesDetailsRow,
+  boardLaneSideTotals,
+  boardStatusHeaderLine,
+  comparableLaneHeaderLine,
+  consistencyBoardHeaderLine,
+  pointsBoardHeaderLine,
+  type BoardHeaderFormat,
+  type BoardLaneSideTotal,
+} from './header';
+export {
   boardCompletersCount,
   boardDisplayName,
   boardScoreLabel,

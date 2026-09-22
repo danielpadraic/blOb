@@ -27,8 +27,10 @@ import {
   BOARD_ROW_MIN_COMPACT,
   BOARD_SIDE_COL,
   boardColumnWidth,
-  boardCompletersCount,
   boardEmptyCopy,
+  boardHeaderSharesDetailsRow,
+  boardLaneSideTotals,
+  boardStatusHeaderLine,
   boardMedalTone,
   boardMedalWash,
   boardStatKind,
@@ -40,7 +42,6 @@ import {
   buildBoard,
   formatBoardNestedQty,
   formatBoardPoints,
-  quantityBoardHeaderLine,
   rankBoardRows,
   shortBoardHeader,
 } from '@/lib/board';
@@ -189,15 +190,8 @@ export function ChallengeBoard({
   const racing = rankedPeople.filter((row) => row.bucket !== 'dropped');
   const doneCount = quantityBoard
     ? racing.filter((row) => progressByUser.get(row.userId)?.done).length
-    : boardCompletersCount(view.people);
+    : 0;
   const inCount = quantityBoard ? racing.length - doneCount : view.remainingCount;
-  const headerLine = quantityBoard
-    ? quantityBoardHeaderLine(inCount, doneCount, view.droppedCount)
-    : pointsBoard
-      ? `${copy('board.in')} ${view.remainingCount} · ${copy('board.completers')} ${doneCount}${
-          view.droppedCount > 0 ? ` · ${copy('board.dropped')} ${view.droppedCount}` : ''
-        }`
-      : `${copy('board.remaining')} ${view.remainingCount} · ${copy('board.caughtUp')} ${view.caughtUpCount} · ${copy('board.dropped')} ${view.droppedCount}`;
   const rows = useMemo(
     () =>
       rankBoardRows(
@@ -226,6 +220,45 @@ export function ChallengeBoard({
     return map;
   }, [roster]);
   const racingIds = useMemo(() => racing.map((row) => row.userId), [racing]);
+  const laneTotals = useMemo(
+    () =>
+      scoringLanes.length > 0
+        ? boardLaneSideTotals({
+            rows,
+            laneOf: (userId) => participantById.get(userId)?.scoring_lane,
+            lanes: scoringLanes,
+          })
+        : [],
+    [participantById, rows, scoringLanes],
+  );
+  const headerFormat =
+    quantityBoard ? 'quantity' : scoringLanes.length > 0 ? 'lanes' : pointsBoard ? 'points' : 'consistency';
+  const leadingScore = racing.reduce((max, row) => Math.max(max, Number(row.points) || 0), 0);
+  const headerPlain = boardStatusHeaderLine({
+    format: headerFormat,
+    racingCount: racing.length,
+    leadingScore,
+    remainingCount: view.remainingCount,
+    caughtUpCount: view.caughtUpCount,
+    droppedCount: view.droppedCount,
+    inCount,
+    doneCount,
+    laneTotals,
+  });
+  const headerPrefixed =
+    headerFormat === 'lanes'
+      ? boardStatusHeaderLine({
+          format: 'lanes',
+          racingCount: racing.length,
+          laneTotals,
+          sidesPrefix: true,
+        })
+      : headerPlain;
+  const headerLine = boardHeaderSharesDetailsRow(headerPrefixed, hasNested, compact)
+    ? headerPrefixed
+    : headerPlain;
+  const headerOnOwnRow =
+    headerFormat === 'lanes' && hasNested && !boardHeaderSharesDetailsRow(headerLine, true, compact);
   const allDetailsOpen = hasNested && racingIds.length > 0 && racingIds.every((id) => openIds.has(id));
   const quantityUnit =
     [...progressByUser.values()].find((item) => item?.unit)?.unit || 'mi';
@@ -395,12 +428,25 @@ export function ChallengeBoard({
   if (compact) {
     return (
       <Card className="gap-2" style={{ padding: 12 }}>
-        <View className="flex-row items-center justify-between">
-          <AppText className="text-[12px] font-semibold" style={{ color: THEME.textMuted, ...flexChildMin() }}>
-            {headerLine}
-          </AppText>
-          {detailsControl}
-        </View>
+        {headerOnOwnRow ? (
+          <View className="gap-1">
+            <View className="flex-row items-center justify-end">{detailsControl}</View>
+            <AppText
+              className="text-[12px] font-semibold"
+              style={{ color: THEME.textMuted, fontVariant: ['tabular-nums'] }}>
+              {headerLine}
+            </AppText>
+          </View>
+        ) : (
+          <View className="flex-row items-center justify-between">
+            <AppText
+              className="text-[12px] font-semibold"
+              style={{ color: THEME.textMuted, ...flexChildMin(), fontVariant: ['tabular-nums'] }}>
+              {headerLine}
+            </AppText>
+            {detailsControl}
+          </View>
+        )}
         {error ? (
           <AppText className="text-sm leading-5 text-coral-dark">
             Couldn’t load the board.{' '}
@@ -442,12 +488,25 @@ export function ChallengeBoard({
         </View>
       </View>
 
-      <View className="flex-row items-center justify-between" style={{ gap: 8 }}>
-        <AppText className="text-[13px] font-semibold" style={{ color: THEME.textMuted, ...flexChildMin() }}>
-          {headerLine}
-        </AppText>
-        {detailsControl}
-      </View>
+      {headerOnOwnRow ? (
+        <View className="gap-1">
+          <View className="flex-row items-center justify-end">{detailsControl}</View>
+          <AppText
+            className="text-[13px] font-semibold"
+            style={{ color: THEME.textMuted, fontVariant: ['tabular-nums'] }}>
+            {headerLine}
+          </AppText>
+        </View>
+      ) : (
+        <View className="flex-row items-center justify-between" style={{ gap: 8 }}>
+          <AppText
+            className="text-[13px] font-semibold"
+            style={{ color: THEME.textMuted, ...flexChildMin(), fontVariant: ['tabular-nums'] }}>
+            {headerLine}
+          </AppText>
+          {detailsControl}
+        </View>
+      )}
       {quantityBoard ? null : <MissBudgetLines challenge={challenge} used={missesUsed} />}
 
       {view.settled ? (
@@ -595,9 +654,6 @@ function ShareLine({
             textClassName="text-[22px] font-extrabold text-charcoal"
             zeroAsNumber
           />
-          <AppText className="text-[12px] leading-4" style={{ color: THEME.textMuted }}>
-            {copy('board.prizeUntilSettlement')}
-          </AppText>
         </View>
         <View style={{ flexShrink: 0, backgroundColor: 'transparent' }}>
           <BlobMascot variant="wave" size={72} />
