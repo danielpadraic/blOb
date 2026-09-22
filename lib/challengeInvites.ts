@@ -8,6 +8,7 @@ import {
   stashPendingInviteToken,
   takePendingInviteToken,
 } from '@/lib/pendingInviteToken';
+import { classifyInviteLinkResponse, type InviteLinkResult } from '@/lib/challengeInviteShare';
 import { supabase } from '@/lib/supabase';
 import type {
   AcceptChallengeInviteResult,
@@ -46,20 +47,18 @@ export async function createChallengeInvite(
   return row;
 }
 
-export async function mintChallengeInviteLink(
+/**
+ * The one live share invite for this challenge. Host / mod / @blob mint the
+ * first token; everyone else on the roster reuses it. Never throws — the caller
+ * needs the reason to pick copy, so a failure comes back as data.
+ */
+export async function resolveChallengeInviteLink(
   challengeId: string,
-): Promise<CreateChallengeInviteResult> {
+): Promise<InviteLinkResult> {
   const { data, error } = await supabase.rpc('mint_challenge_invite_link', {
     p_challenge_id: challengeId,
   });
-  if (error) {
-    throw new Error(getErrorMessage(error));
-  }
-  const row = (Array.isArray(data) ? data[0] : data) as CreateChallengeInviteResult | null;
-  if (!row?.token) {
-    throw new Error('Couldn’t copy that invite.');
-  }
-  return row;
+  return classifyInviteLinkResponse({ data, error });
 }
 
 export async function acceptChallengeInvite(token: string): Promise<AcceptChallengeInviteResult> {

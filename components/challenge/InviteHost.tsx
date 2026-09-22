@@ -18,15 +18,18 @@ import { AppText } from '@/components/ui/AppText';
 import { useMyCircles } from '@/hooks/useCircles';
 import { useCreatePost } from '@/hooks/useFeed';
 import { challengeAnnounceCopy } from '@/lib/challengeFeedPost';
-import { mintChallengeInviteLink } from '@/lib/challengeInvites';
-import { needsInviteShareLink, resolveChallengeCopyUrl } from '@/lib/challengeInviteShare';
+import { resolveChallengeInviteLink } from '@/lib/challengeInvites';
+import {
+  needsInviteShareLink,
+  resolveChallengeCopyUrl,
+  type InviteLinkResult,
+} from '@/lib/challengeInviteShare';
 import { copyTextToClipboard } from '@/lib/clipboardCopy';
 import { copy } from '@/lib/copy';
 import { isPrivateCorporate } from '@/lib/privacyMode';
 import type { PostAudience } from '@/lib/postAudience';
 import type { FeedChallengePreview } from '@/lib/social';
 import { THEME, themeShadow } from '@/lib/theme';
-import { getErrorMessage } from '@/utils/errors';
 
 export type ChallengeShareTarget = {
   challengeId: string;
@@ -62,7 +65,7 @@ export function InviteHost({ children }: { children: ReactNode }) {
   const inviteTokenRef = useRef<string | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [manualUrl, setManualUrl] = useState<string | null>(null);
-  const mintInFlight = useRef<Promise<string> | null>(null);
+  const mintInFlight = useRef<Promise<InviteLinkResult> | null>(null);
   const mintForId = useRef<string | null>(null);
   const createPost = useCreatePost();
   const myCircles = useMyCircles();
@@ -74,32 +77,33 @@ export function InviteHost({ children }: { children: ReactNode }) {
     setInviteToken(token);
   }, []);
 
-  const ensureInviteToken = useCallback((challengeId: string) => {
-    if (inviteTokenRef.current) {
-      return Promise.resolve(inviteTokenRef.current);
-    }
-    if (mintInFlight.current) {
-      return mintInFlight.current;
-    }
-    const pending = mintChallengeInviteLink(challengeId)
-      .then((row) => {
-        const token = String(row.token ?? '').trim();
-        if (!token) {
-          throw new Error('Couldn’t copy that invite.');
-        }
-        if (mintForId.current === challengeId) {
-          rememberToken(token);
-        }
-        return token;
-      })
-      .finally(() => {
-        if (mintInFlight.current === pending) {
-          mintInFlight.current = null;
-        }
-      });
-    mintInFlight.current = pending;
-    return pending;
-  }, [rememberToken]);
+  // One token per open sheet. Tapping Copy twice reuses it instead of minting again.
+  const ensureInviteToken = useCallback(
+    (challengeId: string): Promise<InviteLinkResult> => {
+      const cached = inviteTokenRef.current;
+      if (cached) {
+        return Promise.resolve({ ok: true, token: cached, created: false });
+      }
+      if (mintInFlight.current) {
+        return mintInFlight.current;
+      }
+      const pending = resolveChallengeInviteLink(challengeId)
+        .then((result) => {
+          if (result.ok && mintForId.current === challengeId) {
+            rememberToken(result.token);
+          }
+          return result;
+        })
+        .finally(() => {
+          if (mintInFlight.current === pending) {
+            mintInFlight.current = null;
+          }
+        });
+      mintInFlight.current = pending;
+      return pending;
+    },
+    [rememberToken],
+  );
 
   const open = useCallback(
     (next: ChallengeShareTarget) => {
@@ -141,31 +145,45 @@ export function InviteHost({ children }: { children: ReactNode }) {
     setCopyError(null);
     setManualUrl(null);
     let token = inviteTokenRef.current ?? inviteToken;
-    try {
-      if (needsInviteShareLink(target.privacyMode) && !token) {
-        token = await ensureInviteToken(target.challengeId);
+
+    if (needsInviteShareLink(target.privacyMode) && !token) {
+      const result = await ensureInviteToken(target.challengeId);
+      if (!result.ok) {
+        // Never a bare /challenges/{id} here — Live 403s for strangers.
+        console.warn(
+          `[invite-copy] ${result.failure} challenge=${target.challengeId} detail=${result.detail}`,
+        );
+        setCopyError(
+          result.failure === 'closed'
+            ? copy('challenge.inviteClosed')
+            : copy('challenge.inviteAskHost'),
+        );
+        return;
       }
-    } catch (error) {
-      setCopyError(getErrorMessage(error) || 'Couldn’t copy. Hold to select.');
-      return;
+      token = result.token;
     }
+
     const url = resolveChallengeCopyUrl({
       challengeId: target.challengeId,
       privacyMode: target.privacyMode,
       inviteToken: token,
     });
     if (!url) {
-      setCopyError('Couldn’t copy. Hold to select.');
+      console.warn(`[invite-copy] token-missing challenge=${target.challengeId} detail=empty url`);
+      setCopyError(copy('challenge.inviteAskHost'));
       return;
     }
+
     const copied = await copyTextToClipboard(url);
     if (copied) {
       close();
       showToast('Link copied');
       return;
     }
+    // Real URL in hand, clipboard refused. Show it rather than blaming the invite.
+    console.warn(`[invite-copy] clipboard-reject challenge=${target.challengeId}`);
     setManualUrl(url);
-    setCopyError('Couldn’t copy. Hold to select.');
+    setCopyError(copy('challenge.inviteHoldToCopy'));
   }
 
   const preview: FeedChallengePreview | null = target

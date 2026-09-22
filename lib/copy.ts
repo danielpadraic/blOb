@@ -267,6 +267,8 @@ const STRINGS = {
   'challenge.privateWall': 'This is a private challenge. Only competitors can open it.',
   'challenge.inviteClosed': 'This invite is no longer open.',
   'challenge.inviteCopied': 'Invite link copied.',
+  'challenge.inviteAskHost': 'Ask the host for the invite link.',
+  'challenge.inviteHoldToCopy': 'Hold to copy.',
   'feed.checkedIn': 'Checked in ·',
   'friends.loading': {
     gentle: 'Finding your people.',
