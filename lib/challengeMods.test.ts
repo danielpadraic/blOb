@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  challengeMentionMemberIds,
   proxyCheckinBlockedReason,
   proxyCheckinLiveBody,
   proxyLoggedByLine,
@@ -86,5 +87,15 @@ describe('challenge moderators', () => {
       sentence: null,
       caption: 'Check-in Complete',
     });
+  });
+
+  it('keeps assigned mods in the mention list even when they are not on the roster', () => {
+    expect(
+      challengeMentionMemberIds({
+        createdBy: 'host',
+        rosterUserIds: ['p1'],
+        moderatorIds: ['courtney'],
+      }).sort(),
+    ).toEqual(['courtney', 'host', 'p1']);
   });
 });

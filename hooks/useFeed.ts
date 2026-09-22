@@ -1891,12 +1891,11 @@ export function useCreatePost(challengeId?: string | null) {
             2500,
           );
         } catch (error) {
-          console.log('[blob:post]', {
-            stage: 'mentions',
-            ms: Date.now() - started,
-            ...mediaLog,
-            error: error instanceof Error ? error.message : 'fail',
-          });
+          if (isMissingRelationError(error)) {
+            logCreatePost({ stage: 'mentions', ms: Date.now() - started, ...mediaLog });
+          } else {
+            throw createPostFail(error);
+          }
         }
       }
       if (liftSessionId && createdPost.id) {

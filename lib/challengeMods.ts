@@ -170,6 +170,29 @@ export async function fetchChallengeModerators(challengeId: string): Promise<Cha
   }));
 }
 
+/** Host, roster, and assigned mods — even when a mod is not competing. */
+export function challengeMentionMemberIds(input: {
+  createdBy?: string | null;
+  rosterUserIds?: readonly (string | null | undefined)[] | null;
+  moderatorIds?: readonly (string | null | undefined)[] | null;
+}): string[] {
+  const ids = new Set<string>();
+  if (input.createdBy) {
+    ids.add(input.createdBy);
+  }
+  for (const id of input.rosterUserIds ?? []) {
+    if (id) {
+      ids.add(id);
+    }
+  }
+  for (const id of input.moderatorIds ?? []) {
+    if (id) {
+      ids.add(id);
+    }
+  }
+  return [...ids];
+}
+
 export async function appointChallengeModerator(challengeId: string, userId: string): Promise<void> {
   const { error } = await supabase.rpc('appoint_challenge_moderator', {
     p_challenge_id: challengeId,

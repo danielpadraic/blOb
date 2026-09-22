@@ -102,7 +102,7 @@ import { currentRequiredPeriodWindow } from '@/lib/checkinPeriod';
 import { challengeShowsMissBudget } from '@/lib/missDuty';
 import { usePeriodCompletions } from '@/hooks/useWorkoutSubmission';
 import { ChallengePageTabs, challengeTabsForViewer, asChallengePageTab, type ChallengePageTab } from '@/components/challenge/ChallengePageTabs';
-import { fetchChallengeModeratorIds } from '@/lib/challengeMods';
+import { challengeMentionMemberIds, fetchChallengeModeratorIds } from '@/lib/challengeMods';
 import { useOfficialOps } from '@/hooks/useOfficialOps';
 import { canSeeCorporateLive } from '@/lib/privacyMode';
 import { LiveAlertsButton } from '@/components/challenge/LiveMuteSheet';
@@ -516,18 +516,15 @@ export default function ChallengeDetailScreen() {
       setPageTab('overview');
     }
   }, [isCalloutObserver, liveAllowed, pageTab]);
-  const mentionMemberIds = useMemo(() => {
-    const ids = new Set<string>();
-    if (challenge?.created_by) {
-      ids.add(challenge.created_by);
-    }
-    for (const row of roster.data ?? []) {
-      if (row.user_id) {
-        ids.add(row.user_id);
-      }
-    }
-    return [...ids];
-  }, [challenge?.created_by, roster.data]);
+  const mentionMemberIds = useMemo(
+    () =>
+      challengeMentionMemberIds({
+        createdBy: challenge?.created_by,
+        rosterUserIds: (roster.data ?? []).map((row) => row.user_id),
+        moderatorIds: modsQuery.data,
+      }),
+    [challenge?.created_by, modsQuery.data, roster.data],
+  );
   const hostRoundPrompt = useHostRoundPrompt(challenge);
   const showOfficialTools = canOpenOfficialTools({
     challenge,

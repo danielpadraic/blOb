@@ -51,6 +51,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePeriodCheckin, useSaveCheckinProof, useSubmitCheckin, useCheckinHistory } from '@/hooks/useChallengeCheckin';
 import { useOfficialOps } from '@/hooks/useOfficialOps';
 import {
+  challengeMentionMemberIds,
   fetchChallengeModeratorIds,
   proxyCheckinBlockedReason,
   proxyCheckinLiveBody,
@@ -181,7 +182,7 @@ import { CALLOUT_WATCHING_LINE } from '@/lib/callouts';
 import { challengeDetailHref, checkinSubmitHref, leaveCheckinHref, MULTI_CHECKIN_HREF, multiCheckinHref } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import type { PostWithMeta } from '@/lib/types';
-import { getCheckinSubmitMessage, getErrorMessage, logDev } from '@/utils/errors';
+import { getCheckinSubmitMessage, getErrorMessage, isMissingRelationError, logDev } from '@/utils/errors';
 import { localUriFromPickerAsset } from '@/utils/media';
 import { uploadPostAttachment } from '@/utils/upload';
 
@@ -575,18 +576,15 @@ function SubmitWorkoutInner() {
    * visible and the user taps the photo slot when ready.
    */
   const needsWrittenProof = proofSteps.some((proof) => proof.method === 'checkin');
-  const mentionAudienceIds = useMemo(() => {
-    const ids = new Set<string>();
-    if (challenge?.created_by) {
-      ids.add(challenge.created_by);
-    }
-    for (const row of roster.data ?? []) {
-      if (row.user_id) {
-        ids.add(row.user_id);
-      }
-    }
-    return [...ids];
-  }, [challenge?.created_by, roster.data]);
+  const mentionAudienceIds = useMemo(
+    () =>
+      challengeMentionMemberIds({
+        createdBy: challenge?.created_by,
+        rosterUserIds: (roster.data ?? []).map((row) => row.user_id),
+        moderatorIds,
+      }),
+    [challenge?.created_by, moderatorIds, roster.data],
+  );
 
   useEffect(() => {
     if (!uid) {
@@ -1512,18 +1510,6 @@ function SubmitWorkoutInner() {
           postId = (post.data as { id?: string } | null)?.id;
           const mediaUrls = (post.data as { media_urls?: string[] } | null)?.media_urls ?? [];
           const checkinStats = (post.data as { checkin_stats?: unknown } | null)?.checkin_stats ?? null;
-          const mentionIds = [
-            ...new Set(caption.chips.map((chip) => chip.userId).filter((chipId) => chipId && chipId !== user?.id)),
-          ];
-          if (postId && mentionIds.length > 0 && uid) {
-            await supabase.from('post_mentions').insert(
-              mentionIds.map((mentioned_user_id) => ({
-                post_id: postId,
-                mentioned_user_id,
-                author_id: uid,
-              })),
-            );
-          }
           if (postId) {
             const captions = mediaCaptionsForUrls(mediaUrls, proofSteps, savedParts, proofCaptions);
             await supabase
@@ -1582,7 +1568,24 @@ function SubmitWorkoutInner() {
             }
           }
         } catch {
-          // Social line already saved; Home hide / mentions are best-effort.
+          // Home hide / lift snapshot stay best-effort. Mentions are required below.
+        }
+        const mentionIds = [
+          ...new Set(caption.chips.map((chip) => chip.userId).filter((chipId) => chipId && chipId !== user?.id)),
+        ];
+        if (postId && mentionIds.length > 0 && uid) {
+          const mentionRows = mentionIds.map((mentioned_user_id) => ({
+            post_id: postId,
+            mentioned_user_id,
+            author_id: uid,
+          }));
+          let mentionWrite = await supabase.from('post_mentions').insert(mentionRows);
+          if (mentionWrite.error && !isMissingRelationError(mentionWrite.error)) {
+            mentionWrite = await supabase.from('post_mentions').insert(mentionRows);
+          }
+          if (mentionWrite.error && !isMissingRelationError(mentionWrite.error)) {
+            throw new Error(getErrorMessage(mentionWrite.error));
+          }
         }
       }
       if (uid) {
