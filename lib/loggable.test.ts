@@ -95,6 +95,26 @@ describe('isLoggable format gate', () => {
     expect(isLoggable(prayer, IN, { now: NOW, submittedThisPeriod: true })).toBe(true);
   });
 
+  it('treats comparable_points as multi even when frequency is daily', () => {
+    const pinnacle = {
+      ...LIVE,
+      format: 'consistency',
+      challenge_type: 'consistency',
+      frequency: 'daily',
+      scoring_method: 'comparable_points',
+      title: 'Rookies vs. Veterans',
+    };
+    expect(loggableFormatKind(pinnacle)).toBe('multi');
+    expect(isLoggable(pinnacle, IN, { now: NOW, submittedThisPeriod: true })).toBe(true);
+    expect(checkinPeriodComplete(pinnacle, { submittedThisPeriod: true })).toBe(false);
+  });
+
+  it('keeps 30-Day Consistency one check-in per period', () => {
+    expect(loggableFormatKind(thirtyDay)).toBe('consistency');
+    expect(isLoggable(thirtyDay, IN, { now: NOW, submittedThisPeriod: true })).toBe(false);
+    expect(checkinPeriodComplete(thirtyDay, { submittedThisPeriod: true })).toBe(true);
+  });
+
   it('treats a 128-mile title as multi even without stored metrics', () => {
     const titled = {
       ...LIVE,

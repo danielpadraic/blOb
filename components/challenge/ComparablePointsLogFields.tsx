@@ -5,7 +5,9 @@ import { ScoringIcon } from '@/components/ui/ScoringIcon';
 import { Input } from '@/components/ui/Input';
 import { AppText } from '@/components/ui/AppText';
 import {
+  comparableIncrementHint,
   comparableLogFields,
+  comparableTodaySoFarLine,
   inferInputKind,
   parseMoneyInput,
   type ComparablePointsConfig,
@@ -26,11 +28,15 @@ export function ComparablePointsLogFields({
   config,
   draft,
   disabled,
+  todayTotals,
+  mode = 'add',
   onChange,
 }: {
   config: ComparablePointsConfig;
   draft: ComparableLogDraft;
   disabled?: boolean;
+  todayTotals?: Record<string, number> | null;
+  mode?: 'add' | 'edit';
   onChange: (next: ComparableLogDraft) => void;
 }) {
   const fields = comparableLogFields(config);
@@ -46,7 +52,7 @@ export function ComparablePointsLogFields({
             <Input
               key={field.id}
               label={field.label}
-              placeholder={field.placeholder || 'Optional'}
+              placeholder={field.placeholder || 'This sale or meeting'}
               value={draft.text[field.id] ?? ''}
               onChangeText={(value) =>
                 onChange({ ...draft, text: { ...draft.text, [field.id]: value } })
@@ -54,6 +60,7 @@ export function ComparablePointsLogFields({
               editable={!disabled}
               grow
               maxLength={240}
+              hint={comparableIncrementHint(field)}
             />
           );
         }
@@ -85,30 +92,43 @@ export function ComparablePointsLogFields({
         }
         const money = inferInputKind(field.unit, field.inputKind) === 'money';
         const unit = field.unit && !money ? ` (${field.unit})` : '';
+        const soFar = comparableTodaySoFarLine(field, todayTotals?.[field.key] ?? 0);
         return (
           <View key={field.key} className="flex-row items-start" style={{ gap: 10 }}>
             <View style={{ marginTop: 22 }}>
               <ScoringIcon iconKey={field.iconKey} size={28} label={field.label} />
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
-          <Input
-            label={`${field.label}${money ? ' ($)' : unit}`}
-            placeholder="0"
-            keyboardType={field.inputKind === 'count' ? 'number-pad' : 'decimal-pad'}
-            value={draft.metrics[field.key] ?? ''}
-            onChangeText={(raw) => {
-              const next = money ? raw.replace(/[^0-9.]/g, '') : raw.replace(/[^\d.]/g, '');
-              onChange({ ...draft, metrics: { ...draft.metrics, [field.key]: next } });
-            }}
-            editable={!disabled}
-            hint={money && draft.metrics[field.key] ? `Stores ${parseMoneyInput(draft.metrics[field.key])}` : undefined}
-          />
+              {soFar ? (
+                <AppText className="text-[12px] leading-4 mb-1" style={{ color: THEME.textMuted }}>
+                  {soFar}
+                </AppText>
+              ) : null}
+              <Input
+                label={`${field.label}${money ? ' ($)' : unit}`}
+                placeholder="0"
+                keyboardType={field.inputKind === 'count' ? 'number-pad' : 'decimal-pad'}
+                value={draft.metrics[field.key] ?? ''}
+                onChangeText={(raw) => {
+                  const next = money ? raw.replace(/[^0-9.]/g, '') : raw.replace(/[^\d.]/g, '');
+                  onChange({ ...draft, metrics: { ...draft.metrics, [field.key]: next } });
+                }}
+                editable={!disabled}
+                hint={
+                  comparableIncrementHint(field) ||
+                  (money && draft.metrics[field.key]
+                    ? `Stores ${parseMoneyInput(draft.metrics[field.key])}`
+                    : undefined)
+                }
+              />
             </View>
           </View>
         );
       })}
       <AppText className="text-[12px] leading-4" style={{ color: THEME.textMuted }}>
-        Zeros are fine. Send replaces this period’s log.
+        {mode === 'edit'
+          ? 'Zeros are fine. Save updates this increment.'
+          : 'Zeros are fine. Each Send adds a new Live post.'}
       </AppText>
     </View>
   );

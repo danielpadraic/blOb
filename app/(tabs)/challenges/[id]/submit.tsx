@@ -59,7 +59,7 @@ import {
   viewerCanProxyCheckin,
 } from '@/lib/challengeMods';
 import { personDisplayName } from '@/lib/social';
-import { isHomeSocialFeedKey, seedChallengeLivePost } from '@/hooks/useFeed';
+import { isHomeSocialFeedKey, liveListKey, seedChallengeLivePost } from '@/hooks/useFeed';
 import { rememberSentLiveCheckin } from '@/lib/liveLanding';
 import { runPostSendOcr } from '@/lib/health/runPostSendOcr';
 import { saveCheckinMetricValues, submitLocationProof } from '@/lib/challenges/stagedCheckin';
@@ -163,12 +163,10 @@ import { getHealthProvider, healthProviderAvailable } from '@/services/health';
 import { distanceProofIsSessionLog, usesComparablePointsScoring } from '@/lib/challengeExperience';
 import {
   comparableCheckinCaption,
-  comparableLogFields,
   comparablePointsFromChallenge,
   comparableRequiredTextMissing,
-  logChoicesFromProofParts,
-  parseMetricValues,
-  parseMoneyInput,
+  honorMetricsFromDraft,
+  sumComparableMetricRows,
 } from '@/lib/comparablePoints';
 import { allowsMultiCheckin, checkinPeriodComplete } from '@/lib/loggable';
 import { hasChallengeStarted, isClosedForLogs, loggingOpensHelper } from '@/lib/settlement';
@@ -837,37 +835,13 @@ function SubmitWorkoutInner() {
     checkinQuery.isFetched,
   ]);
 
-  useEffect(() => {
-    if (!comparableHonor || !checkinQuery.isFetched) {
-      return;
-    }
-    const config = comparablePointsFromChallenge(challenge);
-    if (!config) {
-      return;
-    }
-    const row = checkinQuery.data;
-    const metrics = parseMetricValues(row?.metric_values);
-    const choices = logChoicesFromProofParts(row?.proof_parts);
-    const text: Record<string, string> = {};
-    const notes = String(row?.notes ?? '').trim();
-    const noteLines = notes && notes !== 'Check-in Complete' ? notes.split('\n') : [];
-    (config.text_fields ?? []).forEach((field, index) => {
-      text[field.id] = noteLines[index] ?? '';
-    });
-    const nextMetrics: Record<string, string> = {};
-    for (const field of comparableLogFields(config)) {
-      if (field.kind === 'activity' || field.kind === 'multiplier') {
-        nextMetrics[field.key] = metrics[field.key] != null ? String(metrics[field.key]) : '';
-      }
-    }
-    setLogDraft({ metrics: nextMetrics, text, choices });
-  }, [
-    comparableHonor,
-    challenge,
-    checkinQuery.isFetched,
-    checkinQuery.data?.id,
-    checkinQuery.data?.updated_at,
-  ]);
+  const todayHonorTotals = useMemo(
+    () =>
+      comparableHonor
+        ? sumComparableMetricRows(historyQuery.data ?? [], checkinPeriodKey(challenge))
+        : {},
+    [challenge, comparableHonor, historyQuery.data],
+  );
 
   const filledCount = blockingProofs.filter((proof) =>
     partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }),
@@ -1463,18 +1437,8 @@ function SubmitWorkoutInner() {
         logCheckinPhase('save', 'extra-soft-fail', getErrorMessage(extraSaveError));
       }
       if (comparableHonor && comparableConfig) {
-        const metrics: Record<string, number> = {};
-        for (const field of comparableLogFields(comparableConfig)) {
-          if (field.kind !== 'activity' && field.kind !== 'multiplier') {
-            continue;
-          }
-          metrics[field.key] =
-            field.inputKind === 'money'
-              ? parseMoneyInput(logDraft.metrics[field.key] ?? '')
-              : Number(logDraft.metrics[field.key] || 0) || 0;
-        }
         try {
-          await saveCheckinMetricValues(id, metrics, {
+          await saveCheckinMetricValues(id, honorMetricsFromDraft(comparableConfig, logDraft), {
             notes: body,
             logChoices: logDraft.choices,
           });
@@ -1492,7 +1456,7 @@ function SubmitWorkoutInner() {
             ? copy('checkin.extraFailed')
             : interpolateCopy(copy('checkin.extraFailedMany'), { n: failedExtras.length });
       const alreadySubmitted = checkinQuery.data?.phase === 'submitted';
-      const sending = (honorOnly || readyNow) && !alreadySubmitted;
+      const sending = (honorOnly || readyNow) && (multiSubmit || !alreadySubmitted);
       const submitted = sending ? await submitCheckin.mutateAsync() : null;
       // submit_checkin answers with the check-in it wrote. Getting no check-in back means the send did
       // not land even though nothing threw, so this stops short of the happy path — landing them on
@@ -1682,9 +1646,16 @@ function SubmitWorkoutInner() {
         }
       }
       await successHaptic();
-      void queryClient.invalidateQueries({
-        predicate: (query) => isHomeSocialFeedKey(query.queryKey),
-      });
+      if (comparableHonor) {
+        void queryClient.invalidateQueries({ queryKey: liveListKey(id) });
+        void queryClient.invalidateQueries({ queryKey: ['challenge-participants', id] });
+        void queryClient.invalidateQueries({ queryKey: ['my-participation', id] });
+        void queryClient.invalidateQueries({ queryKey: ['checkin-history', id] });
+      } else {
+        void queryClient.invalidateQueries({
+          predicate: (query) => isHomeSocialFeedKey(query.queryKey),
+        });
+      }
       // A failed extra never rolls back the required slot — warn, do not block.
       if (extraWarning) {
         setFailKind(null);
@@ -2381,6 +2352,7 @@ function SubmitWorkoutInner() {
                     config={comparableConfig}
                     draft={logDraft}
                     disabled={busy}
+                    todayTotals={todayHonorTotals}
                     onChange={setLogDraft}
                   />
                 </View>

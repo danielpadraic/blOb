@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
-import { isHomeSocialFeedKey } from '@/hooks/useFeed';
+import { isHomeSocialFeedKey, liveListKey } from '@/hooks/useFeed';
 import {
   checkinCtaTitle,
   isCheckinPrimary,
@@ -202,14 +202,22 @@ function isSubmittedToday(
 export async function fetchCheckinHistory(
   challengeId: string,
   userId: string,
-): Promise<Array<{ period_key: string | null; status: string | null; submitted_at: string | null; proof_parts: unknown }>> {
+): Promise<
+  Array<{
+    period_key: string | null;
+    status: string | null;
+    submitted_at: string | null;
+    proof_parts: unknown;
+    metric_values?: unknown;
+  }>
+> {
   const recent = await supabase
     .from('challenge_checkins')
-    .select('period_key, status, submitted_at, proof_parts')
+    .select('period_key, status, submitted_at, proof_parts, metric_values')
     .eq('challenge_id', challengeId)
     .eq('user_id', userId)
     .order('period_key', { ascending: false })
-    .limit(60);
+    .limit(120);
   if (recent.error) {
     if (isMissingRelation(recent.error.message)) {
       return [];
@@ -221,6 +229,7 @@ export async function fetchCheckinHistory(
     status: string | null;
     submitted_at: string | null;
     proof_parts: unknown;
+    metric_values?: unknown;
   }>;
 }
 
@@ -388,13 +397,19 @@ export function useSaveCheckinProof(challengeId: string | undefined) {
         return;
       }
       writeCheckinCache(queryClient, challengeId, row.user_id || user.id, row);
-      void queryClient.invalidateQueries({
-        predicate: (query) => isHomeSocialFeedKey(query.queryKey),
-      });
+      const cached = queryClient.getQueryData<Challenge>(['challenge', challengeId]);
+      if (usesComparablePointsScoring(cached)) {
+        void queryClient.invalidateQueries({ queryKey: liveListKey(challengeId) });
+        void queryClient.invalidateQueries({ queryKey: ['challenge-participants', challengeId] });
+        void queryClient.invalidateQueries({ queryKey: ['my-participation', challengeId] });
+      } else {
+        void queryClient.invalidateQueries({
+          predicate: (query) => isHomeSocialFeedKey(query.queryKey),
+        });
+      }
       void queryClient.invalidateQueries({ queryKey: ['challenge-checkin'] });
       void queryClient.invalidateQueries({ queryKey: ['loggable-challenge'] });
       void queryClient.invalidateQueries({ queryKey: ['checkin-history'] });
-      const cached = queryClient.getQueryData<Challenge>(['challenge', challengeId]);
       if (row.post_selfie_url || row.status === 'submitted') {
         void cancelCheckoutReminder(row.id);
       } else if (row.status === 'in_progress' || row.status === 'ready') {
@@ -470,9 +485,14 @@ export function useSubmitCheckin(challengeId: string | undefined, forUserId?: st
           (current) => incrementDaysCompleted(Number(current) || 0, false),
         );
       }
-      void queryClient.invalidateQueries({
-        predicate: (query) => isHomeSocialFeedKey(query.queryKey),
-      });
+      const cachedForFeed = queryClient.getQueryData<Challenge>(['challenge', challengeId]);
+      if (usesComparablePointsScoring(cachedForFeed)) {
+        void queryClient.invalidateQueries({ queryKey: liveListKey(challengeId) });
+      } else {
+        void queryClient.invalidateQueries({
+          predicate: (query) => isHomeSocialFeedKey(query.queryKey),
+        });
+      }
       void queryClient.invalidateQueries({ queryKey: ['workout-submission', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['challenge-completions', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['submitted-checkins', challengeId] });

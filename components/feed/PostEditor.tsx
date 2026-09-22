@@ -1,9 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, View } from 'react-native';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useQuery } from '@tanstack/react-query';
 
+import {
+  ComparablePointsLogFields,
+  emptyComparableLogDraft,
+  type ComparableLogDraft,
+} from '@/components/challenge/ComparablePointsLogFields';
 import { GifPicker } from '@/components/feed/GifPicker';
 import { MentionField } from '@/components/feed/MentionField';
 import { Button } from '@/components/ui/Button';
@@ -15,9 +20,17 @@ import { useChallenge } from '@/hooks/useChallenge';
 import { applyEditedPostToFeeds, useEditPost, useHidePostFromHome } from '@/hooks/usePostEdit';
 import { useQueryClient } from '@tanstack/react-query';
 import { requiredChallengeProofs } from '@/lib/challenges';
+import { usesComparablePointsScoring } from '@/lib/challengeExperience';
 import { saveCapturedProofLocally } from '@/lib/checkin';
 import { isCheckinPost } from '@/lib/checkinPost';
 import { proofDisplayName, uniqueProofUrls, type ChallengeProofPart } from '@/lib/challengeProofs';
+import {
+  comparableCheckinCaption,
+  comparablePointsFromChallenge,
+  honorDraftFromIncrement,
+  honorMetricsFromDraft,
+} from '@/lib/comparablePoints';
+import { ENDED_LOBBY_STATUSES } from '@/lib/constants';
 import { copy } from '@/lib/copy';
 import {
   ensureCameraPermission,
@@ -79,6 +92,46 @@ export function PostEditor({
     () => requiredProofUrls(proofs, checkinRow.data),
     [checkinRow.data, proofs],
   );
+  const honorConfig = comparablePointsFromChallenge(challenge.data);
+  const honorIncrement = Boolean(
+    checkin && post.checkin_id && usesComparablePointsScoring(challenge.data) && honorConfig,
+  );
+  const honorLocked = (ENDED_LOBBY_STATUSES as readonly string[]).includes(
+    String(challenge.data?.status ?? ''),
+  );
+  const honorRow = useQuery({
+    queryKey: ['edit-honor-checkin', post.checkin_id],
+    enabled: Boolean(honorIncrement && post.checkin_id),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('challenge_checkins')
+        .select('id, metric_values, notes, proof_parts')
+        .eq('id', post.checkin_id as string)
+        .maybeSingle();
+      if (error) {
+        throw new Error(getErrorMessage(error));
+      }
+      return data as {
+        id: string;
+        metric_values?: unknown;
+        notes?: string | null;
+        proof_parts?: unknown;
+      } | null;
+    },
+  });
+  const [honorDraft, setHonorDraft] = useState<ComparableLogDraft>(emptyComparableLogDraft);
+  const honorSeed = useRef('');
+  useEffect(() => {
+    if (!honorConfig || !honorRow.data) {
+      return;
+    }
+    const token = `${honorRow.data.id}:${JSON.stringify(honorRow.data.metric_values ?? {})}`;
+    if (honorSeed.current === token) {
+      return;
+    }
+    honorSeed.current = token;
+    setHonorDraft(honorDraftFromIncrement(honorConfig, honorRow.data));
+  }, [honorConfig, honorRow.data]);
   const [caption, setCaption] = useState(post.content ?? '');
   const [mediaUrls, setMediaUrls] = useState(originalMedia);
   const [drafts, setDrafts] = useState<DraftAsset[]>([]);
@@ -201,10 +254,26 @@ export function PostEditor({
     if (!user?.id || busy || edit.isPending) {
       return;
     }
+    if (honorIncrement && honorLocked) {
+      onToast?.('This challenge is settled.');
+      return;
+    }
+    const honorCaption =
+      honorIncrement && honorConfig
+        ? comparableCheckinCaption(honorConfig, honorDraft.text)
+        : caption;
+    const seededHonor = honorConfig && honorRow.data ? honorDraftFromIncrement(honorConfig, honorRow.data) : null;
+    const honorChanged =
+      honorIncrement &&
+      honorConfig &&
+      (JSON.stringify(honorMetricsFromDraft(honorConfig, honorDraft)) !==
+        JSON.stringify(honorMetricsFromDraft(honorConfig, seededHonor ?? emptyComparableLogDraft())) ||
+        honorCaption !== (post.content ?? '').trim());
     const unchanged =
       drafts.length === 0 &&
+      !honorChanged &&
       postEditUnchanged({
-        caption,
+        caption: honorCaption,
         originalCaption: post.content ?? '',
         mediaUrls,
         originalMediaUrls: post.media_urls ?? [],
@@ -225,8 +294,9 @@ export function PostEditor({
       }
       const mediaChanged =
         drafts.length > 0 ||
-        caption.trim() !== (post.content ?? '').trim() ||
-        mediaUrls.join('|') !== originalMedia.join('|');
+        honorCaption.trim() !== (post.content ?? '').trim() ||
+        mediaUrls.join('|') !== originalMedia.join('|') ||
+        Boolean(honorChanged);
       if (mediaChanged) {
         const replacements: Record<string, string> = {};
         const uploaded: string[] = [];
@@ -249,11 +319,15 @@ export function PostEditor({
         const nextMedia = uniqueProofUrls([...mediaUrls, ...uploaded]);
         await edit.mutateAsync({
           postId: post.id,
-          caption,
+          caption: honorCaption,
           mediaUrls: nextMedia,
           hiddenMediaUrls: [],
           proofReplacements: replacements,
           checkinId: post.checkin_id,
+          challengeId: post.challenge_id,
+          honorMetrics:
+            honorIncrement && honorConfig ? honorMetricsFromDraft(honorConfig, honorDraft) : null,
+          honorChoices: honorIncrement ? honorDraft.choices : null,
         });
       }
       onSaved?.();
@@ -288,6 +362,22 @@ export function PostEditor({
         <ScrollView
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingHorizontal: 20, gap: 12, paddingBottom: 16 }}>
+          {honorIncrement && honorConfig ? (
+            <View style={{ gap: 8 }}>
+              {honorLocked ? (
+                <AppText className="text-[13px]" style={{ color: THEME.textMuted }}>
+                  This challenge is settled.
+                </AppText>
+              ) : null}
+              <ComparablePointsLogFields
+                config={honorConfig}
+                draft={honorDraft}
+                disabled={busy || honorLocked}
+                mode="edit"
+                onChange={setHonorDraft}
+              />
+            </View>
+          ) : (
           <View style={{ gap: 6 }}>
             <AppText className="text-[13px] font-semibold text-charcoal">Caption</AppText>
             <MentionField
@@ -300,6 +390,7 @@ export function PostEditor({
               accessibilityLabel="Caption"
             />
           </View>
+          )}
           <AppText className="text-[13px]" style={{ color: THEME.textMuted }}>
             {hiddenFromHome ? copy('post.hiddenFromHome') : copy('post.hideFromHome')}
           </AppText>

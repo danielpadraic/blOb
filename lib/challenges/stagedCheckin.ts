@@ -72,6 +72,23 @@ export async function saveCheckinMetricValues(
   await saveCheckinMetricValuesWithClient(supabase as never, challengeId, values, extras);
 }
 
+export async function editHonorCheckinIncrement(input: {
+  checkinId: string;
+  metricValues: Record<string, number>;
+  notes?: string | null;
+  logChoices?: Record<string, string> | null;
+}) {
+  const { error } = await supabase.rpc('edit_honor_checkin_increment', {
+    p_checkin_id: input.checkinId,
+    p_metric_values: input.metricValues,
+    p_notes: input.notes ?? null,
+    p_log_choices: input.logChoices ?? null,
+  });
+  if (error) {
+    throw new Error(getErrorMessage(error));
+  }
+}
+
 export async function submitCheckin(challengeId: string, forUserId?: string | null) {
   try {
     logCheckinPhase('submit', 'start');

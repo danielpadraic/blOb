@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   comparableCheckinCaption,
+  comparableIncrementHint,
   comparableLogFields,
+  comparableTodaySoFarLine,
   activityScoresForLane,
   comparablePointsLaneSubline,
   deriveScoringLanes,
@@ -11,8 +13,12 @@ import {
   emptyComparablePointsConfig,
   extrasKeepAddingFor,
   formatComparableBoardCell,
+  formatIncrementCount,
   formatMoneyAmount,
   formatMoneySentenceAmount,
+  honorDraftFromIncrement,
+  honorMetricsFromDraft,
+  sumComparableMetricRows,
   inferInputKind,
   inferScoreWindow,
   multiplierMetricKey,
@@ -346,6 +352,85 @@ describe('generated log fields', () => {
     ).toBe('camera');
     expect(comparableCheckinCaption(gymConfig(), {})).toBe('Check-in Complete');
     expect(comparableCheckinCaption(gymConfig(), { closed: 'Two tickets' })).toBe('Two tickets');
+    expect(comparableCheckinCaption(gymConfig(), { closed: '' })).toBe('Check-in Complete');
+    expect(comparableCheckinCaption(gymConfig(), { closed: 'Two tickets' })).not.toContain('is dialing');
+  });
+
+  it('treats each honor submit as an ADD increment, not last-write-wins', () => {
+    const fields = comparableLogFields(
+      parseComparablePointsConfig({
+        version: 1,
+        parity_points: 16_000,
+        activities: [
+          {
+            id: 'act-dials',
+            name: 'Dials',
+            unit: 'dials',
+            parity_qty: 2800,
+            multiplier: {
+              enabled: true,
+              extra_factor: 1,
+              label: 'Presentations',
+              tiers: [{ threshold: 8, percent: 100 }],
+            },
+            qualifiers: { enabled: false, items: [] },
+          },
+          {
+            id: 'act-ap',
+            name: 'AP',
+            unit: 'USD',
+            parity_qty: 16_000,
+            input_kind: 'money',
+            multiplier: { enabled: false, extra_factor: 1 },
+            qualifiers: { enabled: false, items: [] },
+          },
+        ],
+        text_fields: [{ id: 'details', label: 'Details' }],
+      })!,
+    );
+    const dials = fields.find((field) => field.kind === 'activity' && field.label === 'Dials');
+    const pres = fields.find((field) => field.kind === 'multiplier' && field.label === 'Presentations');
+    const ap = fields.find((field) => field.kind === 'activity' && field.label === 'AP');
+    const details = fields.find((field) => field.kind === 'text');
+    expect(dials && comparableIncrementHint(dials)).toBe('This adds to today’s total.');
+    expect(pres && comparableIncrementHint(pres)).toBe('Log this presentation.');
+    expect(ap && comparableIncrementHint(ap)).toBe('Log this AP.');
+    expect(details && comparableIncrementHint(details)).toContain('this increment');
+    expect(dials && comparableTodaySoFarLine(dials, 1140)).toBe('Today so far: 1,140 dials');
+    expect(formatIncrementCount(1140)).toBe('1,140');
+    expect(
+      sumComparableMetricRows(
+        [
+          {
+            period_key: '2026-09-22',
+            status: 'submitted',
+            submitted_at: '2026-09-22T12:00:00.000Z',
+            metric_values: { 'act-dials': 40 },
+          },
+          {
+            period_key: '2026-09-22',
+            status: 'submitted',
+            submitted_at: '2026-09-22T13:00:00.000Z',
+            metric_values: { 'act-dials': 25 },
+          },
+          {
+            period_key: '2026-09-21',
+            status: 'submitted',
+            submitted_at: '2026-09-21T13:00:00.000Z',
+            metric_values: { 'act-dials': 99 },
+          },
+        ],
+        '2026-09-22',
+      ),
+    ).toEqual({ 'act-dials': 65 });
+    const config = gymConfig();
+    const draft = honorDraftFromIncrement(config, {
+      metric_values: { walks: 40 },
+      notes: 'Acme',
+      proof_parts: {},
+    });
+    expect(draft.metrics.walks).toBe('40');
+    expect(honorMetricsFromDraft(config, { metrics: { walks: '50', tickets: '' } }).walks).toBe(50);
   });
 
   it('hides a self-serve Side choice when scoring lanes exist', () => {

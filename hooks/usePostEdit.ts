@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
-import { patchFeedPosts } from '@/hooks/useFeed';
+import { liveListKey, patchFeedPosts } from '@/hooks/useFeed';
+import { editHonorCheckinIncrement } from '@/lib/challenges/stagedCheckin';
 import type { ChallengeProofPart } from '@/lib/challengeProofs';
 import { uniqueProofUrls } from '@/lib/challengeProofs';
 import { parsePostEdits } from '@/lib/postEdit';
@@ -46,6 +47,9 @@ export type EditPostInput = {
   hiddenMediaUrls: string[];
   proofReplacements?: Record<string, string>;
   checkinId?: string | null;
+  honorMetrics?: Record<string, number> | null;
+  honorChoices?: Record<string, string> | null;
+  challengeId?: string | null;
 };
 
 export function applyEditedPostToFeeds(
@@ -140,6 +144,14 @@ export function useEditPost() {
       if (!user) {
         throw new Error('You need to be signed in.');
       }
+      if (input.checkinId && input.honorMetrics) {
+        await editHonorCheckinIncrement({
+          checkinId: input.checkinId,
+          metricValues: input.honorMetrics,
+          notes: input.caption,
+          logChoices: input.honorChoices ?? null,
+        });
+      }
       return persistEditedPost(input);
     },
     onMutate: async (input) => {
@@ -160,10 +172,19 @@ export function useEditPost() {
       }
     },
     onSuccess: (row, input) => {
-      applyEditedPostToFeeds(queryClient, rowFromEdit(input, row));
+      applyEditedPostToFeeds(queryClient, rowFromEdit(input, {
+        ...row,
+        edited_at: row.edited_at ?? new Date().toISOString(),
+      }));
       void queryClient.invalidateQueries({ queryKey: ['post-edits'] });
       void queryClient.invalidateQueries({ queryKey: ['challenge-checkin'] });
       void queryClient.invalidateQueries({ queryKey: ['edit-checkin'] });
+      void queryClient.invalidateQueries({ queryKey: ['edit-honor-checkin'] });
+      if (input.challengeId) {
+        void queryClient.invalidateQueries({ queryKey: liveListKey(input.challengeId) });
+        void queryClient.invalidateQueries({ queryKey: ['challenge-participants', input.challengeId] });
+        void queryClient.invalidateQueries({ queryKey: ['my-participation', input.challengeId] });
+      }
     },
   });
 }

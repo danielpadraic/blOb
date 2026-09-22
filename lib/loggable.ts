@@ -1,4 +1,5 @@
 import {
+  usesComparablePointsScoring,
   usesCumulativeScoring,
   usesPointsBoard,
   usesQuantityScoring,
@@ -80,7 +81,12 @@ export function allowsMultiCheckin(challenge?: ExperienceChallenge | null): bool
   if (MULTI_FORMATS.has(format) || MULTI_FORMATS.has(type)) {
     return true;
   }
-  if (usesQuantityScoring(challenge) || usesPointsBoard(challenge) || usesCumulativeScoring(challenge)) {
+  if (
+    usesComparablePointsScoring(challenge) ||
+    usesQuantityScoring(challenge) ||
+    usesPointsBoard(challenge) ||
+    usesCumulativeScoring(challenge)
+  ) {
     return true;
   }
   if (titleTaskLooksLikeDistanceRace(challenge)) {

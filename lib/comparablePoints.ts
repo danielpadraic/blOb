@@ -1286,3 +1286,136 @@ export function comparableRequiredTextMissing(
   }
   return null;
 }
+
+export function formatIncrementCount(value: number): string {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) {
+    return '0';
+  }
+  return n.toLocaleString('en-US', {
+    maximumFractionDigits: Number.isInteger(n) ? 0 : 2,
+    minimumFractionDigits: 0,
+  });
+}
+
+function comparableFieldWord(field: Pick<ComparableLogNumericField, 'label' | 'unit'>): string {
+  const unit = String(field.unit ?? '').trim().toLowerCase();
+  if (unit) {
+    return unit;
+  }
+  return String(field.label ?? '').trim().toLowerCase() || 'logged';
+}
+
+/** Copy under an ADD increment field. Details is this sale / meeting, not the day. */
+export function comparableIncrementHint(field: ComparableLogField): string {
+  if (field.kind === 'text') {
+    return 'For this increment — the name of this sale or this meeting.';
+  }
+  if (field.kind === 'choice') {
+    return '';
+  }
+  const word = comparableFieldWord(field);
+  if (word === 'presentations' || word === 'presentation' || word === 'pres') {
+    return 'Log this presentation.';
+  }
+  if (
+    field.inputKind === 'money' ||
+    word === 'ap' ||
+    word === 'annual premium' ||
+    word === 'annualized premium'
+  ) {
+    return 'Log this AP.';
+  }
+  if (word === 'dials' || word === 'dial') {
+    return 'This adds to today’s total.';
+  }
+  return 'This adds to today’s total.';
+}
+
+export function comparableTodaySoFarLine(
+  field: ComparableLogNumericField,
+  amount: number,
+): string | null {
+  if (!(amount > 0)) {
+    return null;
+  }
+  if (field.inputKind === 'money') {
+    return `Today so far: ${formatMoneySentenceAmount(amount)}`;
+  }
+  return `Today so far: ${formatIncrementCount(amount)} ${comparableFieldWord(field)}`;
+}
+
+export type ComparableIncrementRow = {
+  metric_values?: unknown;
+  period_key?: unknown;
+  status?: string | null;
+  submitted_at?: string | null;
+};
+
+/** SUM of honor increments. Never last-write-wins. */
+export function sumComparableMetricRows(
+  rows: ComparableIncrementRow[] | null | undefined,
+  periodKey?: string | null,
+): Record<string, number> {
+  const want = String(periodKey ?? '').trim();
+  const totals: Record<string, number> = {};
+  for (const row of rows ?? []) {
+    const submitted = row.status === 'submitted' || Boolean(row.submitted_at);
+    if (!submitted) {
+      continue;
+    }
+    if (want && String(row.period_key ?? '').trim() !== want) {
+      continue;
+    }
+    const metrics = parseMetricValues(row.metric_values);
+    for (const [key, amount] of Object.entries(metrics)) {
+      totals[key] = Math.round(((totals[key] ?? 0) + amount) * 100) / 100;
+    }
+  }
+  return totals;
+}
+
+export function honorDraftFromIncrement(
+  config: ComparablePointsConfig,
+  input: {
+    metric_values?: unknown;
+    notes?: string | null;
+    proof_parts?: unknown;
+  },
+): { metrics: Record<string, string>; text: Record<string, string>; choices: Record<string, string> } {
+  const metricsIn = parseMetricValues(input.metric_values);
+  const notes = String(input.notes ?? '').trim();
+  const noteLines = notes && notes !== COMPARABLE_CHECKIN_EMPTY_CAPTION ? notes.split('\n') : [];
+  const text: Record<string, string> = {};
+  (config.text_fields ?? []).forEach((field, index) => {
+    text[field.id] = noteLines[index] ?? '';
+  });
+  const metrics: Record<string, string> = {};
+  for (const field of comparableLogFields(config)) {
+    if (field.kind === 'activity' || field.kind === 'multiplier') {
+      metrics[field.key] = metricsIn[field.key] != null ? String(metricsIn[field.key]) : '';
+    }
+  }
+  return {
+    metrics,
+    text,
+    choices: logChoicesFromProofParts(input.proof_parts),
+  };
+}
+
+export function honorMetricsFromDraft(
+  config: ComparablePointsConfig,
+  draft: { metrics?: Record<string, string> },
+): Record<string, number> {
+  const metrics: Record<string, number> = {};
+  for (const field of comparableLogFields(config)) {
+    if (field.kind !== 'activity' && field.kind !== 'multiplier') {
+      continue;
+    }
+    metrics[field.key] =
+      field.inputKind === 'money'
+        ? parseMoneyInput(draft.metrics?.[field.key] ?? '')
+        : Number(draft.metrics?.[field.key] || 0) || 0;
+  }
+  return metrics;
+}
