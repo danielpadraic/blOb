@@ -13,9 +13,12 @@ import {
   extrasKeepAddingFor,
   formatPoints,
   inferInputKind,
+  scoringLaneName,
   type ActivityConfig,
   type LogInputKind,
+  type ScoringLane,
 } from '@/lib/comparablePoints';
+import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 
 const INPUT_KINDS: { id: LogInputKind; label: string }[] = [
@@ -29,9 +32,11 @@ export function ActivityCard({
   index,
   parityPoints,
   extrasKeepAdding,
+  lanes,
   canRemove,
   onChange,
   onRemove,
+  onToggleLane,
   onAddQualifier,
   onPatchQualifier,
   onRemoveQualifier,
@@ -40,9 +45,11 @@ export function ActivityCard({
   index: number;
   parityPoints: number;
   extrasKeepAdding: boolean;
+  lanes?: ScoringLane[];
   canRemove: boolean;
   onChange: (partial: Partial<ActivityConfig>) => void;
   onRemove: () => void;
+  onToggleLane?: (laneId: string) => void;
   onAddQualifier: () => void;
   onPatchQualifier: (id: string, label: string) => void;
   onRemoveQualifier: (id: string) => void;
@@ -202,6 +209,22 @@ export function ActivityCard({
           })
         }
       />
+
+      {(lanes?.length ?? 0) > 0 ? (
+        <View className="gap-2">
+          <AppText className="text-sm font-semibold text-charcoal">{copy('create.sideActivities')}</AppText>
+          <ChipRow>
+            {lanes!.map((lane) => (
+              <Chip
+                key={lane.id}
+                label={scoringLaneName(lane) || 'Untitled'}
+                selected={(activity.lane_ids ?? []).includes(lane.id)}
+                onPress={() => onToggleLane?.(lane.id)}
+              />
+            ))}
+          </ChipRow>
+        </View>
+      ) : null}
 
       <ToggleRow
         title="Multiplier"

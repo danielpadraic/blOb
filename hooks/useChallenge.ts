@@ -1180,7 +1180,10 @@ export function useUpdateUserChallenge() {
       values: CreateChallengeValues;
     }): Promise<Challenge> => {
       const unlimited = values.duration_type === 'unlimited';
-      const schedule = ensureSchedule(values);
+      const schedule = ensureSchedule({
+        ...values,
+        timezone: challengeScheduleTimezone(values.timezone),
+      });
       const isPoints = !unlimited && values.challenge_type === 'points';
       const durationDays = unlimited ? null : durationDaysFromValues(schedule);
       const durationInt = unlimited ? null : durationIntegerForPublish(durationDays);
@@ -1238,6 +1241,9 @@ export function useUpdateUserChallenge() {
         rules: composeChallengeRules(values) || null,
         starts_at: schedule.starts_at,
         ends_at: unlimited ? null : schedule.ends_at,
+        timezone: challengeScheduleTimezone(values.timezone),
+        sponsor_name: values.sponsor_name?.trim() || null,
+        creator_participating: values.creator_participating === true,
         is_unlimited: unlimited,
         min_participants: Math.max(Number(values.min_participants) || 2, 2),
         days_required: durationInt ?? targetCount,
@@ -1296,6 +1302,14 @@ export function useUpdateUserChallenge() {
       if (values.scoring_method === 'comparable_points' && scoring) {
         await publishScoringChange(challengeId, scoring);
       }
+      await supabase
+        .from('challenges')
+        .update({
+          timezone: challengeScheduleTimezone(values.timezone),
+          sponsor_name: values.sponsor_name?.trim() || null,
+          creator_participating: values.creator_participating === true,
+        })
+        .eq('id', challengeId);
       if (user?.id) {
         await persistPrivacyMode({
           challengeId,

@@ -164,6 +164,9 @@ export type SimpleChallengeDraft = {
   description: string;
   starts_at: string;
   start_preset: StartPreset;
+  timezone?: string;
+  ends_at?: string;
+  end_mode?: 'date' | 'length';
   duration_preset: SimpleDurationPreset;
   duration_days: number;
   task: string;
@@ -204,6 +207,9 @@ export function defaultSimpleDraft(now = new Date()): SimpleChallengeDraft {
     description: '',
     starts_at: starts.toISOString(),
     start_preset: 'hour',
+    timezone: challengeScheduleTimezone(),
+    ends_at: '',
+    end_mode: 'length',
     duration_preset: 7,
     duration_days: 7,
     task: '',
@@ -262,7 +268,7 @@ export function refreshSimpleDraftStart(draft: SimpleChallengeDraft, now = new D
     preset,
     starts_at: draft.starts_at,
     duration_days: durationDaysOf(draft),
-    timezone: challengeScheduleTimezone(),
+    timezone: challengeScheduleTimezone(draft.timezone),
     now,
   });
   return { ...draft, start_preset: preset, starts_at: resolved.starts_at };
@@ -318,6 +324,9 @@ export function parseSimpleChallengeDraft(raw: unknown): SimpleChallengeDraft | 
     description: typeof row.description === 'string' ? row.description : base.description,
     starts_at,
     start_preset,
+    timezone: typeof row.timezone === 'string' ? row.timezone : base.timezone,
+    ends_at: typeof row.ends_at === 'string' ? row.ends_at : base.ends_at,
+    end_mode: row.end_mode === 'date' ? 'date' : 'length',
     duration_preset,
     duration_days: Math.max(Number(row.duration_days) || base.duration_days, 1),
     task: typeof row.task === 'string' ? row.task : base.task,
@@ -513,7 +522,14 @@ function publishCadenceOf(draft: SimpleChallengeDraft): string {
 }
 
 export function endsAtOf(draft: SimpleChallengeDraft): string {
-  return endsAtFromStartAndDays(draft.starts_at, durationDaysOf(draft));
+  if (draft.end_mode === 'date' && draft.ends_at) {
+    return draft.ends_at;
+  }
+  return endsAtFromStartAndDays(
+    draft.starts_at,
+    durationDaysOf(draft),
+    challengeScheduleTimezone(draft.timezone),
+  );
 }
 
 export function deviceTimezone(): string {
@@ -657,7 +673,8 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
     duration_type: 'fixed',
     starts_at: draft.starts_at,
     ends_at: endsAtOf(draft),
-    end_mode: 'length',
+    end_mode: draft.end_mode === 'date' ? 'date' : 'length',
+    timezone: challengeScheduleTimezone(draft.timezone),
     duration_value: String(days),
     duration_unit: 'days',
     duration_days: String(days),
@@ -768,6 +785,9 @@ export function simpleDraftFromChallenge(challenge: Challenge): SimpleChallengeD
     description: challenge.description ?? '',
     starts_at: challenge.starts_at,
     start_preset: startPresetFromValues(challenge.starts_at),
+    timezone: challengeScheduleTimezone(challenge.timezone),
+    ends_at: challenge.ends_at ?? '',
+    end_mode: challenge.starts_at && challenge.ends_at ? 'date' : 'length',
     duration_preset,
     duration_days: days,
     task: challenge.task ?? '',

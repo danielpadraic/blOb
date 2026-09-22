@@ -30,6 +30,7 @@ import {
   asEndMode,
   asStartPreset,
   ensureSchedule,
+  hydrateSchedule,
   startPresetFromValues,
   type StartPreset,
 } from '@/lib/challengeSchedule';
@@ -471,10 +472,13 @@ export function hydrateDraftValues(raw: unknown): CreateChallengeValues {
             : DEFAULT_CREATE_VALUES.discoverability,
       challenge_lane: row.challenge_lane === 'private' ? 'private' : 'coins',
       duration_type: row.duration_type === 'unlimited' ? 'unlimited' : 'fixed',
+      timezone: asString(row.timezone, DEFAULT_CREATE_VALUES.timezone ?? ''),
+      sponsor_name: asString(row.sponsor_name, DEFAULT_CREATE_VALUES.sponsor_name ?? ''),
       ...ensureSchedule({
         starts_at: asString(row.starts_at, ''),
         ends_at: asString(row.ends_at, ''),
         end_mode: asEndMode(row.end_mode),
+        timezone: asString(row.timezone, ''),
         duration_value: asString(row.duration_value, asString(row.duration_days, DEFAULT_CREATE_VALUES.duration_days)),
         duration_unit: asDurationUnit(row.duration_unit),
         duration_days: asString(row.duration_days, DEFAULT_CREATE_VALUES.duration_days),
@@ -515,7 +519,10 @@ export function hydrateDraftValues(raw: unknown): CreateChallengeValues {
           : row.currency === 'bucks'
             ? 'bucks'
             : 'coins',
-      creator_participating: (row.creator_participating ?? row.creator_participates) !== false,
+      creator_participating:
+        (row.creator_participating ?? row.creator_participates) == null
+          ? true
+          : Boolean(row.creator_participating ?? row.creator_participates),
       min_minutes: asString(row.min_minutes, DEFAULT_CREATE_VALUES.min_minutes),
       cover_image_url: asString(row.cover_image_url, ''),
       rules_video_url: asString(row.rules_video_url, ''),
@@ -600,7 +607,9 @@ export function valuesFromChallenge(challenge: Challenge): CreateChallengeValues
       durationDays = 0;
     }
   }
-  durationDays = Math.min(MAX_CHALLENGE_DURATION_DAYS, Math.max(1, durationDays || 7));
+  if (durationDays > 0) {
+    durationDays = Math.min(MAX_CHALLENGE_DURATION_DAYS, Math.max(1, durationDays));
+  }
 
   const structured = parseRulesStructured(challenge.rules_list);
   const proofs = (structured?.primary?.proof?.length
@@ -669,14 +678,26 @@ export function valuesFromChallenge(challenge: Challenge): CreateChallengeValues
           ? 'private'
           : 'public',
     challenge_lane: challenge.challenge_lane === 'private' ? 'private' : 'coins',
-    duration_type: 'fixed',
-    ...ensureSchedule({
+    duration_type: unlimited ? 'unlimited' : 'fixed',
+    timezone: challenge.timezone?.trim() || '',
+    sponsor_name: challenge.sponsor_name?.trim() || '',
+    discoverability:
+      challenge.discoverability === 'invite_only' || challenge.discoverability === 'friends_of_friends'
+        ? challenge.discoverability
+        : challenge.privacy_mode === 'private_corporate' ||
+            challenge.privacy_mode === 'private' ||
+            challenge.visibility === 'invite' ||
+            challenge.visibility === 'private'
+          ? 'invite_only'
+          : DEFAULT_CREATE_VALUES.discoverability,
+    ...hydrateSchedule({
       starts_at: challenge.starts_at ?? '',
       ends_at: challenge.ends_at ?? '',
-      end_mode: 'length',
-      duration_value: String(durationDays),
+      end_mode: challenge.starts_at && challenge.ends_at ? 'date' : 'length',
+      timezone: challenge.timezone ?? '',
+      duration_value: durationDays > 0 ? String(durationDays) : undefined,
       duration_unit: 'days',
-      duration_days: String(durationDays),
+      duration_days: durationDays > 0 ? String(durationDays) : undefined,
     }),
     target_count: String(Math.max(Number(primary?.count ?? challenge.target_count) || 1, 1)),
     frequency: normalizeFrequency(primary?.period ?? challenge.frequency),
@@ -724,7 +745,8 @@ export function valuesFromChallenge(challenge: Challenge): CreateChallengeValues
     max_participants: cap && cap > 0 ? String(cap) : '20',
     buy_in: String(Math.max(Number(challenge.buy_in_amount) || 0, 0)),
     currency: challenge.currency === 'bucks' ? 'bucks' : 'coins',
-    creator_participating: challenge.creator_participating !== false,
+    creator_participating:
+      challenge.creator_participating == null ? true : Boolean(challenge.creator_participating),
     min_minutes: String(Math.max(Number(challenge.min_minutes) || 30, 1)),
     cover_image_url: challenge.cover_image_url ?? '',
     rules_video_url: challenge.rules_video_url ?? '',

@@ -34,6 +34,10 @@ export function usesAdvancedCreateEdit(challenge?: ExperienceChallenge | null): 
   if (usesComparablePointsScoring(challenge)) {
     return true;
   }
+  const scoring = comparablePointsFromChallenge(challenge);
+  if (scoring && ((scoring.activities?.length ?? 0) > 0 || (scoring.lanes?.length ?? 0) > 0)) {
+    return true;
+  }
   if (challenge.challenge_type === 'points' || challenge.format === 'points' || challenge.format === 'lms') {
     return true;
   }

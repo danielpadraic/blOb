@@ -1,5 +1,7 @@
 import type { Challenge } from '@/lib/types';
 import { challengeClockTz } from '@/lib/checkinPeriod';
+import { hostRigorOf } from '@/lib/hostRigor';
+import { isPrivateCorporate } from '@/lib/privacyMode';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -73,6 +75,52 @@ export function canHostQuickEdit(input: {
     status !== 'cancelled_underfilled' &&
     status !== 'distributing'
   );
+}
+
+const WIZARD_EDIT_BLOCKED = new Set([
+  'ended',
+  'settled',
+  'settling',
+  'judging',
+  'distributing',
+  'cancelled',
+  'cancelled_underfilled',
+]);
+
+/**
+ * Full CreateWizard edit. Pre-live host/mod, plus live Friendly|Normal
+ * private_corporate (this Pinnacle week). @blob uses canHouseEditChallenge.
+ */
+export function canHostWizardEdit(input: {
+  challenge:
+    | Pick<
+        Challenge,
+        'status' | 'created_by' | 'is_official' | 'series_id' | 'privacy_mode' | 'host_rigor'
+      >
+    | null
+    | undefined;
+  viewerId?: string | null;
+  moderatorIds?: readonly string[] | null;
+}): boolean {
+  const challenge = input.challenge;
+  const viewerId = input.viewerId?.trim();
+  if (!challenge || !viewerId || !isUserCreatedChallenge(challenge)) {
+    return false;
+  }
+  const isHost = challenge.created_by === viewerId;
+  const isMod = Boolean(input.moderatorIds?.includes(viewerId));
+  if (!isHost && !isMod) {
+    return false;
+  }
+  const status = String(challenge.status ?? '').toLowerCase();
+  if (WIZARD_EDIT_BLOCKED.has(status)) {
+    return false;
+  }
+  if (status === 'live') {
+    const rigor = hostRigorOf(challenge);
+    return isPrivateCorporate(challenge) && (rigor === 'friendly' || rigor === 'normal');
+  }
+  return true;
 }
 
 export function startRollKeepDays(challenge: {

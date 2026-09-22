@@ -19,8 +19,10 @@ import {
   multiplierMetricKey,
   scoreComparableWindow,
   scoreWindowLabel,
+  scoringLaneName,
   type ScoreWindow,
 } from '@/lib/comparablePoints';
+import { copy } from '@/lib/copy';
 import { THEME } from '@/lib/theme';
 
 const WINDOW_CHIPS: { id: ScoreWindow; label: string; help: string }[] = [
@@ -83,9 +85,11 @@ export function ComparablePointsEditor({ form }: { form: ComparablePointsForm })
           index={index}
           parityPoints={draft.parity_points}
           extrasKeepAdding={draft.extras_keep_adding !== false}
+          lanes={draft.lanes ?? []}
           canRemove={draft.activities.length > 1}
           onChange={(partial) => form.patchActivity(activity.id, partial)}
           onRemove={() => form.removeActivity(activity.id)}
+          onToggleLane={(laneId) => form.toggleLaneActivity(laneId, activity.id)}
           onAddQualifier={() => form.addQualifier(activity.id)}
           onPatchQualifier={(id, label) => form.patchQualifier(activity.id, id, label)}
           onRemoveQualifier={(id) => form.removeQualifier(activity.id, id)}
@@ -112,6 +116,81 @@ export function ComparablePointsEditor({ form }: { form: ComparablePointsForm })
           Keep it to 3–4 activities so the board stays readable.
         </AppText>
       ) : null}
+
+      <View className="gap-2">
+        <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
+          {copy('create.sides')}
+        </AppText>
+        <AppText className="text-[13px] leading-5 text-muted">{copy('create.sidesHelp')}</AppText>
+        {(draft.lanes ?? []).map((lane) => (
+          <View
+            key={lane.id}
+            className="gap-2"
+            style={{
+              backgroundColor: THEME.surface,
+              borderRadius: THEME.radius,
+              borderWidth: 1,
+              borderColor: THEME.border,
+              padding: 14,
+            }}>
+            <Input
+              label="Side name"
+              placeholder="e.g. Rookie"
+              value={scoringLaneName(lane)}
+              onChangeText={(name) => form.patchLane(lane.id, name)}
+              maxLength={40}
+            />
+            <AppText className="text-sm font-semibold text-charcoal">{copy('create.sideActivities')}</AppText>
+            <ChipRow>
+              {draft.activities
+                .filter((activity) => activity.name.trim())
+                .map((activity) => {
+                  const selected = (lane.activities ?? []).includes(activity.id);
+                  return (
+                    <Chip
+                      key={activity.id}
+                      label={activity.name}
+                      selected={selected}
+                      onPress={() => form.toggleLaneActivity(lane.id, activity.id)}
+                    />
+                  );
+                })}
+            </ChipRow>
+            {(draft.lanes ?? []).length > 2 ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => form.removeLane(lane.id)}
+                style={{ minHeight: 32, justifyContent: 'center' }}>
+                <AppText className="text-sm font-semibold text-muted">Remove side</AppText>
+              </Pressable>
+            ) : null}
+          </View>
+        ))}
+        <Pressable
+          accessibilityRole="button"
+          onPress={form.addLane}
+          className="items-center self-start rounded-full px-3"
+          style={{
+            minHeight: 36,
+            borderWidth: 1,
+            borderColor: THEME.border,
+            backgroundColor: THEME.surface,
+            justifyContent: 'center',
+          }}>
+          <AppText className="text-sm font-semibold text-charcoal">{copy('create.addSide')}</AppText>
+        </Pressable>
+      </View>
+
+      <View className="gap-2">
+        <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
+          Amounts above full value
+        </AppText>
+        <Chip
+          label={draft.extras_keep_adding !== false ? 'Keep adding · on' : 'Keep adding · off'}
+          selected={draft.extras_keep_adding !== false}
+          onPress={() => form.setExtrasKeepAdding(draft.extras_keep_adding === false)}
+        />
+      </View>
 
       <LogExtrasEditor form={form} />
 

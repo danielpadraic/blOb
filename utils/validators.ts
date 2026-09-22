@@ -252,6 +252,8 @@ export const createChallengeSchema = z
     duration_type: z.enum(['fixed', 'unlimited']),
     starts_at: z.string(),
     ends_at: z.string(),
+    timezone: z.string().trim().optional().or(z.literal('')),
+    sponsor_name: z.string().trim().max(80).optional().or(z.literal('')),
     end_mode: z.enum(['date', 'length']),
     duration_value: z.string(),
     duration_unit: z.enum(['days', 'weeks', 'months']),

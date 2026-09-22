@@ -89,7 +89,9 @@ export function privacyModeLabel(mode: PrivacyMode): string {
   return 'Public';
 }
 
-export const LOCKED_AFTER_JOIN_FIELDS = ['privacy_mode'] as const;
+export const CURRENCY_LOCKED_MESSAGE = 'Prize currency is locked after someone joins.';
+
+export const LOCKED_AFTER_JOIN_FIELDS = ['privacy_mode', 'currency'] as const;
 
 export function canChangePrivacyMode(input: {
   current: PrivacyMode;
@@ -165,6 +167,12 @@ export function rejectLockedAfterJoinField(input: {
       participantCount: input.participantCount,
       officialOps: input.officialOps,
     });
+  }
+  if (input.field === 'currency') {
+    if (input.officialOps || input.participantCount < 1 || input.current === input.next) {
+      return { ok: true };
+    }
+    return { ok: false, message: CURRENCY_LOCKED_MESSAGE };
   }
   return { ok: true };
 }

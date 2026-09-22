@@ -11,6 +11,7 @@ import {
   parseStoredWizardStep,
   resumeDraftForm,
   resumeWizardStep,
+  valuesFromChallenge,
 } from '@/lib/challengeDraft';
 import { emptyChallengeTask, emptyExtraCreateTask } from '@/utils/validators';
 
@@ -171,5 +172,63 @@ describe('challenge drafts', () => {
     });
     expect(empty.id).toBe('draft-empty');
     expect(isVisibleDraft(empty)).toBe(false);
+  });
+});
+
+describe('valuesFromChallenge', () => {
+  it('hydrates Pinnacle start/end, host-out, and comparable sides without a 7-day default', () => {
+    const values = valuesFromChallenge({
+      id: '16af3e82-15c0-479f-af52-328440b0c87e',
+      title: 'Rookies vs. Veterans',
+      description: 'Pinnacle week',
+      task: 'Honor log',
+      rules: 'Daily honor',
+      timezone: 'America/Chicago',
+      starts_at: '2026-09-22T05:00:00.000Z',
+      ends_at: '2026-09-26T04:59:59.000Z',
+      creator_participating: false,
+      host_rigor: 'friendly',
+      privacy_mode: 'private_corporate',
+      visibility: 'invite',
+      frequency: 'daily',
+      scoring_method: 'comparable_points',
+      scoring_config: {
+        version: 1,
+        parity_points: 13_000,
+        window: 'challenge',
+        extras_keep_adding: true,
+        lanes: [
+          { id: 'rookie', name: 'Rookie', activities: ['act-dials', 'act-ap'] },
+          { id: 'veteran', name: 'Veteran', activities: ['act-ap'] },
+        ],
+        activities: [
+          { id: 'act-dials', name: 'Dials', unit: 'dials', parity_qty: 3500, input_kind: 'count' },
+          { id: 'act-ap', name: 'AP', unit: 'USD', parity_qty: 13_000, input_kind: 'money' },
+        ],
+        text_fields: [{ id: 'details', label: 'Details' }],
+      },
+      sponsor_name: 'Pinnacle Life Group',
+    } as never);
+
+    expect(values.title).toBe('Rookies vs. Veterans');
+    expect(values.timezone).toBe('America/Chicago');
+    expect(values.starts_at).toBe('2026-09-22T05:00:00.000Z');
+    expect(values.ends_at).toBe('2026-09-26T04:59:59.000Z');
+    expect(values.end_mode).toBe('date');
+    expect(values.creator_participating).toBe(false);
+    expect(values.host_rigor).toBe('friendly');
+    expect(values.privacy_mode).toBe('private_corporate');
+    expect(values.sponsor_name).toBe('Pinnacle Life Group');
+    expect(values.scoring_method).toBe('comparable_points');
+    const scoring = values.scoring_config as {
+      window?: string;
+      extras_keep_adding?: boolean;
+      lanes?: Array<{ name: string; activities?: string[] }>;
+      text_fields?: Array<{ label: string }>;
+    };
+    expect(scoring.window).toBe('challenge');
+    expect(scoring.extras_keep_adding).toBe(true);
+    expect(scoring.lanes?.map((lane) => lane.name)).toEqual(['Rookie', 'Veteran']);
+    expect(scoring.text_fields?.[0]?.label).toBe('Details');
   });
 });

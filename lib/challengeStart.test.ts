@@ -1,6 +1,45 @@
 import { describe, expect, it } from 'vitest';
 
-import { canHouseEditChallenge, formatStartMovedDate, startMovedBody } from '@/lib/challengeStart';
+import { canHouseEditChallenge, canHostWizardEdit, formatStartMovedDate, startMovedBody } from '@/lib/challengeStart';
+
+describe('Wizard edit', () => {
+  const pinnacle = {
+    status: 'live',
+    created_by: 'host-1',
+    is_official: false,
+    series_id: null,
+    privacy_mode: 'private_corporate' as const,
+    host_rigor: 'friendly' as const,
+  };
+
+  it('lets a live Friendly private_corporate host open Edit Challenge', () => {
+    expect(canHostWizardEdit({ challenge: pinnacle, viewerId: 'host-1' })).toBe(true);
+  });
+
+  it('lets a listed moderator edit the same live Friendly corporate challenge', () => {
+    expect(
+      canHostWizardEdit({ challenge: pinnacle, viewerId: 'mod-1', moderatorIds: ['mod-1'] }),
+    ).toBe(true);
+  });
+
+  it('blocks a live Strict corporate host from the wizard', () => {
+    expect(
+      canHostWizardEdit({
+        challenge: { ...pinnacle, host_rigor: 'strict' },
+        viewerId: 'host-1',
+      }),
+    ).toBe(false);
+  });
+
+  it('blocks a live public Friendly host — schedule edit is corporate Friendly|Normal', () => {
+    expect(
+      canHostWizardEdit({
+        challenge: { ...pinnacle, privacy_mode: 'public' },
+        viewerId: 'host-1',
+      }),
+    ).toBe(false);
+  });
+});
 
 describe('House edit', () => {
   it('lets official_ops edit a live challenge they do not host, not after settled', () => {

@@ -5,7 +5,7 @@ import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
 import { shortLaneMarkLabel } from '@/lib/board';
 import { THEME } from '@/lib/theme';
-import type { ScoringLane } from '@/lib/comparablePoints';
+import { scoringLaneName, type ScoringLane } from '@/lib/comparablePoints';
 
 type ScoringLaneChipProps = {
   lanes: ScoringLane[];
@@ -33,8 +33,8 @@ export function ScoringLaneChip({
   const needsSide = !current;
   const mark = density === 'mark';
   const label = mark
-    ? shortLaneMarkLabel(current?.label ?? '')
-    : current?.label.trim() || 'Needs a side';
+    ? shortLaneMarkLabel(scoringLaneName(current))
+    : scoringLaneName(current) || 'Needs a side';
 
   function choose(id: string) {
     setOpen(false);
@@ -112,7 +112,7 @@ export function ScoringLaneChip({
             <Pressable
               key={lane.id}
               accessibilityRole="button"
-              accessibilityLabel={lane.label}
+              accessibilityLabel={scoringLaneName(lane)}
               onPress={() => choose(lane.id)}
               style={{
                 minHeight: 48,
@@ -123,7 +123,7 @@ export function ScoringLaneChip({
                 paddingHorizontal: 14,
                 justifyContent: 'center',
               }}>
-              <AppText className="text-[15px] font-semibold text-charcoal">{lane.label}</AppText>
+              <AppText className="text-[15px] font-semibold text-charcoal">{scoringLaneName(lane)}</AppText>
             </Pressable>
           ))}
         </View>

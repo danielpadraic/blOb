@@ -11,27 +11,41 @@ import {
   parseScheduleDate,
   toLocalInputValue,
 } from '@/lib/challengeSchedule';
+import {
+  dateForZonedPicker,
+  formatZonedDateTime,
+  fromZonedInputValue,
+  isoFromZonedPicker,
+  toZonedInputValue,
+} from '@/lib/challengeTimezone';
 import { THEME } from '@/lib/theme';
 
 type DateTimeFieldProps = {
   label?: string;
   value: string;
+  timeZone?: string;
   error?: string;
   minimumDate?: Date;
   onChange: (iso: string) => void;
 };
 
-export function DateTimeField({ label, value, error, minimumDate, onChange }: DateTimeFieldProps) {
+export function DateTimeField({ label, value, timeZone, error, minimumDate, onChange }: DateTimeFieldProps) {
   const [mode, setMode] = useState<'date' | 'time' | null>(null);
-  const date = parseScheduleDate(value) ?? defaultChallengeStart();
+  const date = timeZone
+    ? dateForZonedPicker(value, timeZone)
+    : parseScheduleDate(value) ?? defaultChallengeStart();
+  const display = timeZone ? formatZonedDateTime(value, timeZone) : formatScheduleDateTime(value);
   const tourLocked = Boolean(useTourOptional()?.createActive);
 
   function commit(next: Date) {
-    const resolved = new Date(next);
+    const iso = timeZone ? isoFromZonedPicker(next, timeZone) : next.toISOString();
+    const resolved = new Date(iso);
     if (minimumDate && resolved.getTime() <= minimumDate.getTime()) {
       resolved.setTime(minimumDate.getTime() + 60 * 60 * 1000);
+      onChange(resolved.toISOString());
+      return;
     }
-    onChange(resolved.toISOString());
+    onChange(iso);
   }
 
   function onNativeChange(event: DateTimePickerEvent, next?: Date) {
@@ -71,14 +85,16 @@ export function DateTimeField({ label, value, error, minimumDate, onChange }: Da
             zIndex: 0,
           }}>
           {tourLocked ? (
-            <AppText className="text-[16px] text-charcoal">{formatScheduleDateTime(value)}</AppText>
+            <AppText className="text-[16px] text-charcoal">{display}</AppText>
           ) : (
             <input
               type="datetime-local"
-              value={toLocalInputValue(value)}
+              value={timeZone ? toZonedInputValue(value, timeZone) : toLocalInputValue(value)}
               min={minimumDate ? toLocalInputValue(minimumDate.toISOString()) : undefined}
               onChange={(event) => {
-                const iso = fromLocalInputValue(event.target.value);
+                const iso = timeZone
+                  ? fromZonedInputValue(event.target.value, timeZone)
+                  : fromLocalInputValue(event.target.value);
                 if (iso) {
                   onChange(iso);
                 }
@@ -118,7 +134,7 @@ export function DateTimeField({ label, value, error, minimumDate, onChange }: Da
             borderRadius: THEME.radiusSm,
           }}>
           <AppText className="text-[15px] font-medium text-charcoal">
-            {formatScheduleDateTime(value)}
+            {display}
           </AppText>
         </Pressable>
       </View>

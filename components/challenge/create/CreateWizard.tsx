@@ -66,6 +66,7 @@ import {
   type ChallengeDraft,
   type ReusableChallenge,
 } from '@/lib/challengeDraft';
+import { usesAdvancedCreateEdit } from '@/lib/challengeExperience';
 import {
   CHALLENGE_TEMPLATES,
   CREATE_STEP_FIELDS,
@@ -106,7 +107,7 @@ import {
 import { subscribeVisualViewport } from '@/lib/visualViewport';
 import { applyLaneToFormValues, normalizeUserChallengeLane, type UserChallengeLane } from '@/lib/challengeLane';
 import { descriptionGrowMaxLines } from '@/lib/composerField';
-import { asPrivacyMode, type PrivacyMode } from '@/lib/privacyMode';
+import { asPrivacyMode, rejectLockedAfterJoinField, type PrivacyMode } from '@/lib/privacyMode';
 import {
   defaultPayoutPairForFamily,
   formatFamilyOf,
@@ -128,6 +129,11 @@ import {
   withFreshSchedule,
   type StartPreset,
 } from '@/lib/challengeSchedule';
+import {
+  CREATE_TIMEZONE_OPTIONS,
+  endOfDayInZone,
+  formatZonedDateTime,
+} from '@/lib/challengeTimezone';
 import {
   COMPARABLE_POINTS_METHOD,
   emptyComparablePointsConfig,
@@ -192,6 +198,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   const fromSimple = (Array.isArray(params.from) ? params.from[0] : params.from) === 'simple';
   const dismissFallback = returnTo === 'feed' ? TABS_HREF : LOBBY_HREF;
   const { profile } = useMyProfile();
+  const officialOps = useOfficialOps().data === true;
   const geo = useGeoCashOptional();
   const create = useCreateChallenge();
   const update = useUpdateUserChallenge();
@@ -321,8 +328,9 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     setStartPath('previous');
     setRestoredDraft(true);
     setEntryTab(entryTabFromValues(next));
-    captureBaseline(next, STEP_GOAL);
-    setStep(STEP_GOAL);
+    const openAt = usesAdvancedCreateEdit(editing.data) ? STEP_SCORING : STEP_GOAL;
+    captureBaseline(next, openAt);
+    setStep(openAt);
     queueMicrotask(() => {
       skipSaveRef.current = false;
     });
@@ -938,8 +946,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
     const merged = {
       ...current,
       ...patch,
-      end_mode: 'length' as const,
-      duration_unit: 'days' as const,
+      duration_unit: patch.duration_unit ?? current.duration_unit ?? 'days',
     };
     const next = ensureSchedule(merged);
     setValue('starts_at', next.starts_at, { shouldValidate: true });
@@ -1438,6 +1445,11 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
   }
 
   async function onPublish() {
+    if (scoringEditorOpen || getValues('scoring_method') === COMPARABLE_POINTS_METHOD) {
+      if (!saveScoringMethod()) {
+        return;
+      }
+    }
     flushRulesDraftRef.current();
     stripBlankExtraRules();
     stripBlankExtraTasks();
@@ -1490,7 +1502,7 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
         preset: startPreset,
         starts_at: formValues.starts_at,
         duration_days: formValues.duration_days || formValues.duration_value,
-        timezone: challengeScheduleTimezone(profile?.timezone),
+        timezone: challengeScheduleTimezone(formValues.timezone || profile?.timezone),
       });
       if (startPreset === 'custom') {
         const start = Date.parse(schedule.starts_at);
@@ -1779,9 +1791,11 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
             errors={errors}
             isUnlimited={isUnlimited}
             startsAt={values.starts_at}
+            endsAt={values.ends_at}
+            endMode={values.end_mode}
             startPreset={startPreset}
-            timeZone={challengeScheduleTimezone(profile?.timezone)}
-            durationDays={values.duration_value || values.duration_days || '7'}
+            timeZone={challengeScheduleTimezone(values.timezone || profile?.timezone)}
+            durationDays={values.duration_value || values.duration_days || ''}
             frequency={values.frequency}
             joinUntilPreset={values.join_until_preset}
             joinUntilAt={values.join_until_at}
@@ -1794,6 +1808,9 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
             }}
               onDurationTypeChange={onDurationTypeChange}
               onFrequencyChange={onFrequencyChange}
+              onTimezoneChange={(timezone) => {
+                setValue('timezone', timezone, { shouldDirty: true, shouldValidate: true });
+              }}
               onScheduleChange={(patch, preset) => {
                 if (preset) {
                   setStartPreset(preset);
@@ -1864,6 +1881,17 @@ export function CreateWizard({ embedded = false }: { embedded?: boolean }) {
               }
               onCurrencyChange={(value) => {
                 if (normalizeUserChallengeLane(values.challenge_lane) !== 'private') {
+                  return;
+                }
+                const gate = rejectLockedAfterJoinField({
+                  field: 'currency',
+                  participantCount: isEditing ? editing.data?.participant_count ?? 0 : 0,
+                  current: values.currency,
+                  next: value,
+                  officialOps,
+                });
+                if (!gate.ok) {
+                  setFormError(gate.message);
                   return;
                 }
                 setValue('currency', value, { shouldValidate: true });
@@ -2244,7 +2272,7 @@ function GoalSlide({
             ref={ref}
             label="Title"
             placeholder="e.g. 14-day reading streak"
-            value={value}
+            value={value ?? ''}
             onChangeText={onChange}
             onBlur={onBlur}
             onFocus={onTitleFocus}
@@ -2271,6 +2299,24 @@ function GoalSlide({
             grow
             growMaxLines={descriptionGrowMaxLines(Dimensions.get('window').height)}
             maxLength={2000}
+          />
+        )}
+      />
+      </FieldAnchor>
+      <FieldAnchor name="sponsor_name">
+      <Controller
+        control={control}
+        name="sponsor_name"
+        render={({ field: { onChange, onBlur, value, ref } }) => (
+          <Input
+            ref={ref}
+            label={copy('create.sponsorLabel')}
+            placeholder={copy('create.sponsorPlaceholder')}
+            value={value ?? ''}
+            onChangeText={onChange}
+            onBlur={onBlur}
+            error={errors.sponsor_name?.message}
+            maxLength={80}
           />
         )}
       />
@@ -2444,6 +2490,8 @@ function DurationSlide({
   errors,
   isUnlimited,
   startsAt,
+  endsAt,
+  endMode,
   startPreset,
   timeZone,
   durationDays,
@@ -2454,12 +2502,15 @@ function DurationSlide({
   onJoinUntilCustom,
   onDurationTypeChange,
   onFrequencyChange,
+  onTimezoneChange,
   onScheduleChange,
 }: {
   control: ReturnType<typeof useForm<CreateChallengeValues>>['control'];
   errors: ReturnType<typeof useForm<CreateChallengeValues>>['formState']['errors'];
   isUnlimited: boolean;
   startsAt: string;
+  endsAt: string;
+  endMode: CreateChallengeValues['end_mode'];
   startPreset: StartPreset;
   timeZone: string;
   durationDays: string;
@@ -2470,20 +2521,44 @@ function DurationSlide({
   onJoinUntilCustom: (iso: string) => void;
   onDurationTypeChange: (next: CreateChallengeValues['duration_type']) => void;
   onFrequencyChange: (next: ChallengeFrequency) => void;
+  onTimezoneChange: (timezone: string) => void;
   onScheduleChange: (patch: Partial<CreateChallengeValues>, preset?: StartPreset) => void;
 }) {
   const onDurationFocus = useWizardFieldFocus('duration_value');
-  const endLine = formatChallengeEndLine(
-    endsAtFromStartAndDays(startsAt, Number(durationDays) || 7),
-  );
+  const zoneOptions = CREATE_TIMEZONE_OPTIONS.includes(timeZone as (typeof CREATE_TIMEZONE_OPTIONS)[number])
+    ? [...CREATE_TIMEZONE_OPTIONS]
+    : [timeZone, ...CREATE_TIMEZONE_OPTIONS];
+  const endLine =
+    endMode === 'date'
+      ? formatZonedDateTime(endsAt, timeZone)
+      : formatChallengeEndLine(
+          endsAt || endsAtFromStartAndDays(startsAt, Number(durationDays) || 7, timeZone),
+        );
 
   return (
     <View className="gap-3">
+      <FieldAnchor name="timezone">
+        <FieldLabel label={copy('create.timezone')} hint={timeZone}>
+          <ChipRow>
+            {zoneOptions.map((zone) => (
+              <Chip
+                key={zone}
+                label={zone.replace('America/', '').replace('_', ' ')}
+                selected={timeZone === zone}
+                onPress={() => {
+                  onTimezoneChange(zone);
+                  onScheduleChange({ timezone: zone });
+                }}
+              />
+            ))}
+          </ChipRow>
+        </FieldLabel>
+      </FieldAnchor>
       <FieldAnchor name="starts_at">
         <FieldLabel
           label="Start"
           error={errors.starts_at?.message}
-          hint="Local time. Saved as UTC.">
+          hint={`${timeZone}. Saved as UTC.`}>
           <View className="gap-3">
             <ChipRow>
               <Chip
@@ -2506,6 +2581,7 @@ function DurationSlide({
             </ChipRow>
             <DateTimeField
               value={startsAt}
+              timeZone={timeZone}
               error={errors.starts_at?.message}
               onChange={(iso) => onScheduleChange({ starts_at: iso }, 'custom')}
             />
@@ -2521,11 +2597,34 @@ function DurationSlide({
       </FieldAnchor>
 
       {!isUnlimited ? (
-        <FieldAnchor name="duration_value">
+        <FieldAnchor name="ends_at">
           <FieldLabel
-            label="Duration"
-            error={errors.duration_value?.message ?? errors.duration_days?.message}>
+            label={copy('create.endsAt')}
+            error={errors.ends_at?.message}
+            hint={endLine ? `${endLine} · ${timeZone}` : timeZone}>
             <View className="gap-3">
+              <DateTimeField
+                value={endsAt}
+                timeZone={timeZone}
+                error={errors.ends_at?.message}
+                onChange={(iso) => onScheduleChange({ ends_at: iso, end_mode: 'date' }, 'custom')}
+              />
+              <ChipRow>
+                <Chip
+                  label={copy('create.endOfDay')}
+                  selected={false}
+                  onPress={() =>
+                    onScheduleChange(
+                      {
+                        ends_at: endOfDayInZone(endsAt || startsAt, timeZone),
+                        end_mode: 'date',
+                      },
+                      'custom',
+                    )
+                  }
+                />
+              </ChipRow>
+              <AppText className="text-[13px] leading-5 text-muted">{copy('create.durationOrEnd')}</AppText>
               <DurationLengthPicker
                 durationDays={durationDays}
                 onChange={(value) =>
@@ -2534,12 +2633,10 @@ function DurationSlide({
                     duration_value: value,
                     duration_days: value,
                     duration_unit: 'days',
+                    timezone: timeZone,
                   })
                 }
               />
-              {endLine ? (
-                <AppText className="text-[13px] leading-5 text-muted">{endLine}</AppText>
-              ) : null}
             </View>
           </FieldLabel>
         </FieldAnchor>

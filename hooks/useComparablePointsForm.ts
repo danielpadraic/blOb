@@ -11,8 +11,11 @@ import {
   emptyLogChoiceField,
   emptyLogTextField,
   emptyQualifier,
+  emptyScoringLane,
   inferScoreWindow,
   parseComparablePointsConfig,
+  scoringLaneName,
+  syncScoringLanes,
   validateComparablePointsConfig,
   type ActivityConfig,
   type ComparablePointsConfig,
@@ -34,7 +37,9 @@ function savedConfigKey(config: ComparablePointsConfig | null): string | null {
   if (!config || config.activities.length < 1) {
     return null;
   }
-  return `${config.version}:${config.parity_points}:${config.window ?? 'challenge'}:${config.activities
+  return `${config.version}:${config.parity_points}:${config.window ?? 'challenge'}:${config.extras_keep_adding !== false}:${(config.lanes ?? [])
+    .map((lane) => `${lane.id}:${scoringLaneName(lane)}:${(lane.activities ?? []).join(',')}`)
+    .join(';')}:${config.activities
     .map((activity) => `${activity.id}:${activity.name}:${activity.parity_qty}`)
     .join('|')}`;
 }
@@ -84,6 +89,54 @@ export function useComparablePointsForm(saved: ComparablePointsConfig | null) {
 
   const setWindow = useCallback((window: ScoreWindow) => {
     setDraft((current) => ({ ...current, window: inferScoreWindow(window) }));
+    setError(null);
+  }, []);
+
+  const addLane = useCallback(() => {
+    setDraft((current) => {
+      const lanes = [...(current.lanes ?? [])];
+      lanes.push(emptyScoringLane({ name: '' }));
+      return { ...current, lanes };
+    });
+    setError(null);
+  }, []);
+
+  const removeLane = useCallback((id: string) => {
+    setDraft((current) =>
+      syncScoringLanes({
+        ...current,
+        lanes: (current.lanes ?? []).filter((lane) => lane.id !== id),
+      }),
+    );
+    setError(null);
+  }, []);
+
+  const patchLane = useCallback((id: string, name: string) => {
+    setDraft((current) => ({
+      ...current,
+      lanes: (current.lanes ?? []).map((lane) =>
+        lane.id === id ? { ...lane, name: name.trim(), label: name.trim() } : lane,
+      ),
+    }));
+    setError(null);
+  }, []);
+
+  const toggleLaneActivity = useCallback((laneId: string, activityId: string) => {
+    setDraft((current) => {
+      const lanes = (current.lanes ?? []).map((lane) => {
+        if (lane.id !== laneId) {
+          return lane;
+        }
+        const acts = new Set(lane.activities ?? []);
+        if (acts.has(activityId)) {
+          acts.delete(activityId);
+        } else {
+          acts.add(activityId);
+        }
+        return { ...lane, activities: [...acts] };
+      });
+      return syncScoringLanes({ ...current, lanes });
+    });
     setError(null);
   }, []);
 
@@ -268,6 +321,10 @@ export function useComparablePointsForm(saved: ComparablePointsConfig | null) {
       setFloorMaster,
       setWindow,
       setExtrasKeepAdding,
+      addLane,
+      removeLane,
+      patchLane,
+      toggleLaneActivity,
       addActivity,
       removeActivity,
       patchActivity,
@@ -290,6 +347,10 @@ export function useComparablePointsForm(saved: ComparablePointsConfig | null) {
       setFloorMaster,
       setWindow,
       setExtrasKeepAdding,
+      addLane,
+      removeLane,
+      patchLane,
+      toggleLaneActivity,
       addActivity,
       removeActivity,
       patchActivity,

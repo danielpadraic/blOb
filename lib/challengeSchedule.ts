@@ -175,17 +175,74 @@ export function ensureSchedule(
   CreateChallengeValues,
   'starts_at' | 'ends_at' | 'end_mode' | 'duration_value' | 'duration_unit' | 'duration_days'
 > {
+  const timeZone = challengeScheduleTimezone(
+    typeof values.timezone === 'string' ? values.timezone : undefined,
+  );
   const start = parseScheduleDate(values.starts_at) ?? defaultChallengeStart(now);
-  const days = durationDaysFromValues({ ...values, starts_at: start.toISOString() });
   const starts_at = start.toISOString();
+  const storedEnd = parseScheduleDate(values.ends_at);
+  const mode = asEndMode(values.end_mode);
+  if (mode === 'date' && storedEnd) {
+    const ends_at = clampChallengeEnd(start, storedEnd).toISOString();
+    const days = Math.min(
+      Math.max(differenceInCalendarDays(new Date(ends_at), start), 1),
+      MAX_CHALLENGE_DURATION_DAYS,
+    );
+    return {
+      starts_at,
+      ends_at,
+      end_mode: 'date',
+      duration_value: String(days),
+      duration_unit: 'days',
+      duration_days: String(days),
+    };
+  }
+  const days = durationDaysFromValues({ ...values, starts_at });
   return {
     starts_at,
-    ends_at: endsAtFromStartAndDays(starts_at, days),
+    ends_at: endsAtFromStartAndDays(starts_at, days, timeZone),
     end_mode: 'length',
     duration_value: String(days),
-    duration_unit: 'days',
+    duration_unit: asDurationUnit(values.duration_unit),
     duration_days: String(days),
   };
+}
+
+/** Keep the live start/end instants. Never invent a 6- or 7-day default. */
+export function hydrateSchedule(
+  values: Partial<CreateChallengeValues>,
+  now = new Date(),
+): Pick<
+  CreateChallengeValues,
+  'starts_at' | 'ends_at' | 'end_mode' | 'duration_value' | 'duration_unit' | 'duration_days'
+> {
+  const start = parseScheduleDate(values.starts_at);
+  const end = parseScheduleDate(values.ends_at);
+  if (start && end) {
+    const days = Math.min(
+      Math.max(differenceInCalendarDays(end, start), 1),
+      MAX_CHALLENGE_DURATION_DAYS,
+    );
+    return {
+      starts_at: start.toISOString(),
+      ends_at: end.toISOString(),
+      end_mode: asEndMode(values.end_mode) === 'length' && !values.ends_at ? 'length' : 'date',
+      duration_value: String(days),
+      duration_unit: 'days',
+      duration_days: String(days),
+    };
+  }
+  if (start) {
+    return ensureSchedule(
+      {
+        ...values,
+        starts_at: start.toISOString(),
+        end_mode: 'length',
+      },
+      now,
+    );
+  }
+  return defaultSchedule(now);
 }
 
 export function endsFromLength(

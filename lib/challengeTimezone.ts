@@ -83,8 +83,9 @@ export function zonedDateTimeToUtc(
   hour: number,
   minute: number,
   timeZone: string,
+  second = 0,
 ): Date {
-  const guess = Date.UTC(year, month - 1, day, hour, minute, 0, 0);
+  const guess = Date.UTC(year, month - 1, day, hour, minute, second, 0);
   let date = new Date(guess);
   date = new Date(guess - zoneOffsetMs(date, timeZone));
   const again = zoneOffsetMs(date, timeZone);
@@ -92,6 +93,87 @@ export function zonedDateTimeToUtc(
     date = new Date(guess - again);
   }
   return date;
+}
+
+export const CREATE_TIMEZONE_OPTIONS = [
+  'America/Chicago',
+  'America/Denver',
+  'America/New_York',
+  'America/Los_Angeles',
+  'America/Phoenix',
+  'Pacific/Honolulu',
+  'UTC',
+] as const;
+
+export function endOfDayInZone(iso: string, timeZone?: string | null): string {
+  const zone = resolveChallengeTimezone(timeZone);
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return iso;
+  }
+  const parts = zonedParts(date, zone);
+  return zonedDateTimeToUtc(parts.year, parts.month, parts.day, 23, 59, zone, 59).toISOString();
+}
+
+export function toZonedInputValue(iso: string, timeZone?: string | null): string {
+  const date = new Date(iso);
+  const fallback = Number.isNaN(date.getTime()) ? new Date() : date;
+  const parts = zonedParts(fallback, resolveChallengeTimezone(timeZone));
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${parts.year}-${pad(parts.month)}-${pad(parts.day)}T${pad(parts.hour)}:${pad(parts.minute)}`;
+}
+
+export function fromZonedInputValue(value: string, timeZone?: string | null): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(value ?? ''));
+  if (!match) {
+    return null;
+  }
+  return zonedDateTimeToUtc(
+    Number(match[1]),
+    Number(match[2]),
+    Number(match[3]),
+    Number(match[4]),
+    Number(match[5]),
+    resolveChallengeTimezone(timeZone),
+  ).toISOString();
+}
+
+export function formatZonedDateTime(iso: string, timeZone?: string | null): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return 'Set date';
+  }
+  try {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: resolveChallengeTimezone(timeZone),
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(date);
+  } catch {
+    return date.toLocaleString();
+  }
+}
+
+export function dateForZonedPicker(iso: string, timeZone?: string | null): Date {
+  const date = new Date(iso);
+  const fallback = Number.isNaN(date.getTime()) ? new Date() : date;
+  const parts = zonedParts(fallback, resolveChallengeTimezone(timeZone));
+  return new Date(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+}
+
+export function isoFromZonedPicker(localDate: Date, timeZone?: string | null): string {
+  return zonedDateTimeToUtc(
+    localDate.getFullYear(),
+    localDate.getMonth() + 1,
+    localDate.getDate(),
+    localDate.getHours(),
+    localDate.getMinutes(),
+    resolveChallengeTimezone(timeZone),
+    localDate.getSeconds(),
+  ).toISOString();
 }
 
 function addCalendarDay(year: number, month: number, day: number, amount: number): {

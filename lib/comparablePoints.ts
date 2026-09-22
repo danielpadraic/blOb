@@ -39,7 +39,9 @@ export type ActivityFloorConfig = {
 
 export type ScoringLane = {
   id: string;
+  name: string;
   label: string;
+  activities?: string[];
 };
 
 export type ActivityConfig = {
@@ -188,6 +190,23 @@ function parseLaneIds(value: unknown): string[] | undefined {
   return ids.length > 0 ? ids : undefined;
 }
 
+export function scoringLaneName(lane: Pick<ScoringLane, 'name' | 'label'> | null | undefined): string {
+  return String(lane?.name || lane?.label || '').trim();
+}
+
+export function emptyScoringLane(partial?: Partial<ScoringLane>): ScoringLane {
+  const name = scoringLaneName({
+    name: typeof partial?.name === 'string' ? partial.name : '',
+    label: typeof partial?.label === 'string' ? partial.label : '',
+  });
+  return {
+    id: partial?.id && String(partial.id).trim() ? String(partial.id).trim() : newId('lane'),
+    name,
+    label: name,
+    activities: parseLaneIds(partial?.activities) ?? [],
+  };
+}
+
 function parseLanes(value: unknown): ScoringLane[] | undefined {
   if (!Array.isArray(value)) {
     return undefined;
@@ -199,14 +218,73 @@ function parseLanes(value: unknown): ScoringLane[] | undefined {
         return null;
       }
       const id = typeof row.id === 'string' ? row.id.trim() : '';
-      const label = typeof row.label === 'string' ? row.label.trim() : '';
-      if (!id || !label) {
+      const name = scoringLaneName({
+        name: typeof row.name === 'string' ? row.name : '',
+        label: typeof row.label === 'string' ? row.label : '',
+      });
+      if (!id || !name) {
         return null;
       }
-      return { id, label };
+      return emptyScoringLane({
+        id,
+        name,
+        label: name,
+        activities: parseLaneIds(row.activities),
+      });
     })
     .filter((item): item is ScoringLane => item != null);
   return lanes.length > 0 ? lanes : undefined;
+}
+
+/** Honor “Side” choice options become scoring lanes when lanes[] is missing. */
+export function deriveScoringLanes(
+  config: Pick<ComparablePointsConfig, 'lanes' | 'choice_fields'> | null | undefined,
+): ScoringLane[] {
+  const existing = parseLanes(config?.lanes);
+  if (existing?.length) {
+    return existing;
+  }
+  const side = (config?.choice_fields ?? []).find(
+    (field) => field.label.trim().toLowerCase() === 'side',
+  );
+  if (!side) {
+    return [];
+  }
+  return side.options
+    .map((option) => {
+      const name = String(option ?? '').trim();
+      const id = slugMetricLabel(name);
+      return id && name ? emptyScoringLane({ id, name, label: name, activities: [] }) : null;
+    })
+    .filter((item): item is ScoringLane => item != null);
+}
+
+/** Keep lane.activities and activity.lane_ids in sync. */
+export function syncScoringLanes(config: ComparablePointsConfig): ComparablePointsConfig {
+  const lanes = deriveScoringLanes(config);
+  if (lanes.length < 2) {
+    return {
+      ...config,
+      lanes: lanes.length > 0 ? lanes : undefined,
+    };
+  }
+  const hasLaneActs = lanes.some((lane) => (lane.activities?.length ?? 0) > 0);
+  const activities = config.activities.map((activity) => {
+    if (!hasLaneActs) {
+      return activity;
+    }
+    const lane_ids = lanes.filter((lane) => (lane.activities ?? []).includes(activity.id)).map((lane) => lane.id);
+    return { ...activity, lane_ids: lane_ids.length > 0 ? lane_ids : undefined };
+  });
+  const nextLanes = lanes.map((lane) => ({
+    ...lane,
+    name: scoringLaneName(lane),
+    label: scoringLaneName(lane),
+    activities: hasLaneActs
+      ? (lane.activities ?? []).filter((id) => activities.some((activity) => activity.id === id))
+      : activities.filter((activity) => (activity.lane_ids ?? []).includes(lane.id)).map((activity) => activity.id),
+  }));
+  return { ...config, activities, lanes: nextLanes };
 }
 
 function asExtraFactor(value: unknown, fallback = DEFAULT_MULTIPLIER_FACTOR): number {
@@ -462,7 +540,7 @@ export function parseComparablePointsConfig(value: unknown): ComparablePointsCon
     .map(parseChoiceField)
     .filter((item): item is LogChoiceField => item != null)
     .slice(0, LOG_CHOICE_FIELD_MAX);
-  return {
+  const parsed: ComparablePointsConfig = {
     version: asScoringVersion(row.version, 1),
     parity_points: Number.isFinite(parity) && parity > 0 ? Math.round(parity) : DEFAULT_PARITY_POINTS,
     window: inferScoreWindow(row.window),
@@ -473,20 +551,24 @@ export function parseComparablePointsConfig(value: unknown): ComparablePointsCon
     text_fields,
     choice_fields,
   };
+  return syncScoringLanes({
+    ...parsed,
+    lanes: deriveScoringLanes(parsed),
+  });
 }
 
 export function cloneComparablePointsConfig(config: ComparablePointsConfig): ComparablePointsConfig {
-  return {
+  return syncScoringLanes({
     version: asScoringVersion(config.version, 1),
     parity_points: config.parity_points,
     window: inferScoreWindow(config.window),
     extras_keep_adding: config.extras_keep_adding === false ? false : true,
     floor_master: Boolean(config.floor_master),
-    lanes: parseLanes(config.lanes),
+    lanes: parseLanes(config.lanes) ?? deriveScoringLanes(config),
     activities: config.activities.map((activity) => emptyActivity(activity)),
     text_fields: (config.text_fields ?? []).map((field) => emptyLogTextField(field)),
     choice_fields: (config.choice_fields ?? []).map((field) => emptyLogChoiceField(field)),
-  };
+  });
 }
 
 export function filledComparableActivities(config: ComparablePointsConfig): ActivityConfig[] {
@@ -579,17 +661,17 @@ export function validateComparablePointsConfig(
   }
   return {
     ok: true,
-    config: {
+    config: syncScoringLanes({
       version: asScoringVersion(config.version, 1),
       parity_points: parity,
       window: inferScoreWindow(config.window),
       extras_keep_adding: config.extras_keep_adding === false ? false : true,
       floor_master: Boolean(config.floor_master),
-      lanes: parseLanes(config.lanes),
+      lanes: parseLanes(config.lanes) ?? deriveScoringLanes({ ...config, choice_fields }),
       activities,
       text_fields,
       choice_fields,
-    },
+    }),
   };
 }
 
@@ -828,7 +910,8 @@ export function scoringLaneLabel(
   if (!id) {
     return null;
   }
-  return config?.lanes?.find((lane) => lane.id === id)?.label.trim() || null;
+  const lane = config?.lanes?.find((item) => item.id === id);
+  return scoringLaneName(lane) || null;
 }
 
 export function participantNeedsScoringLane(
@@ -881,7 +964,7 @@ export function comparablePointsLaneSubline(config: ComparablePointsConfig): str
         .filter((activity) => activityScoresForLane(activity, lane.id))
         .map(activityLaneName)
         .filter(Boolean);
-      const who = laneActorLabel(lane.label);
+      const who = laneActorLabel(scoringLaneName(lane));
       if (names.length === 0) {
         return `${who} score nothing.`;
       }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  CURRENCY_LOCKED_MESSAGE,
   LOCKED_AFTER_JOIN_FIELDS,
   PRIVACY_MODE_LOCKED_MESSAGE,
   canChangePrivacyMode,
@@ -44,6 +45,17 @@ describe('canChangePrivacyMode', () => {
       expect(gate.message.includes('\n')).toBe(false);
     }
     expect(LOCKED_AFTER_JOIN_FIELDS).toContain('privacy_mode');
+    expect(LOCKED_AFTER_JOIN_FIELDS).toContain('currency');
+    const currencyGate = rejectLockedAfterJoinField({
+      field: 'currency',
+      participantCount: 2,
+      current: 'coins',
+      next: 'bucks',
+    });
+    expect(currencyGate.ok).toBe(false);
+    if (!currencyGate.ok) {
+      expect(currencyGate.message).toBe(CURRENCY_LOCKED_MESSAGE);
+    }
     expect(saved).toBe('public');
     expect(
       canChangePrivacyMode({ current: saved, next: saved, participantCount: 3 }).ok,

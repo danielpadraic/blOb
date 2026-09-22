@@ -147,6 +147,8 @@ export const DEFAULT_CREATE_VALUES: CreateChallengeValues = {
   challenge_lane: 'coins',
   buy_in: '0',
   duration_type: 'fixed',
+  timezone: '',
+  sponsor_name: '',
   ...defaultSchedule(),
   target_count: '6',
   frequency: 'weekly',

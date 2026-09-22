@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { View } from 'react-native';
 
@@ -28,7 +28,8 @@ import { useMyProfile } from '@/hooks/useProfile';
 import { canCancelChallenge, countOtherJoiners } from '@/lib/challengeCancel';
 import { canParticipantLeave } from '@/lib/challengeLeave';
 import { usesAdvancedCreateEdit } from '@/lib/challengeExperience';
-import { canHouseEditChallenge, canHostQuickEdit } from '@/lib/challengeStart';
+import { fetchChallengeModeratorIds } from '@/lib/challengeMods';
+import { canHouseEditChallenge, canHostQuickEdit, canHostWizardEdit } from '@/lib/challengeStart';
 import { useOfficialOps } from '@/hooks/useOfficialOps';
 import { canHouseActOnChallenge } from '@/lib/officialOps';
 import { challengeIsSettledForRigor, viewerCanFriendlyHostAdd } from '@/lib/hostRigor';
@@ -83,9 +84,19 @@ export function useChallengeDetailOverflow() {
   const myRow = roster.data?.find((row) => row.user_id === user?.id);
   const liveMute = asLiveMute(myRow?.live_mute);
   const canMute = Boolean(user?.id && myRow && isLiveCompetitor(myRow));
+  const modsQuery = useQuery({
+    queryKey: ['challenge-moderators', id],
+    queryFn: () => fetchChallengeModeratorIds(id!),
+    enabled: Boolean(id),
+  });
   const canHostEdit = canHostQuickEdit({ challenge, viewerId: user?.id });
   const canHouseEdit = canHouseEditChallenge({ challenge, officialOps });
-  const canEdit = canHostEdit || canHouseEdit;
+  const canWizardEdit =
+    canHostWizardEdit({
+      challenge,
+      viewerId: user?.id,
+      moderatorIds: modsQuery.data,
+    }) || canHouseEdit;
   const houseReady = officialOps;
   const houseDisabled = !canHouseActOnChallenge(challenge);
   const friendlyAdd = viewerCanFriendlyHostAdd({
@@ -94,7 +105,7 @@ export function useChallengeDetailOverflow() {
     officialOps: false,
   });
   const friendlyAddDisabled = challengeIsSettledForRigor(challenge?.status);
-  const canDetails = canEditOfficialDetails({ challenge, viewerId: user?.id, profile }) && !canEdit;
+  const canDetails = canEditOfficialDetails({ challenge, viewerId: user?.id, profile });
   const canTools = canOpenOfficialTools({ challenge, viewerId: user?.id, profile });
   const canCancel = canCancelChallenge({
     challenge,
@@ -104,7 +115,8 @@ export function useChallengeDetailOverflow() {
     rosterReady: roster.data != null,
   });
   const canLeave = canParticipantLeave({ challenge, joined });
-  const showOverflow = canEdit || canDetails || canTools || canCancel || canLeave || canMute || houseReady || friendlyAdd;
+  const showOverflow =
+    canWizardEdit || canDetails || canTools || canCancel || canLeave || canMute || houseReady || friendlyAdd;
   const rollPending = Boolean(challenge?.start_roll_pending) && canHostEdit;
   const rollOpen = rollPending && !rollDismissed;
 
@@ -221,7 +233,7 @@ export function useChallengeDetailOverflow() {
       },
     });
   }
-  if (canEdit) {
+  if (canWizardEdit) {
     actions.push({
       key: 'edit',
       label: copy('challenge.editChallenge'),

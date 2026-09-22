@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  ensureSchedule,
+  hydrateSchedule,
   inOneHour,
   resolveStartForPublish,
   startPresetFromValues,
   tomorrowMorning,
 } from '@/lib/challengeSchedule';
-import { startTomorrowInZone } from '@/lib/challengeTimezone';
+import { endOfDayInZone, startTomorrowInZone } from '@/lib/challengeTimezone';
 
 describe('challenge start presets', () => {
   it('resolves hour at T+3h to about 1 hour from then, not the original stamp', () => {
@@ -63,5 +65,39 @@ describe('challenge start presets', () => {
     });
     expect(resolved.starts_at).toBe(new Date(past).toISOString());
     expect(startPresetFromValues(past, new Date('2026-08-26T18:00:00.000Z'))).toBe('custom');
+  });
+});
+
+describe('hydrateSchedule', () => {
+  it('keeps a live start and end instead of inventing a 7-day length', () => {
+    const next = hydrateSchedule({
+      starts_at: '2026-09-22T05:00:00.000Z',
+      ends_at: '2026-09-26T04:59:59.000Z',
+      timezone: 'America/Chicago',
+    });
+    expect(next.starts_at).toBe('2026-09-22T05:00:00.000Z');
+    expect(next.ends_at).toBe('2026-09-26T04:59:59.000Z');
+    expect(next.end_mode).toBe('date');
+    expect(Number(next.duration_days)).toBeGreaterThanOrEqual(3);
+    expect(Number(next.duration_days)).toBeLessThan(7);
+  });
+
+  it('does not recompute a date-mode end through ensureSchedule', () => {
+    const next = ensureSchedule({
+      starts_at: '2026-09-22T05:00:00.000Z',
+      ends_at: '2026-09-26T04:59:59.000Z',
+      end_mode: 'date',
+      timezone: 'America/Chicago',
+      duration_days: '7',
+    });
+    expect(next.ends_at).toBe('2026-09-26T04:59:59.000Z');
+    expect(next.end_mode).toBe('date');
+  });
+});
+
+describe('end of day', () => {
+  it('sets 23:59:59 in America/Chicago', () => {
+    const iso = endOfDayInZone('2026-09-25T05:00:00.000Z', 'America/Chicago');
+    expect(iso).toBe('2026-09-26T04:59:59.000Z');
   });
 });

@@ -83,7 +83,7 @@ import {
 import { simpleDraftFromStarter, starterFromCreateParams } from '@/lib/interestsMatch';
 import { milesToMeters } from '@/lib/distance';
 import { usesAdvancedCreateEdit } from '@/lib/challengeExperience';
-import { canHouseEditChallenge, canHostQuickEdit } from '@/lib/challengeStart';
+import { canHouseEditChallenge, canHostWizardEdit } from '@/lib/challengeStart';
 import { useOfficialOps } from '@/hooks/useOfficialOps';
 import {
   challengeScheduleTimezone,
@@ -93,6 +93,7 @@ import {
   tomorrowMorning,
   type StartPreset,
 } from '@/lib/challengeSchedule';
+import { CREATE_TIMEZONE_OPTIONS, endOfDayInZone } from '@/lib/challengeTimezone';
 import { defaultSentenceForMethod, makeProof } from '@/lib/challengeProofs';
 import { formatCash, formatWallet, walletBalance } from '@/lib/currency';
 import { firstRouteParam } from '@/lib/challengeLoad';
@@ -359,7 +360,7 @@ export function SimpleCreateForm() {
       return;
     }
     if (
-      !canHostQuickEdit({ challenge: editing.data, viewerId: user?.id }) &&
+      !canHostWizardEdit({ challenge: editing.data, viewerId: user?.id }) &&
       !canHouseEditChallenge({ challenge: editing.data, officialOps })
     ) {
       setError(copy('challenge.notStarted'));
@@ -512,7 +513,7 @@ export function SimpleCreateForm() {
         preset: draft.start_preset,
         starts_at: draft.starts_at,
         duration_days: draft.duration_preset === 'custom' ? draft.duration_days : draft.duration_preset,
-        timezone: challengeScheduleTimezone(profile?.timezone),
+        timezone: challengeScheduleTimezone(draft.timezone || profile?.timezone),
       });
       const toPublish = { ...draft, starts_at: schedule.starts_at };
       if (toPublish.start_preset === 'custom') {
@@ -894,6 +895,21 @@ export function SimpleCreateForm() {
           }}>
           <SectionLabel>{copy('create.start')}</SectionLabel>
           <ChipRow>
+            {(CREATE_TIMEZONE_OPTIONS.includes(
+              challengeScheduleTimezone(draft.timezone || profile?.timezone) as (typeof CREATE_TIMEZONE_OPTIONS)[number],
+            )
+              ? [...CREATE_TIMEZONE_OPTIONS]
+              : [challengeScheduleTimezone(draft.timezone || profile?.timezone), ...CREATE_TIMEZONE_OPTIONS]
+            ).map((zone) => (
+              <Chip
+                key={zone}
+                label={zone.replace('America/', '').replace('_', ' ')}
+                selected={challengeScheduleTimezone(draft.timezone || profile?.timezone) === zone}
+                onPress={() => patch({ timezone: zone })}
+              />
+            ))}
+          </ChipRow>
+          <ChipRow>
             <Chip
               label="In 1 hour"
               selected={draft.start_preset === 'hour'}
@@ -909,7 +925,7 @@ export function SimpleCreateForm() {
                   start_preset: 'tomorrow' as StartPreset,
                   starts_at: tomorrowMorning(
                     new Date(),
-                    challengeScheduleTimezone(profile?.timezone),
+                    challengeScheduleTimezone(draft.timezone || profile?.timezone),
                   ).toISOString(),
                 })
               }
@@ -922,8 +938,28 @@ export function SimpleCreateForm() {
           </ChipRow>
           <DateTimeField
             value={draft.starts_at}
+            timeZone={challengeScheduleTimezone(draft.timezone || profile?.timezone)}
             minimumDate={editId ? undefined : new Date()}
             onChange={(starts_at) => patch({ starts_at, start_preset: 'custom' })}
+          />
+          <DateTimeField
+            label={copy('create.endsAt')}
+            value={draft.ends_at || endsAtOf(draft)}
+            timeZone={challengeScheduleTimezone(draft.timezone || profile?.timezone)}
+            onChange={(ends_at) => patch({ ends_at, end_mode: 'date' })}
+          />
+          <Chip
+            label={copy('create.endOfDay')}
+            selected={false}
+            onPress={() =>
+              patch({
+                ends_at: endOfDayInZone(
+                  draft.ends_at || draft.starts_at,
+                  challengeScheduleTimezone(draft.timezone || profile?.timezone),
+                ),
+                end_mode: 'date',
+              })
+            }
           />
           <JoinUntilField
             preset={draft.join_until_preset ?? 'after_24h'}

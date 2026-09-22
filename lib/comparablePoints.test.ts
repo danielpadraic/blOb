@@ -5,6 +5,7 @@ import {
   comparableLogFields,
   activityScoresForLane,
   comparablePointsLaneSubline,
+  deriveScoringLanes,
   comparablePointsLiveSentence,
   emptyActivity,
   emptyComparablePointsConfig,
@@ -155,6 +156,53 @@ describe('comparable points config', () => {
     expect(
       formatComparableBoardCell({ key: 'act-dials', label: 'Dials', money: false }, { 'act-dials': 3500 }),
     ).toBe('3500');
+  });
+});
+
+describe('scoring lanes', () => {
+  it('reads name + activities and keeps Board label', () => {
+    const parsed = parseComparablePointsConfig({
+      version: 1,
+      parity_points: 13_000,
+      lanes: [
+        { id: 'rookie', name: 'Rookie', activities: ['act-dials', 'act-ap'] },
+        { id: 'veteran', name: 'Veteran', activities: ['act-ap'] },
+      ],
+      activities: [
+        {
+          id: 'act-dials',
+          name: 'Dials',
+          unit: 'dials',
+          parity_qty: 3500,
+          multiplier: { enabled: false, extra_factor: 1 },
+          qualifiers: { enabled: false, items: [] },
+        },
+        {
+          id: 'act-ap',
+          name: 'AP',
+          unit: 'USD',
+          parity_qty: 13_000,
+          multiplier: { enabled: false, extra_factor: 1 },
+          qualifiers: { enabled: false, items: [] },
+        },
+      ],
+    });
+    expect(parsed?.lanes?.map((lane) => ({ id: lane.id, name: lane.name, activities: lane.activities }))).toEqual([
+      { id: 'rookie', name: 'Rookie', activities: ['act-dials', 'act-ap'] },
+      { id: 'veteran', name: 'Veteran', activities: ['act-ap'] },
+    ]);
+    expect(parsed?.activities.find((item) => item.id === 'act-dials')?.lane_ids).toEqual(['rookie']);
+    expect(parsed?.activities.find((item) => item.id === 'act-ap')?.lane_ids).toEqual(['rookie', 'veteran']);
+  });
+
+  it('derives Rookie + Veteran from a Side choice when lanes are missing', () => {
+    const lanes = deriveScoringLanes({
+      choice_fields: [{ id: 'side', label: 'Side', options: ['Rookie', 'Veteran'] }],
+    });
+    expect(lanes.map((lane) => ({ id: lane.id, name: lane.name }))).toEqual([
+      { id: 'rookie', name: 'Rookie' },
+      { id: 'veteran', name: 'Veteran' },
+    ]);
   });
 });
 
