@@ -92,6 +92,25 @@ export function challengeMoneyShape(row: MoneyShapeInput | null | undefined): Mo
   return 'host';
 }
 
+/** Private / corporate / coins / $0 / free never run the cash geo matrix. */
+export function skipsCashGeo(
+  row: (MoneyShapeInput & { privacy_mode?: string | null }) | null | undefined,
+): boolean {
+  const privacy = String(row?.privacy_mode ?? '').toLowerCase();
+  if (privacy === 'private' || privacy === 'private_corporate') {
+    return true;
+  }
+  if (!isCashCurrency(row?.currency)) {
+    return true;
+  }
+  const entry = firstMoney([row?.buy_in_amount, row?.entry_fee], [row?.entry_cents]);
+  const prize = firstMoney([row?.prize_pool, row?.prize_amount], [row?.prize_cents]);
+  if (entry <= 0 && prize <= 0) {
+    return true;
+  }
+  return challengeMoneyShape(row) === 'free';
+}
+
 export function joinActionForShape(shape: MoneyShape): CashAction | null {
   if (shape === 'host') {
     return 'join_host';

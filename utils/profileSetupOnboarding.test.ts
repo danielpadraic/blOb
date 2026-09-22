@@ -16,6 +16,8 @@ describe('Physical Details onboarding has no Health / OS-permission gate', () =>
     expect(src).not.toMatch(/We need permission to continue/);
     expect(src).toMatch(/Always private/);
     expect(src).toMatch(/Set this up later/);
+    expect(src).toMatch(/title="Add later"/);
+    expect(src).toMatch(/skipAccountDetails/);
     expect(src).toMatch(/label: 'Skip'/);
   });
 });

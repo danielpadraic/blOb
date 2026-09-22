@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { profileSetupSchema, isProfileComplete } from '@/utils/validators';
+import { profileSetupSchema, isProfileComplete, profileSetupPhoneOk } from '@/utils/validators';
 
 /** Name + tone only. Physical Details are left blank, as a skipping user leaves them. */
 const NAMED_ONLY = {
@@ -39,10 +39,20 @@ describe('profileSetupSchema — Physical Details are optional', () => {
     ).toBe(true);
   });
 
-  it('requires home state, birth date, and phone on Account', () => {
-    expect(issuePaths({ ...NAMED_ONLY, date_of_birth: '' })).toContain('date_of_birth');
-    expect(issuePaths({ ...NAMED_ONLY, declared_region: '' })).toContain('declared_region');
-    expect(issuePaths({ ...NAMED_ONLY, phone: '' })).toContain('phone');
+  it('lets first-run skip home state, birth date, and phone', () => {
+    expect(profileSetupSchema.safeParse({ ...NAMED_ONLY, date_of_birth: '' }).success).toBe(true);
+    expect(profileSetupSchema.safeParse({ ...NAMED_ONLY, declared_region: '' }).success).toBe(true);
+    expect(profileSetupSchema.safeParse({ ...NAMED_ONLY, phone: '' }).success).toBe(true);
+  });
+
+  it('accepts a CA 10-digit phone and +1, and rejects a short typed number', () => {
+    expect(profileSetupPhoneOk('4155551212')).toBe(true);
+    expect(profileSetupPhoneOk('+1 415 555 1212')).toBe(true);
+    expect(profileSetupPhoneOk('2135551212')).toBe(true);
+    expect(profileSetupPhoneOk('')).toBe(true);
+    expect(profileSetupPhoneOk('5551212')).toBe(false);
+    expect(issuePaths({ ...NAMED_ONLY, phone: '5551212' })).toContain('phone');
+    expect(issuePaths({ ...NAMED_ONLY, phone: '4155551212' })).not.toContain('phone');
   });
 
   it('still requires a username and a display name', () => {

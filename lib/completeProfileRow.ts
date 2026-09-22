@@ -148,6 +148,18 @@ export function optionalSetupUpdateRow(row: Record<string, unknown>): Record<str
   if (Array.isArray(row.primary_activities)) {
     out.primary_activities = row.primary_activities;
   }
+  if (typeof row.date_of_birth === 'string' && row.date_of_birth.trim()) {
+    out.date_of_birth = row.date_of_birth.trim();
+  }
+  if (typeof row.declared_region === 'string' && row.declared_region.trim()) {
+    out.declared_region = row.declared_region.trim();
+  }
+  if (typeof row.home_state === 'string' && row.home_state.trim()) {
+    out.home_state = row.home_state.trim();
+  }
+  if (typeof row.phone === 'string' && row.phone.trim()) {
+    out.phone = row.phone.trim();
+  }
   for (const key of OPTIONAL_ONBOARDING_KEYS) {
     if (row[key] !== undefined) {
       out[key] = row[key];
@@ -283,6 +295,18 @@ export function buildCompleteProfileRow(userId: string, patch: ProfileUpdate): R
   }
   if (patch.skill_tags && patch.skill_tags.length > 0) {
     row.skill_tags = patch.skill_tags;
+  }
+  if (typeof patch.date_of_birth === 'string' && patch.date_of_birth.trim()) {
+    row.date_of_birth = patch.date_of_birth.trim();
+  }
+  if (typeof patch.declared_region === 'string' && patch.declared_region.trim()) {
+    row.declared_region = patch.declared_region.trim();
+  }
+  if (typeof patch.home_state === 'string' && patch.home_state.trim()) {
+    row.home_state = patch.home_state.trim();
+  }
+  if (typeof patch.phone === 'string' && patch.phone.trim()) {
+    row.phone = patch.phone.trim();
   }
 
   return omitNullishProfileFields(row);

@@ -8,6 +8,7 @@ import {
   namesOnlyProfileUpsertRow,
   omitOptionalOnboardingFields,
   omitNullishProfileFields,
+  optionalSetupUpdateRow,
   profileSetupNamesPersisted,
   shouldCompleteSetupAfterWriteError,
 } from '@/lib/completeProfileRow';
@@ -29,6 +30,35 @@ describe('complete profile row — optional Physical Details', () => {
     expect(row).not.toHaveProperty('body_metrics_completed_at');
     expect(row.username).toBe('danielh');
     expect(row.display_name).toBe('Daniel');
+  });
+
+  it('keeps a typed home state, birth date, and phone on the write row', () => {
+    expect(
+      buildCompleteProfileRow('user-1', {
+        username: 'danielh',
+        display_name: 'Daniel',
+        date_of_birth: '1990-01-15',
+        declared_region: 'CA',
+        home_state: 'CA',
+        phone: '4155551212',
+      }),
+    ).toMatchObject({
+      date_of_birth: '1990-01-15',
+      declared_region: 'CA',
+      phone: '4155551212',
+    });
+    expect(
+      optionalSetupUpdateRow({
+        date_of_birth: '1990-01-15',
+        declared_region: 'CA',
+        home_state: 'CA',
+        phone: '4155551212',
+      }),
+    ).toMatchObject({
+      date_of_birth: '1990-01-15',
+      declared_region: 'CA',
+      phone: '4155551212',
+    });
   });
 
   it('stores gender only when the user picked male or female', () => {

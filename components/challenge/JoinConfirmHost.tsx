@@ -8,7 +8,12 @@ import { useJoinChallenge } from '@/hooks/useChallenge';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { walletBalance } from '@/lib/currency';
-import { joinActionForShape, challengeMoneyShape, isGeoGateDeny } from '@/lib/geo/eligibility';
+import {
+  joinActionForShape,
+  challengeMoneyShape,
+  isGeoGateDeny,
+  skipsCashGeo,
+} from '@/lib/geo/eligibility';
 import { bucksJoinCta } from '@/lib/joinCta';
 import type { Challenge } from '@/lib/types';
 import { getJoinChallengeMessage } from '@/utils/errors';
@@ -50,7 +55,7 @@ export function JoinConfirmProvider({ children }: { children: ReactNode }) {
     }
     pendingRef.current = null;
     setError(null);
-    const action = joinActionForShape(challengeMoneyShape(next));
+    const action = skipsCashGeo(next) ? null : joinActionForShape(challengeMoneyShape(next));
     if (action && geo) {
       void geo.ensure({ action, challengeId: next.id }).then((ok) => {
         if (ok) {

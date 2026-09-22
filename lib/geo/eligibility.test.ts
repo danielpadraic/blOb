@@ -8,6 +8,7 @@ import {
   challengeMoneyShape,
   createActionForShape,
   joinActionForShape,
+  skipsCashGeo,
 } from '@/lib/geo/eligibility';
 import { regionFromGeocode } from '@/lib/geo/preciseLocation';
 import { parseCashGateResult } from '@/lib/geo/cashGate';
@@ -94,6 +95,32 @@ describe('challenge money shape', () => {
         guarantee_cents: 50000,
       }),
     ).toBe('hybrid');
+  });
+});
+
+describe('skipsCashGeo', () => {
+  it('skips private, corporate, coins, $0, and free — never CA phones', () => {
+    expect(
+      skipsCashGeo({
+        privacy_mode: 'private_corporate',
+        currency: 'coins',
+        buy_in_amount: 0,
+        prize_pool: 0,
+      }),
+    ).toBe(true);
+    expect(skipsCashGeo({ privacy_mode: 'private', currency: 'bucks', buy_in_amount: 10 })).toBe(
+      true,
+    );
+    expect(skipsCashGeo({ currency: 'coins', buy_in_amount: 10, prize_pool: 40 })).toBe(true);
+    expect(skipsCashGeo({ currency: 'bucks', buy_in_amount: 0, prize_pool: 0 })).toBe(true);
+    expect(
+      skipsCashGeo({
+        currency: 'bucks',
+        buy_in_amount: 10,
+        prize_pool: 20,
+        host_budget: 0,
+      }),
+    ).toBe(false);
   });
 });
 

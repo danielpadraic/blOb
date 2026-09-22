@@ -31,12 +31,13 @@ export function AccountSpineFields({
   regionError?: string;
   phoneError?: string;
 }) {
-  const initial = parseDateOnly(dateOfBirth) ?? new Date(2000, 0, 1);
-  const [draft, setDraft] = useState(initial);
+  const parsedDob = parseDateOnly(dateOfBirth);
+  const [draft, setDraft] = useState(parsedDob ?? new Date(2000, 0, 1));
   const [nativeOpen, setNativeOpen] = useState(false);
   const [stateOpen, setStateOpen] = useState(false);
   const iso = formatDateOnly(draft);
-  const webValue = useMemo(() => iso, [iso]);
+  const hasDob = Boolean(parsedDob);
+  const webValue = useMemo(() => (hasDob ? iso : ''), [hasDob, iso]);
 
   function onNativeChange(event: DateTimePickerEvent, next?: Date) {
     if (Platform.OS === 'android') {
@@ -75,7 +76,9 @@ export function AccountSpineFields({
             accessibilityLabel={copy('interests.dob')}
             onPress={() => setNativeOpen(true)}
             style={{ minHeight: 44, justifyContent: 'center' }}>
-            <AppText className="text-sm leading-5 text-charcoal">{iso}</AppText>
+            <AppText className="text-sm leading-5 text-charcoal">
+              {hasDob ? iso : 'Add later'}
+            </AppText>
           </Pressable>
         )}
         <AppText className="text-[12px] leading-5 text-muted">{copy('interests.dobHelp')}</AppText>

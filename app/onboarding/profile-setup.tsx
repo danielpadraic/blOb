@@ -92,7 +92,7 @@ const STEP_COPY = [
   },
   {
     title: 'Your place',
-    body: 'Home state, birth date, and phone stay private. Needed for Official Challenges.',
+    body: 'Home state, birth date, and phone stay private. Needed for Official cash Challenges. You can add them later.',
   },
   {
     title: 'Training',
@@ -272,10 +272,10 @@ export function ProfileSetupWizard() {
   }
 
   const onSubmit = () => {
-    void persistSetup(false);
+    void persistSetup('full');
   };
 
-  async function persistSetup(skipMetrics: boolean) {
+  async function persistSetup(mode: 'full' | 'skipMetrics' | 'skipAccount') {
     if (availability.isTaken) {
       setFormError('That username is taken.');
       setStep(0);
@@ -287,33 +287,36 @@ export function ProfileSetupWizard() {
       setStep(0);
       return;
     }
-    const accountOk = await trigger([...PROFILE_STEP_FIELDS[1]]);
-    if (!accountOk) {
-      setStep(1);
-      return;
-    }
-    const trainingOk = await trigger([...PROFILE_STEP_FIELDS[2]]);
-    if (!trainingOk) {
-      setStep(2);
-      return;
-    }
 
-    if (skipMetrics) {
-      const metricFields = [
-        'gender',
-        'height_cm',
-        'height_ft',
-        'height_in',
-        'current_weight',
-        'goal_weight',
-      ] as const;
-      for (const field of metricFields) {
-        setValue(field, '', { shouldValidate: false });
-      }
-    } else {
-      const metricsOk = await trigger([...PROFILE_STEP_FIELDS[3]]);
-      if (!metricsOk) {
+    if (mode !== 'skipAccount') {
+      const accountOk = await trigger([...PROFILE_STEP_FIELDS[1]]);
+      if (!accountOk) {
+        setStep(1);
         return;
+      }
+      const trainingOk = await trigger([...PROFILE_STEP_FIELDS[2]]);
+      if (!trainingOk) {
+        setStep(2);
+        return;
+      }
+
+      if (mode === 'skipMetrics') {
+        const metricFields = [
+          'gender',
+          'height_cm',
+          'height_ft',
+          'height_in',
+          'current_weight',
+          'goal_weight',
+        ] as const;
+        for (const field of metricFields) {
+          setValue(field, '', { shouldValidate: false });
+        }
+      } else {
+        const metricsOk = await trigger([...PROFILE_STEP_FIELDS[3]]);
+        if (!metricsOk) {
+          return;
+        }
       }
     }
 
@@ -341,7 +344,7 @@ export function ProfileSetupWizard() {
     const enteredGender =
       values.gender === 'male' || values.gender === 'female' ? values.gender : null;
     const enteredMetrics =
-      !skipMetrics &&
+      mode === 'full' &&
       enteredGender != null &&
       enteredHeight &&
       Boolean(values.current_weight.trim());
@@ -359,10 +362,10 @@ export function ProfileSetupWizard() {
           values.typical_weekly_workout_frequency,
         ),
         primary_activities: values.primary_activities,
-        date_of_birth: values.date_of_birth,
-        declared_region: values.declared_region,
-        home_state: values.declared_region,
-        phone: values.phone,
+        date_of_birth: values.date_of_birth.trim() || null,
+        declared_region: values.declared_region.trim() || null,
+        home_state: values.declared_region.trim() || null,
+        phone: values.phone.trim() || null,
         ...(enteredMetrics
           ? {
               gender: enteredGender,
@@ -406,7 +409,11 @@ export function ProfileSetupWizard() {
   }
 
   async function skipPhysicalDetails() {
-    await persistSetup(true);
+    await persistSetup('skipMetrics');
+  }
+
+  async function skipAccountDetails() {
+    await persistSetup('skipAccount');
   }
 
   const handleLabel = usernameHandleLabel(username);
@@ -438,15 +445,26 @@ export function ProfileSetupWizard() {
             <AppText className="text-sm leading-5 text-coral-dark">{formError}</AppText>
           ) : null}
           {step < 3 ? (
-            <Button
-              title="Continue"
-              size="lg"
-              onPress={() => void goNext()}
-              disabled={
-                step === 0 &&
-                (availability.isTaken || availability.isChecking || availability.isAvailable === false)
-              }
-            />
+            <>
+              <Button
+                title="Continue"
+                size="lg"
+                onPress={() => void goNext()}
+                disabled={
+                  step === 0 &&
+                  (availability.isTaken || availability.isChecking || availability.isAvailable === false)
+                }
+              />
+              {step === 1 ? (
+                <Button
+                  title="Add later"
+                  variant="ghost"
+                  size="lg"
+                  onPress={() => void skipAccountDetails()}
+                  disabled={saving || completeProfile.isPending}
+                />
+              ) : null}
+            </>
           ) : (
             <>
               <Button

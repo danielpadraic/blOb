@@ -44,6 +44,19 @@ export const setPasswordSchema = z
     path: ['confirmPassword'],
   });
 
+/** Empty is fine on first-run. A typed value must be US 10-digit or +1. No area-code denylist. */
+export function profileSetupPhoneOk(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return true;
+  }
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits.length === 10) {
+    return true;
+  }
+  return digits.length === 11 && digits.startsWith('1');
+}
+
 export const profileSetupSchema = z.object({
   username: z
     .string()
@@ -78,12 +91,15 @@ export const profileSetupSchema = z.object({
   date_of_birth: z
     .string()
     .trim()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Add your birth date'),
-  declared_region: z.string().trim().length(2, 'Add your home state'),
+    .refine((value) => !value || /^\d{4}-\d{2}-\d{2}$/.test(value), 'Add your birth date'),
+  declared_region: z
+    .string()
+    .trim()
+    .refine((value) => !value || value.length === 2, 'Add your home state'),
   phone: z
     .string()
     .trim()
-    .refine((value) => value.replace(/\D/g, '').length >= 10, 'Add a phone number'),
+    .refine((value) => profileSetupPhoneOk(value), 'Enter a 10-digit US number or +1'),
 }).superRefine((values, ctx) => {
   // Physical Details are optional in first-run. Every range below only applies
   // to a field the user actually filled in.
