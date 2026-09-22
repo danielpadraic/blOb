@@ -3,7 +3,7 @@ import 'react-native-gesture-handler';
 import '@/lib/nativewind';
 
 import { QueryClientProvider } from '@tanstack/react-query';
-import { Stack, usePathname, useRouter, type Href } from 'expo-router';
+import { Stack, useGlobalSearchParams, usePathname, useRouter, type Href } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as WebBrowser from 'expo-web-browser';
@@ -21,8 +21,8 @@ import { WalletProvider } from '@/hooks/useWallet';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useAppOpenPing } from '@/hooks/useAppOpenPing';
 import { installMediaLifecycle, stopMediaUnlessCameraPath } from '@/lib/cameraSession';
-import { peekPendingInviteToken } from '@/lib/challengeInvites';
-import { inviteHref } from '@/lib/routes';
+import { peekPendingInvite } from '@/lib/challengeInvites';
+import { challengeInviteHref, inviteHref } from '@/lib/routes';
 import { FEED_COLUMN_MAX, THEME } from '@/lib/theme';
 import { queryClient } from '@/lib/queryClient';
 import { paymentsProviderError } from '@/services/payments';
@@ -242,6 +242,8 @@ function RecoveryRedirect({ ready, active }: { ready: boolean; active: boolean }
 function PendingInviteRedirect({ ready }: { ready: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
+  const params = useGlobalSearchParams<{ invite?: string | string[] }>();
+  const inviteParam = Array.isArray(params.invite) ? params.invite[0] : params.invite;
   const redirecting = useRef(false);
 
   useEffect(() => {
@@ -251,21 +253,39 @@ function PendingInviteRedirect({ ready }: { ready: boolean }) {
     if (pathname.startsWith('/invite')) {
       return;
     }
+    if (pathname.includes('/challenges/') && String(inviteParam ?? '').trim()) {
+      return;
+    }
+    if (
+      pathname.startsWith('/auth') ||
+      pathname.startsWith('/onboarding') ||
+      pathname.includes('/login') ||
+      pathname.includes('/register')
+    ) {
+      return;
+    }
     let cancelled = false;
-    void peekPendingInviteToken().then((token) => {
-      if (cancelled || !token) {
+    void peekPendingInvite().then((pending) => {
+      if (cancelled || !pending?.token) {
         return;
       }
       if (pathname.startsWith('/invite')) {
         return;
       }
+      if (pathname.includes('/challenges/') && String(inviteParam ?? '').trim()) {
+        return;
+      }
       redirecting.current = true;
-      router.replace(inviteHref(token));
+      router.replace(
+        pending.challengeId
+          ? challengeInviteHref(pending.challengeId, pending.token)
+          : inviteHref(pending.token),
+      );
     });
     return () => {
       cancelled = true;
     };
-  }, [pathname, ready, router]);
+  }, [inviteParam, pathname, ready, router]);
 
   return null;
 }

@@ -3,6 +3,12 @@ import * as Clipboard from 'expo-clipboard';
 import * as Linking from 'expo-linking';
 
 import { officialBob } from '@/copy/officialBob';
+import {
+  challengeInviteShareUrl,
+  needsInviteShareLink,
+} from '@/lib/challengeInviteShare';
+
+export { challengeInviteShareUrl, needsInviteShareLink };
 
 export function challengeShareUrl(challengeId: string): string {
   return Linking.createURL(`challenges/${challengeId}`);

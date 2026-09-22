@@ -1,5 +1,5 @@
 import { SharedTabs } from '@/components/ui/SharedTabs';
-import { canSeeCorporateLive } from '@/lib/privacyMode';
+import { canSeeChallengeLobby } from '@/lib/privacyMode';
 
 export { asChallengePageTab } from '@/lib/livePush';
 
@@ -24,8 +24,8 @@ export function challengeTabsForViewer(input: {
   if (input.isCalloutObserver) {
     return CHALLENGE_LIVE_ONLY_TABS;
   }
-  if (!canSeeCorporateLive(input)) {
-    return CHALLENGE_PAGE_TABS.filter((tab) => tab.value !== 'feed');
+  if (!canSeeChallengeLobby(input)) {
+    return CHALLENGE_PAGE_TABS.filter((tab) => tab.value === 'overview');
   }
   return CHALLENGE_PAGE_TABS;
 }

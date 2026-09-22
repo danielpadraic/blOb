@@ -19,6 +19,8 @@ import { useMyCircles } from '@/hooks/useCircles';
 import { useCreatePost } from '@/hooks/useFeed';
 import { challengeAnnounceCopy } from '@/lib/challengeFeedPost';
 import { copy } from '@/lib/copy';
+import { mintChallengeInviteLink } from '@/lib/challengeInvites';
+import { challengeInviteShareUrl, needsInviteShareLink } from '@/lib/challengeInviteShare';
 import { challengeShareUrl } from '@/lib/officialShare';
 import { isPrivateCorporate } from '@/lib/privacyMode';
 import type { PostAudience } from '@/lib/postAudience';
@@ -83,6 +85,13 @@ export function InviteHost({ children }: { children: ReactNode }) {
       return;
     }
     try {
+      if (needsInviteShareLink(target.privacyMode)) {
+        const minted = await mintChallengeInviteLink(target.challengeId);
+        await Clipboard.setStringAsync(challengeInviteShareUrl(target.challengeId, minted.token));
+        close();
+        showToast(copy('challenge.inviteCopied'));
+        return;
+      }
       await Clipboard.setStringAsync(challengeShareUrl(target.challengeId));
       close();
       showToast('Link copied.');
@@ -125,7 +134,9 @@ export function InviteHost({ children }: { children: ReactNode }) {
             {target?.challengeTitle ?? 'this challenge'}
           </AppText>
           <View className="gap-2">
-            <Button title="Share to feed" size="lg" onPress={() => setPanel('feed')} />
+            {corporateBlocked ? null : (
+              <Button title="Share to feed" size="lg" onPress={() => setPanel('feed')} />
+            )}
             {target?.allowSendToPeople !== false ? (
               <Button
                 title="Send to people"

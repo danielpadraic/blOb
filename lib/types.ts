@@ -2464,6 +2464,10 @@ export type Database = {
         Args: { p_challenge_id: string };
         Returns: CreateChallengeInviteResult;
       };
+      mint_challenge_invite_link: {
+        Args: { p_challenge_id: string };
+        Returns: CreateChallengeInviteResult;
+      };
       accept_challenge_invite: {
         Args: { p_token: string };
         Returns: AcceptChallengeInviteResult;

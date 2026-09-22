@@ -5,6 +5,7 @@ import {
   LOCKED_AFTER_JOIN_FIELDS,
   PRIVACY_MODE_LOCKED_MESSAGE,
   canChangePrivacyMode,
+  canSeeChallengeLobby,
   canSeeCorporateLive,
   contentAudienceForPrivacyMode,
   corporateIdsFromLookup,
@@ -94,6 +95,29 @@ describe('corporate containment helpers', () => {
     expect(
       corporateIdsFromLookup(['corp'], [{ id: 'corp', privacy_mode: 'private_corporate' }]).has('corp'),
     ).toBe(true);
+  });
+
+  it('keeps Live and Board closed until a private invitee is on the roster', () => {
+    expect(
+      canSeeChallengeLobby({
+        privacyMode: 'private_corporate',
+        isParticipant: false,
+        isHost: false,
+      }),
+    ).toBe(false);
+    expect(
+      canSeeChallengeLobby({
+        privacyMode: 'private',
+        isParticipant: false,
+      }),
+    ).toBe(false);
+    expect(
+      canSeeChallengeLobby({
+        privacyMode: 'private_corporate',
+        isParticipant: true,
+      }),
+    ).toBe(true);
+    expect(canSeeChallengeLobby({ privacyMode: 'public', isParticipant: false })).toBe(true);
   });
 
   it('keeps Live closed for invited-not-joined Corporate viewers', () => {

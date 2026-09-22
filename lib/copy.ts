@@ -265,6 +265,8 @@ const STRINGS = {
   'geo.cashOutSoon': 'Cash out isn’t available yet.',
   'challenge.privateWallTitle': 'Private challenge',
   'challenge.privateWall': 'This is a private challenge. Only competitors can open it.',
+  'challenge.inviteClosed': 'This invite is no longer open.',
+  'challenge.inviteCopied': 'Invite link copied.',
   'feed.checkedIn': 'Checked in ·',
   'friends.loading': {
     gentle: 'Finding your people.',

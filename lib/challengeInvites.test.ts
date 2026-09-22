@@ -53,6 +53,11 @@ describe('pending invite token', () => {
       params: { token: 'pinnacle-token' },
     });
 
+    await stashPendingInviteToken('pinnacle-token', '16af3e82-aaaa-bbbb-cccc-ddddeeeeffff');
+    expect(await pendingInviteResumeHref()).toBe(
+      '/challenges/16af3e82-aaaa-bbbb-cccc-ddddeeeeffff?invite=pinnacle-token',
+    );
+
     await clearPendingInviteToken();
     expect(await peekPendingInviteToken()).toBeNull();
     expect(data[WEB_KEY]).toBeUndefined();

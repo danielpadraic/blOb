@@ -366,6 +366,12 @@ export function inviteHref(token: string) {
   };
 }
 
+export function challengeInviteHref(challengeId: string, token: string) {
+  const id = String(challengeId ?? '').trim();
+  const invite = String(token ?? '').trim();
+  return `/challenges/${id}?invite=${encodeURIComponent(invite)}` as const;
+}
+
 export const CAPTURE_HREF = '/capture' as const;
 
 /** Query `mode` stays `story` | `reel` | `post` so capture URLs stay stable. User-facing names are Wave / Round / post. */

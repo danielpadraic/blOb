@@ -175,11 +175,15 @@ export function getInviteAcceptMessage(error: unknown): string {
   const raw = extractRawMessage(error);
   const text = getErrorMessage(error);
   const blob = `${text} ${raw}`.toLowerCase();
-  if (blob.includes('expired')) {
-    return 'This invite has expired.';
-  }
-  if (blob.includes('invite_revoked') || blob.includes('invite is no longer valid') || /\brevoked\b/.test(blob)) {
-    return 'That invite is no longer valid.';
+  if (
+    blob.includes('invite_closed') ||
+    blob.includes('no longer open') ||
+    blob.includes('expired') ||
+    blob.includes('invite_revoked') ||
+    blob.includes('invite is no longer valid') ||
+    /\brevoked\b/.test(blob)
+  ) {
+    return 'This invite is no longer open.';
   }
   if (
     blob.includes('already_joined') ||
@@ -196,7 +200,7 @@ export function getInviteAcceptMessage(error: unknown): string {
     return 'This invite isn’t available.';
   }
   if (blob.includes('invite_used') || blob.includes('already used')) {
-    return 'That invite was already used.';
+    return 'This invite is no longer open.';
   }
   if (
     blob.includes('invite_not_found') ||
@@ -204,10 +208,10 @@ export function getInviteAcceptMessage(error: unknown): string {
     blob.includes('invalid link') ||
     blob.includes('missing an invite token')
   ) {
-    return 'That invite link is not valid.';
+    return 'This invite is no longer open.';
   }
   if (/postgres|pgrst|sqlstate|p0001|42883|22p02/i.test(blob) || !text) {
-    return 'That invite link is not valid.';
+    return 'This invite is no longer open.';
   }
   return text;
 }

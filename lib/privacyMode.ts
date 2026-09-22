@@ -111,6 +111,25 @@ export function canChangePrivacyMode(input: {
   return { ok: false, message: PRIVACY_MODE_LOCKED_MESSAGE };
 }
 
+/** Live / Board stay closed until the person is on the roster (or host / mod / @blob). */
+export function canSeeChallengeLobby(input: {
+  privacyMode?: string | null;
+  isParticipant?: boolean | null;
+  isHost?: boolean | null;
+  isMod?: boolean | null;
+  isOps?: boolean | null;
+  isCalloutObserver?: boolean | null;
+}): boolean {
+  if (input.isCalloutObserver) {
+    return true;
+  }
+  const mode = String(input.privacyMode ?? '').toLowerCase();
+  if (mode !== 'private' && mode !== 'private_corporate') {
+    return true;
+  }
+  return Boolean(input.isParticipant || input.isHost || input.isMod || input.isOps);
+}
+
 /** Live stays closed for invited-not-joined Corporate viewers. */
 export function canSeeCorporateLive(input: {
   privacyMode?: string | null;

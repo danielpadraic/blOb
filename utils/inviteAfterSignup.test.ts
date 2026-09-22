@@ -18,9 +18,9 @@ describe('private corporate invite after signup', () => {
     expect(invites).toMatch(/peekPendingInviteToken/);
     expect(invites).toMatch(/clearPendingInviteToken/);
     expect(setup).toMatch(/pendingInviteResumeHref/);
-    expect(layout).toMatch(/peekPendingInviteToken/);
+    expect(layout).toMatch(/peekPendingInvite/);
     expect(layout).not.toMatch(/takePendingInviteToken/);
-    expect(layout).not.toMatch(/pathname.startsWith\('\/challenges'\)/);
+    expect(layout).toMatch(/\/challenges\//);
     expect(screen).toMatch(/stashPendingInviteToken\(token\)/);
     expect(screen).toMatch(/accept\.mutate\(token/);
     expect(screen).toMatch(/tab: 'overview'/);

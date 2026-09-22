@@ -2,6 +2,7 @@ import * as Linking from 'expo-linking';
 
 import {
   clearPendingInviteToken,
+  peekPendingInvite,
   peekPendingInviteToken,
   pendingInviteResumeHref,
   stashPendingInviteToken,
@@ -18,6 +19,7 @@ import { getErrorMessage, getInviteAcceptMessage, isMissingRelationError } from 
 
 export {
   clearPendingInviteToken,
+  peekPendingInvite,
   peekPendingInviteToken,
   pendingInviteResumeHref,
   stashPendingInviteToken,
@@ -40,6 +42,22 @@ export async function createChallengeInvite(
   const row = (Array.isArray(data) ? data[0] : data) as CreateChallengeInviteResult | null;
   if (!row?.token) {
     throw new Error('Couldn’t create an invite link.');
+  }
+  return row;
+}
+
+export async function mintChallengeInviteLink(
+  challengeId: string,
+): Promise<CreateChallengeInviteResult> {
+  const { data, error } = await supabase.rpc('mint_challenge_invite_link', {
+    p_challenge_id: challengeId,
+  });
+  if (error) {
+    throw new Error(getErrorMessage(error));
+  }
+  const row = (Array.isArray(data) ? data[0] : data) as CreateChallengeInviteResult | null;
+  if (!row?.token) {
+    throw new Error('Couldn’t copy that invite.');
   }
   return row;
 }

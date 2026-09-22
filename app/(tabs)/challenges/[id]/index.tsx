@@ -105,7 +105,9 @@ import { usePeriodCompletions } from '@/hooks/useWorkoutSubmission';
 import { ChallengePageTabs, challengeTabsForViewer, asChallengePageTab, type ChallengePageTab } from '@/components/challenge/ChallengePageTabs';
 import { challengeMentionMemberIds, fetchChallengeModeratorIds } from '@/lib/challengeMods';
 import { useOfficialOps } from '@/hooks/useOfficialOps';
-import { canSeeCorporateLive } from '@/lib/privacyMode';
+import { useChallengeInviteLink, inviteTokenFromParam } from '@/hooks/useChallengeInviteLink';
+import { canSeeChallengeLobby, canSeeCorporateLive } from '@/lib/privacyMode';
+import { needsInviteShareLink } from '@/lib/challengeInviteShare';
 import { LiveAlertsButton } from '@/components/challenge/LiveMuteSheet';
 import { TourAnchor } from '@/components/tour/TourAnchor';
 import { useContextualTour } from '@/components/tour/useContextualTour';
@@ -289,6 +291,7 @@ export default function ChallengeDetailScreen() {
     tab?: string;
     receipt?: string;
     notice?: string;
+    invite?: string;
   }>();
   const routeParam = firstRouteParam(params.id);
   const { id, waiting: waitingForId } = useStableChallengeRouteId(routeParam);
@@ -300,6 +303,7 @@ export default function ChallengeDetailScreen() {
   const noticeParam = Array.isArray(params.notice) ? params.notice[0] : params.notice;
   const loggedParam = Array.isArray(params.logged) ? params.logged[0] : params.logged;
   const fundedParam = Array.isArray(params.funded) ? params.funded[0] : params.funded;
+  const inviteToken = inviteTokenFromParam(params.invite);
   const router = useRouter();
   const navigation = useNavigation();
   const pathname = usePathname();
@@ -308,6 +312,7 @@ export default function ChallengeDetailScreen() {
   const { user } = useAuth();
   const { profile, refetch: refetchProfile } = useMyProfile();
   const wallet = useWalletOptional();
+  const inviteLink = useChallengeInviteLink(id || undefined, inviteToken);
   const challengeQuery = useChallenge(id || undefined);
   const previewQuery = useChallengeFeedPreview(id || undefined);
   const loadKind = challengeLoadKind(challengeQuery.error);
@@ -505,7 +510,7 @@ export default function ChallengeDetailScreen() {
     queryFn: () => fetchChallengeModeratorIds(id!),
   });
   const isMod = Boolean(user?.id && (modsQuery.data ?? []).includes(user.id));
-  const liveAllowed = canSeeCorporateLive({
+  const lobbyAllowed = canSeeChallengeLobby({
     privacyMode: challenge?.privacy_mode,
     isParticipant: isJoined,
     isHost,
@@ -513,6 +518,16 @@ export default function ChallengeDetailScreen() {
     isOps: officialOps,
     isCalloutObserver,
   });
+  const liveAllowed =
+    lobbyAllowed &&
+    canSeeCorporateLive({
+      privacyMode: challenge?.privacy_mode,
+      isParticipant: isJoined,
+      isHost,
+      isMod,
+      isOps: officialOps,
+      isCalloutObserver,
+    });
   const pageTabOptions = challengeTabsForViewer({
     privacyMode: challenge?.privacy_mode,
     isParticipant: isJoined,
@@ -522,10 +537,10 @@ export default function ChallengeDetailScreen() {
     isCalloutObserver,
   });
   useEffect(() => {
-    if (!liveAllowed && pageTab === 'feed' && !isCalloutObserver) {
+    if (!isCalloutObserver && !lobbyAllowed && pageTab !== 'overview') {
       setPageTab('overview');
     }
-  }, [isCalloutObserver, liveAllowed, pageTab]);
+  }, [isCalloutObserver, lobbyAllowed, pageTab]);
   const mentionMemberIds = useMemo(
     () =>
       challengeMentionMemberIds({
@@ -549,7 +564,8 @@ export default function ChallengeDetailScreen() {
     inviteHost?.open({
       challengeId: challenge.id,
       challengeTitle: challenge.title,
-      allowSendToPeople: isOfficialJoinable(challenge) || isHost,
+      allowSendToPeople:
+        needsInviteShareLink(challenge.privacy_mode) || isOfficialJoinable(challenge) || isHost,
       defaultAudience: challenge.visibility === 'friends' ? 'friends' : 'public',
       privacyMode: challenge.privacy_mode,
     });
@@ -881,6 +897,8 @@ export default function ChallengeDetailScreen() {
 
   const stillLoading =
     waitingForId ||
+    inviteLink.needsAuth ||
+    inviteLink.claiming ||
     (Boolean(id) && (challengeQuery.isLoading || challengeQuery.isFetching) && !challenge);
 
   if (stillLoading) {
@@ -905,10 +923,12 @@ export default function ChallengeDetailScreen() {
   }
 
   if (!challenge) {
+    const inviteClosed = Boolean(inviteToken && inviteLink.closed);
     const kind = loadKind ?? (challengeQuery.isError ? 'server' : 'unavailable');
-    const server = kind === 'server';
-    const title =
-      kind === 'geo'
+    const server = !inviteClosed && kind === 'server';
+    const title = inviteClosed
+      ? copy('challenge.inviteClosed')
+      : kind === 'geo'
         ? copy('geo.unavailable')
         : kind === 'private'
           ? copy('challenge.private')
@@ -1407,7 +1427,7 @@ export default function ChallengeDetailScreen() {
           <ChallengeLifecycleStatus status={challenge.status} />
         </View>
         ) : null}
-        {pageTab === 'overview' && !isCalloutObserver ? (
+        {pageTab === 'overview' && !isCalloutObserver && lobbyAllowed ? (
           <View className="mt-3">
             <ChallengeLeaderboard
               variant="compact"
@@ -1777,7 +1797,7 @@ export default function ChallengeDetailScreen() {
         </View>
         ) : null}
 
-        {pageTab === 'board' && !isCalloutObserver ? (
+        {pageTab === 'board' && !isCalloutObserver && lobbyAllowed ? (
           <View className="mt-4">
             {showAddPeople ? (
               <Pressable
