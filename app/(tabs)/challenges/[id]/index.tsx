@@ -124,10 +124,10 @@ import {
   usesTotalCountCheckins,
 } from '@/lib/challengeExperience';
 import { allowsMultiCheckin, usesPeriodCheckinGate } from '@/lib/loggable';
-import { methodLabel, proofDisplayName, signupProofLines } from '@/lib/challengeProofs';
+import { methodLabel, proofDisplayName } from '@/lib/challengeProofs';
 import { resolveTaskCadence, taskCadenceLabel } from '@/lib/taskCadence';
 import { parseLocationPlace } from '@/lib/locationProof';
-import { challengeRuleCopy } from '@/lib/challengeRuleCopy';
+import { challengeRuleCopy, challengeSignupLines } from '@/lib/challengeRuleCopy';
 import {
   challengeTargetCount,
   countLiveCompetitors,
@@ -1112,7 +1112,7 @@ export default function ChallengeDetailScreen() {
         }
       : null);
 
-  const signupLines = signupProofLines(challenge);
+  const signupLines = challengeSignupLines(challenge);
   const hideBuyIn =
     isTeacher3DayChallenge(challenge) ||
     (buyInAmount > 0 && (isBucksChallenge(challenge) || Boolean(challenge.host_funded)));

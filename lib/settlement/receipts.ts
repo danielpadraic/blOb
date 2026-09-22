@@ -62,12 +62,25 @@ export function nobodyFinishedRuleCopy(input?: {
   host_funded?: boolean | null;
   host_budget?: number | null;
   creator_contribution?: number | null;
+  prize_pool?: number | null;
+  prizePool?: number | null;
+  scoring_method?: string | null;
+  privacy_mode?: string | null;
+  comparable_points_config?: unknown;
 } | null): string | null {
   const buyIn = Math.max(Number(input?.buyInAmount ?? input?.buy_in_amount) || 0, 0) > 0;
-  const host =
-    Boolean(input?.hostFunded ?? input?.host_funded) ||
-    Math.max(Number(input?.hostBudget ?? input?.host_budget) || 0, 0) > 0 ||
-    Math.max(Number(input?.creatorContribution ?? input?.creator_contribution) || 0, 0) > 0;
+  const prize = Math.max(Number(input?.prizePool ?? input?.prize_pool) || 0, 0);
+  const hostBudget = Math.max(Number(input?.hostBudget ?? input?.host_budget) || 0, 0);
+  const contribution = Math.max(Number(input?.creatorContribution ?? input?.creator_contribution) || 0, 0);
+  const hostMoney = hostBudget > 0 || contribution > 0 || prize > 0;
+  const hostFlag = Boolean(input?.hostFunded ?? input?.host_funded);
+  const host = hostMoney && (hostFlag || hostBudget > 0 || contribution > 0);
+  const comparable =
+    input?.scoring_method === 'comparable_points' || input?.comparable_points_config != null;
+  const corporate = String(input?.privacy_mode ?? '') === 'private_corporate';
+  if ((comparable || corporate) && !buyIn && !hostMoney) {
+    return null;
+  }
   if (!buyIn && !host) {
     return null;
   }

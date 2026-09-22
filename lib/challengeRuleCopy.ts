@@ -1,4 +1,5 @@
-import { usesQuantityScoring, usesTotalCountCheckins } from '@/lib/challengeExperience';
+import { usesComparablePointsScoring, usesQuantityScoring, usesTotalCountCheckins } from '@/lib/challengeExperience';
+import { signupProofLines } from '@/lib/challengeProofs';
 import { boardQuantityProgress } from '@/lib/board/quantity';
 import { athleteDistanceUnit } from '@/lib/distance';
 import { challengeCumulativeProgress, cumulativeEligible, cumulativeTargetMeters } from '@/lib/cumulative';
@@ -45,6 +46,7 @@ type RuleChallenge = {
   cumulative_metric?: string | null;
   metrics?: unknown;
   title?: string | null;
+  description?: string | null;
 };
 
 export type ChallengeRuleCopy = {
@@ -417,11 +419,57 @@ function cadenceFromSentence(
   return null;
 }
 
+function storedRulesLookBroken(primary: string): boolean {
+  return (
+    /_/.test(primary) ||
+    /\d+\s*\/\s*(day|week|month)/i.test(primary) ||
+    /competitors must log/i.test(primary) ||
+    /any_exercise/i.test(primary)
+  );
+}
+
+/** Host description, then task. Never invent honor when either is set. */
+export function challengeSignupLines(challenge: RuleChallenge): string[] {
+  const description = (challenge.description ?? '').trim();
+  if (description) {
+    return description
+      .split(/\n\s*\n/)
+      .map((paragraph) => paragraph.trim())
+      .filter(Boolean);
+  }
+  const task = (challenge.task ?? '').trim();
+  if (task) {
+    return [task];
+  }
+  return signupProofLines(challenge);
+}
+
 export function challengeRuleCopy(challenge: RuleChallenge): ChallengeRuleCopy {
   const structured: RulesStructured | null =
     readStructured(challenge.rules_list) ?? readStructured(challenge.rules_structured);
   const storedTarget = Math.max(Number(challenge.target_count || challenge.days_required) || 1, 1);
   const unlimited = Boolean(challenge.is_unlimited);
+  const comparable = usesComparablePointsScoring(challenge);
+  const rulesText = (challenge.rules ?? '').trim();
+  const splitStored = rulesText ? splitRulesText(rulesText) : { primary: '', extras: [] };
+  if (comparable || (challenge.challenge_type === 'points' && !unlimited && rulesText && !storedRulesLookBroken(splitStored.primary))) {
+    const extras = mergeExtras(splitStored.primary, [
+      splitStored.extras,
+      structured?.extras.map((item) => item.text) ?? [],
+      extrasFromPayload(challenge.rules_list),
+      extrasFromPayload(challenge.rules_structured),
+    ]);
+    return {
+      primary: splitStored.primary || null,
+      extras,
+      cadenceLabel: comparable ? 'points' : `${storedTarget} points`,
+      cadenceLong: comparable ? 'score points' : `reach ${storedTarget} points`,
+      totalHint: null,
+      period: null,
+      count: storedTarget,
+      toFinish: comparable ? null : challengeTaskTitles(challenge).join(' · ') || null,
+    };
+  }
   if (challenge.challenge_type === 'points' && !unlimited) {
     const n = pointsToWinOf({
       points_to_win: challenge.target_count,
@@ -450,8 +498,7 @@ export function challengeRuleCopy(challenge: RuleChallenge): ChallengeRuleCopy {
       toFinish: challengeTaskTitles(challenge).join(' · ') || null,
     };
   }
-  const rulesText = (challenge.rules ?? '').trim();
-  const split = rulesText ? splitRulesText(rulesText) : { primary: '', extras: [] };
+  const split = splitStored;
 
   const fromSentence = cadenceFromSentence(split.primary || rulesText);
   const freq =

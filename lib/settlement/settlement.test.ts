@@ -332,6 +332,14 @@ describe('even-split remaining', () => {
     expect(nobodyFinishedRuleCopy({ hostFunded: true, hostBudget: 25 })).toBe(
       'If nobody finishes, the prize is returned to the host.',
     );
+    expect(
+      nobodyFinishedRuleCopy({
+        hostFunded: true,
+        prize_pool: 0,
+        scoring_method: 'comparable_points',
+        privacy_mode: 'private_corporate',
+      }),
+    ).toBeNull();
     expect(receiptHeadline({ joined: true, winnerCount: 0, voidKind: 'buyin' })).toBe(VOID_BUYIN_RECEIPT);
     expect(receiptHeadline({ joined: true, winnerCount: 0 })).toBe(FORFEIT_RECEIPT);
   });
