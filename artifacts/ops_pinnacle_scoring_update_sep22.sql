@@ -75,7 +75,7 @@
 -- 6. Open https://blob.mobi/challenges/16af3e82-15c0-479f-af52-328440b0c87e
 --    Sign in as @danielharder. Hard-refresh the page (hold Shift and click the
 --    reload arrow). The mechanics line must now read:
---    "2800 Dials with 8 Presentations equals 16,000 points, and $16,000 of AP
+--    "2,800 Dials with 8 Presentations equals 16,000 points, and $16,000 of AP
 --    equals 16,000 points."
 --    If you still see 3,500 or $13,000, refresh once more — the old page was
 --    cached.

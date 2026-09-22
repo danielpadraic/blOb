@@ -875,9 +875,10 @@ export function activityQtyPhrase(activity: ActivityConfig): string {
     return `${formatMoneySentenceAmount(activity.parity_qty)} of ${name}`;
   }
   if (unitCollidesWithName(activity.unit, name)) {
-    return `${formatQty(activity.parity_qty)} ${name}`;
+    return `${formatIncrementCount(activity.parity_qty)} ${name}`;
   }
-  return `${activityQtyLabel(activity)} of ${name}`;
+  const unit = activity.unit.trim() || 'units';
+  return `${formatIncrementCount(activity.parity_qty)} ${unit} of ${name}`;
 }
 
 function joinSentenceParts(parts: string[]): string {
@@ -978,7 +979,7 @@ export function comparablePointsLaneSubline(config: ComparablePointsConfig): str
 
 export function comparablePointsHeadline(config: ComparablePointsConfig): string {
   const count = filledComparableActivities(config).length || config.activities.length;
-  return `${count} ${count === 1 ? 'activity' : 'activities'} · ${formatPoints(config.parity_points)} pts at full value`;
+  return `${count} ${count === 1 ? 'activity' : 'activities'}`;
 }
 
 export function scoreWindowLabel(window: ScoreWindow | undefined): string {
@@ -1002,7 +1003,7 @@ export function comparablePointsLiveSentence(config: ComparablePointsConfig): st
     const threshold = fullValueMultiplierThreshold(activity);
     const label = activity.multiplier.label?.trim();
     const withMult =
-      threshold != null && label ? `${qty} with ${formatQty(threshold)} ${label}` : qty;
+      threshold != null && label ? `${qty} with ${formatIncrementCount(threshold)} ${label}` : qty;
     return `${withMult} equals ${pts}`;
   });
   return joinSentenceParts(parts);
