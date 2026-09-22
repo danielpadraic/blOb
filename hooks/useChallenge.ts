@@ -5,7 +5,7 @@ import { announceCreatedChallenge } from '@/lib/challengeFeedPost';
 import { notifyFriendsOfCreatedChallenge } from '@/lib/notifications';
 import { applyLaneForPublish } from '@/lib/challengeLane';
 import { parseComparablePointsConfig } from '@/lib/comparablePoints';
-import { asPrivacyMode } from '@/lib/privacyMode';
+import { asPrivacyMode, canChangePrivacyMode } from '@/lib/privacyMode';
 import { asLiveMute } from '@/lib/livePush';
 import { challengeScheduleTimezone, durationDaysFromValues, ensureSchedule, publishEndMode } from '@/lib/challengeSchedule';
 import {
@@ -1201,6 +1201,37 @@ export function useUpdateUserChallenge() {
         throw new Error(placeError);
       }
       const privacyMode = asPrivacyMode(values.privacy_mode, values.visibility, values.challenge_lane);
+      const existing = await supabase
+        .from('challenges')
+        .select('privacy_mode, visibility, challenge_lane, created_by')
+        .eq('id', challengeId)
+        .maybeSingle();
+      const oldPrivacy = asPrivacyMode(
+        existing.data?.privacy_mode,
+        existing.data?.visibility as string | null | undefined,
+        existing.data?.challenge_lane as string | null | undefined,
+      );
+      const { count: joinedCount } = await supabase
+        .from('challenge_participants')
+        .select('id', { count: 'exact', head: true })
+        .eq('challenge_id', challengeId);
+      const { count: acceptedInvites } = await supabase
+        .from('challenge_invites')
+        .select('id', { count: 'exact', head: true })
+        .eq('challenge_id', challengeId)
+        .eq('status', 'accepted')
+        .neq('invitee_id', existing.data?.created_by ?? user?.id ?? '');
+      const ops = await supabase.rpc('is_official_ops');
+      const privacyGate = canChangePrivacyMode({
+        current: oldPrivacy,
+        next: privacyMode,
+        participantCount: joinedCount ?? 0,
+        acceptedNonHostInvites: acceptedInvites ?? 0,
+        officialOps: ops.data === true,
+      });
+      if (!privacyGate.ok) {
+        throw new Error(privacyGate.message);
+      }
       const challenge = await updateUserChallenge(challengeId, {
         title: values.title.trim(),
         description: values.description?.trim() ? values.description.trim() : null,
@@ -1266,12 +1297,12 @@ export function useUpdateUserChallenge() {
         await publishScoringChange(challengeId, scoring);
       }
       if (user?.id) {
-        const ops = await supabase.rpc('is_official_ops');
         await persistPrivacyMode({
           challengeId,
           createdBy: user.id,
           next: privacyMode,
-          current: challenge.privacy_mode,
+          current: oldPrivacy,
+          participantCount: joinedCount ?? 0,
           officialOps: ops.data === true,
         });
       }

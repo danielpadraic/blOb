@@ -4,6 +4,9 @@ import {
   LOCKED_AFTER_JOIN_FIELDS,
   PRIVACY_MODE_LOCKED_MESSAGE,
   canChangePrivacyMode,
+  canSeeCorporateLive,
+  contentAudienceForPrivacyMode,
+  corporateIdsFromLookup,
   homeFeedAllowsChallengeContent,
   rejectLockedAfterJoinField,
 } from '@/lib/privacyMode';
@@ -53,5 +56,48 @@ describe('canChangePrivacyMode', () => {
         officialOps: true,
       }).ok,
     ).toBe(true);
+    expect(
+      canChangePrivacyMode({
+        current: 'private_corporate',
+        next: 'public',
+        participantCount: 0,
+        acceptedNonHostInvites: 1,
+      }).ok,
+    ).toBe(false);
+  });
+});
+
+describe('corporate containment helpers', () => {
+  it('writes challenge_only for Private Corporate', () => {
+    expect(contentAudienceForPrivacyMode('private_corporate')).toBe('challenge_only');
+  });
+
+  it('hides every requested id when the privacy lookup fails', () => {
+    expect(
+      [...corporateIdsFromLookup(['a', 'b'], null, true)].sort(),
+    ).toEqual(['a', 'b']);
+    expect(
+      [...corporateIdsFromLookup(['a', 'b'], [{ id: 'a', privacy_mode: 'public' }])].sort(),
+    ).toEqual(['b']);
+    expect(
+      corporateIdsFromLookup(['corp'], [{ id: 'corp', privacy_mode: 'private_corporate' }]).has('corp'),
+    ).toBe(true);
+  });
+
+  it('keeps Live closed for invited-not-joined Corporate viewers', () => {
+    expect(
+      canSeeCorporateLive({
+        privacyMode: 'private_corporate',
+        isParticipant: false,
+        isHost: false,
+      }),
+    ).toBe(false);
+    expect(
+      canSeeCorporateLive({
+        privacyMode: 'private_corporate',
+        isParticipant: true,
+      }),
+    ).toBe(true);
+    expect(canSeeCorporateLive({ privacyMode: 'public', isParticipant: false })).toBe(true);
   });
 });

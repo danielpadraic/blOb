@@ -1,5 +1,6 @@
 import { searchPeople } from '@/lib/social';
 import { resolvePostsSchema } from '@/lib/postsSelect';
+import { corporateIdsFromLookup } from '@/lib/privacyMode';
 import { supabase } from '@/lib/supabase';
 import type { Challenge, Post, PublicProfile } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
@@ -67,6 +68,7 @@ async function searchChallenges(like: string): Promise<SearchChallenge[]> {
     .select('id, title, is_official, visibility, status')
     .ilike('title', like)
     .or('visibility.eq.public,visibility.eq.friends,visibility.is.null,is_official.eq.true')
+    .neq('privacy_mode', 'private_corporate')
     .limit(8);
   if (error) {
     console.log('[blob:search] challenges', getErrorMessage(error));
@@ -87,7 +89,14 @@ async function searchPosts(like: string): Promise<Post[]> {
     console.log('[blob:search] posts', getErrorMessage(error));
     return [];
   }
-  return (data ?? []) as unknown as Post[];
+  const rows = (data ?? []) as unknown as Post[];
+  const challengeIds = rows.map((row) => row.challenge_id).filter(Boolean) as string[];
+  if (challengeIds.length === 0) {
+    return rows;
+  }
+  const lookup = await supabase.from('challenges').select('id, privacy_mode').in('id', challengeIds);
+  const hidden = corporateIdsFromLookup(challengeIds, lookup.data, Boolean(lookup.error));
+  return rows.filter((row) => !row.challenge_id || !hidden.has(row.challenge_id));
 }
 
 function countHashtags(posts: Post[], preferred?: string): SearchHashtag[] {

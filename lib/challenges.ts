@@ -1785,15 +1785,30 @@ export async function persistPrivacyMode(input: {
     logDev('[blob:create] privacy_mode skipped', readError.message);
     return;
   }
-  const current = asPrivacyMode(
-    row?.privacy_mode ?? input.current,
+  const stored = asPrivacyMode(
+    row?.privacy_mode,
     row?.visibility as string | null | undefined,
     row?.challenge_lane as string | null | undefined,
   );
+  const current =
+    input.current != null && String(input.current).trim() !== ''
+      ? asPrivacyMode(input.current)
+      : stored;
+  let acceptedNonHostInvites = 0;
+  if (participantCount < 1) {
+    const { count: inviteCount } = await supabase
+      .from('challenge_invites')
+      .select('id', { count: 'exact', head: true })
+      .eq('challenge_id', input.challengeId)
+      .eq('status', 'accepted')
+      .neq('invitee_id', input.createdBy);
+    acceptedNonHostInvites = inviteCount ?? 0;
+  }
   const gate = canChangePrivacyMode({
     current,
     next: input.next,
     participantCount,
+    acceptedNonHostInvites,
     officialOps: input.officialOps,
   });
   if (!gate.ok) {

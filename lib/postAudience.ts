@@ -1,4 +1,4 @@
-export type PostAudience = 'public' | 'friends' | 'specific' | 'only_me';
+export type PostAudience = 'public' | 'friends' | 'specific' | 'only_me' | 'challenge_only';
 export type DefaultPostAudience = 'public' | 'friends';
 
 export const POST_AUDIENCE_OPTIONS = [
@@ -19,7 +19,13 @@ export function asPostAudience(value: unknown): PostAudience {
   if (value === 'people') {
     return 'specific';
   }
-  if (value === 'public' || value === 'friends' || value === 'specific' || value === 'only_me') {
+  if (
+    value === 'public' ||
+    value === 'friends' ||
+    value === 'specific' ||
+    value === 'only_me' ||
+    value === 'challenge_only'
+  ) {
     return value;
   }
   return DEFAULT_POST_AUDIENCE;
@@ -80,7 +86,7 @@ export function viewerCanSeeHomePost(input: {
     return true;
   }
   const audience = asPostAudience(input.audience);
-  if (audience === 'only_me') {
+  if (audience === 'only_me' || audience === 'challenge_only') {
     return false;
   }
   if (viewerId && input.wallHostId && input.wallHostId === viewerId) {

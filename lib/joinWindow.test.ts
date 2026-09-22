@@ -65,7 +65,7 @@ describe('join until', () => {
     expect(joinChallengeGate(challenge, new Date('2026-09-12T16:00:00.000Z')).reason).toBe(
       'JOIN_CLOSED',
     );
-    expect(JOIN_CLOSED_COPY).toBe('Join closed.');
+    expect(JOIN_CLOSED_COPY).toBe('Sorry, this Challenge isn’t taking new people.');
   });
 
   it('keeps Official weekly filling/arming only', () => {

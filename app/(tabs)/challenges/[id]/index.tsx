@@ -101,7 +101,10 @@ import { useViewerPeriodMisses } from '@/hooks/usePeriodMisses';
 import { currentRequiredPeriodWindow } from '@/lib/checkinPeriod';
 import { challengeShowsMissBudget } from '@/lib/missDuty';
 import { usePeriodCompletions } from '@/hooks/useWorkoutSubmission';
-import { ChallengePageTabs, CHALLENGE_LIVE_ONLY_TABS, asChallengePageTab, type ChallengePageTab } from '@/components/challenge/ChallengePageTabs';
+import { ChallengePageTabs, challengeTabsForViewer, asChallengePageTab, type ChallengePageTab } from '@/components/challenge/ChallengePageTabs';
+import { fetchChallengeModeratorIds } from '@/lib/challengeMods';
+import { useOfficialOps } from '@/hooks/useOfficialOps';
+import { canSeeCorporateLive } from '@/lib/privacyMode';
 import { LiveAlertsButton } from '@/components/challenge/LiveMuteSheet';
 import { TourAnchor } from '@/components/tour/TourAnchor';
 import { useContextualTour } from '@/components/tour/useContextualTour';
@@ -485,6 +488,34 @@ export default function ChallengeDetailScreen() {
   const isJoined = Boolean(participation);
   const viewerOut = isViewerOutOfPrize(participation);
   const isHost = Boolean(challenge && user?.id && challenge.created_by === user.id);
+  const officialOps = useOfficialOps().data === true;
+  const modsQuery = useQuery({
+    queryKey: ['challenge-moderators', id],
+    enabled: Boolean(id && user?.id),
+    queryFn: () => fetchChallengeModeratorIds(id!),
+  });
+  const isMod = Boolean(user?.id && (modsQuery.data ?? []).includes(user.id));
+  const liveAllowed = canSeeCorporateLive({
+    privacyMode: challenge?.privacy_mode,
+    isParticipant: isJoined,
+    isHost,
+    isMod,
+    isOps: officialOps,
+    isCalloutObserver,
+  });
+  const pageTabOptions = challengeTabsForViewer({
+    privacyMode: challenge?.privacy_mode,
+    isParticipant: isJoined,
+    isHost,
+    isMod,
+    isOps: officialOps,
+    isCalloutObserver,
+  });
+  useEffect(() => {
+    if (!liveAllowed && pageTab === 'feed' && !isCalloutObserver) {
+      setPageTab('overview');
+    }
+  }, [isCalloutObserver, liveAllowed, pageTab]);
   const mentionMemberIds = useMemo(() => {
     const ids = new Set<string>();
     if (challenge?.created_by) {
@@ -1150,7 +1181,7 @@ export default function ChallengeDetailScreen() {
           <ChallengePageTabs
             value={pageTab}
             onChange={setPageTab}
-            options={isCalloutObserver ? CHALLENGE_LIVE_ONLY_TABS : undefined}
+            options={pageTabOptions}
           />
         </View>
         <LiveAlertsButton />
@@ -1175,7 +1206,7 @@ export default function ChallengeDetailScreen() {
           </AppText>
         </Pressable>
       ) : null}
-      {liveMounted ? (
+      {liveMounted && liveAllowed ? (
         <View
           collapsable={false}
           pointerEvents={pageTab === 'feed' ? 'auto' : 'none'}

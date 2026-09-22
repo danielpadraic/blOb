@@ -1,5 +1,5 @@
 import { asIdSet } from '@/lib/ids';
-import { homeFeedAllowsChallengeContent } from '@/lib/privacyMode';
+import { corporateIdsFromLookup } from '@/lib/privacyMode';
 import { supabase } from '@/lib/supabase';
 import type { StoryGroup } from '@/lib/social';
 import type { Story } from '@/types/social';
@@ -14,13 +14,9 @@ export async function fetchCorporateChallengeIds(ids: string[]): Promise<Set<str
   }
   const { data, error } = await supabase.from('challenges').select('id, privacy_mode').in('id', unique);
   if (error) {
-    return new Set();
+    return corporateIdsFromLookup(unique, null, true);
   }
-  return new Set(
-    (data ?? [])
-      .filter((row) => !homeFeedAllowsChallengeContent(row.privacy_mode))
-      .map((row) => row.id),
-  );
+  return corporateIdsFromLookup(unique, data);
 }
 
 export async function fetchHiddenRailPostIds(postIds: string[]): Promise<Set<string>> {

@@ -30,7 +30,7 @@ export default function InviteTokenScreen() {
     setActionError(null);
     accept.mutate(token, {
       onSuccess: (result) => {
-        router.replace(challengeDetailHref(result.challenge_id));
+        router.replace(challengeDetailHref(result.challenge_id, 'lobby', null, { tab: 'overview' }));
       },
       onError: (error) => {
         setActionError(getInviteAcceptMessage(error));

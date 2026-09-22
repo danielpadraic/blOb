@@ -1,6 +1,6 @@
 import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
 
-export const JOIN_CLOSED_COPY = 'Join closed.';
+export const JOIN_CLOSED_COPY = 'Sorry, this Challenge isn’t taking new people.';
 export const JOIN_OPEN_UNTIL_PREFIX = 'Join open until';
 
 export const JOIN_UNTIL_PRESETS = [

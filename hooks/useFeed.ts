@@ -25,7 +25,12 @@ import {
 } from '@/lib/feedListKeys';
 import { asQuoteSnapshot } from '@/lib/quotePost';
 import { isClipSharePost } from '@/lib/roundShare';
-import { homeFeedAllowsChallengeContent } from '@/lib/privacyMode';
+import {
+  asPrivacyMode,
+  contentAudienceForPrivacyMode,
+  corporateIdsFromLookup,
+  isPrivateCorporate,
+} from '@/lib/privacyMode';
 import { DEFAULT_POST_AUDIENCE, viewerCanSeeHomePost, type PostAudience } from '@/lib/postAudience';
 import { reportAppError } from '@/lib/appErrors';
 import { fetchLiftSession } from '@/lib/lift/api';
@@ -765,10 +770,14 @@ function viewerCanSeeProfilePost(
     friendsWithAuthor: boolean;
     officialAuthor: boolean;
     hidden: Set<string>;
+    corporateIds?: Set<string>;
   },
 ): boolean {
   const hidden = asIdSet(input.hidden);
   if (hidden.has(post.id)) {
+    return false;
+  }
+  if (post.challenge_id && asIdSet(input.corporateIds).has(post.challenge_id)) {
     return false;
   }
   if (post.hidden_from_home && post.author_id !== input.viewerId) {
@@ -903,13 +912,9 @@ async function fetchCorporateChallengeIds(ids: string[]): Promise<Set<string>> {
   const { data, error } = await supabase.from('challenges').select('id, privacy_mode').in('id', unique);
   if (error) {
     console.log('[blob:feed] privacy lookup skipped', error.message);
-    return new Set();
+    return corporateIdsFromLookup(unique, null, true);
   }
-  return new Set(
-    (data ?? [])
-      .filter((row) => !homeFeedAllowsChallengeContent(row.privacy_mode))
-      .map((row) => row.id),
-  );
+  return corporateIdsFromLookup(unique, data);
 }
 
 async function fetchOfficialAuthorIds(): Promise<string[]> {
@@ -1149,13 +1154,15 @@ async function fetchHomeFeedPage(input: {
       break;
     }
     const preview = await hydrateCircles(scanned);
-    let corporateIds = new Set<string>();
+    const previewChallengeIds = preview
+      .map((post) => post.challenge_id)
+      .filter((id): id is string => Boolean(id));
+    let corporateIds = corporateIdsFromLookup(previewChallengeIds, null, true);
     try {
-      corporateIds = await fetchCorporateChallengeIds(
-        preview.map((post) => post.challenge_id).filter((id): id is string => Boolean(id)),
-      );
+      corporateIds = await fetchCorporateChallengeIds(previewChallengeIds);
     } catch (error) {
       console.log('[blob:feed]', rawFeedError(error));
+      corporateIds = corporateIdsFromLookup(previewChallengeIds, null, true);
     }
     let fofAuthors = new Set<string>();
     try {
@@ -1201,13 +1208,14 @@ async function fetchHomeFeedPage(input: {
   }
 
   const preview = scanned.length > 0 ? await hydrateCircles(scanned) : [];
-  let corporateIds = new Set<string>();
+  const previewChallengeIds = preview
+    .map((post) => post.challenge_id)
+    .filter((id): id is string => Boolean(id));
+  let corporateIds = corporateIdsFromLookup(previewChallengeIds, null, true);
   try {
-    corporateIds = await fetchCorporateChallengeIds(
-      preview.map((post) => post.challenge_id).filter((id): id is string => Boolean(id)),
-    );
+    corporateIds = await fetchCorporateChallengeIds(previewChallengeIds);
   } catch {
-    corporateIds = new Set();
+    corporateIds = corporateIdsFromLookup(previewChallengeIds, null, true);
   }
   let fofAuthors = new Set<string>();
   try {
@@ -1573,12 +1581,13 @@ export function useAuthorFeed(authorId?: string | null) {
         }
       }
       const rows = dedupePosts([authored, wall]);
-      const [hiddenIds, friendIds, officialIds, mutedIds, blockedIds] = await Promise.all([
+      const [hiddenIds, friendIds, officialIds, mutedIds, blockedIds, corporateIds] = await Promise.all([
         user?.id ? fetchHiddenPostIds(user.id) : Promise.resolve([] as string[]),
         user?.id ? friendIdsForUser(user.id) : Promise.resolve([] as string[]),
         fetchOfficialAuthorIds(),
         user?.id ? fetchMutedUserIds(user.id) : Promise.resolve([] as string[]),
         user?.id ? fetchBlockedUserIds(user.id) : Promise.resolve([] as string[]),
+        fetchCorporateChallengeIds(rows.map((post) => post.challenge_id).filter(Boolean) as string[]),
       ]);
       const hidden = asIdSet(hiddenIds);
       const friends = asIdSet(friendIds, user?.id);
@@ -1594,6 +1603,7 @@ export function useAuthorFeed(authorId?: string | null) {
             friendsWithAuthor: friends.has(post.author_id),
             officialAuthor: official.has(post.author_id),
             hidden,
+            corporateIds,
           }),
       );
       return hydrateAuthors(await withSocial(visible, user?.id));
@@ -1798,10 +1808,20 @@ export function useCreatePost(challengeId?: string | null) {
       }
       const content = input.content.trim();
       const media_urls = input.mediaUrls?.filter(Boolean) ?? [];
-      const audience = input.audience ?? DEFAULT_POST_AUDIENCE;
+      let audience = input.audience ?? DEFAULT_POST_AUDIENCE;
       const audience_user_ids = audience === 'specific' ? (input.audienceUserIds ?? []) : [];
       const quoted_post_id = input.quotedPostId ?? null;
       const attachedId = input.challengeId ?? challengeId ?? null;
+      if (attachedId) {
+        const room = await supabase
+          .from('challenges')
+          .select('privacy_mode')
+          .eq('id', attachedId)
+          .maybeSingle();
+        if (isPrivateCorporate(room.data?.privacy_mode)) {
+          audience = contentAudienceForPrivacyMode(asPrivacyMode(room.data?.privacy_mode));
+        }
+      }
       const circleId = input.circleId ?? null;
       if (attachedId && circleId && input.type !== 'circle_challenge_share') {
         throw new Error('A post can’t belong to a challenge and a Circle.');

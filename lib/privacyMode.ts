@@ -95,15 +95,59 @@ export function canChangePrivacyMode(input: {
   current: PrivacyMode;
   next: PrivacyMode;
   participantCount: number;
+  acceptedNonHostInvites?: number;
   officialOps?: boolean | null;
 }): { ok: true } | { ok: false; message: string } {
   if (input.current === input.next) {
     return { ok: true };
   }
-  if (input.officialOps || input.participantCount < 1) {
+  const joined =
+    input.participantCount >= 1 || (input.acceptedNonHostInvites ?? 0) >= 1;
+  if (input.officialOps || !joined) {
     return { ok: true };
   }
   return { ok: false, message: PRIVACY_MODE_LOCKED_MESSAGE };
+}
+
+/** Live stays closed for invited-not-joined Corporate viewers. */
+export function canSeeCorporateLive(input: {
+  privacyMode?: string | null;
+  isParticipant?: boolean | null;
+  isHost?: boolean | null;
+  isMod?: boolean | null;
+  isOps?: boolean | null;
+  isCalloutObserver?: boolean | null;
+}): boolean {
+  if (input.isCalloutObserver) {
+    return true;
+  }
+  if (!isPrivateCorporate(input.privacyMode)) {
+    return true;
+  }
+  return Boolean(input.isParticipant || input.isHost || input.isMod || input.isOps);
+}
+
+/** Lookup miss or error hides every requested id — never an empty hide-list. */
+export function corporateIdsFromLookup(
+  requested: string[],
+  rows: { id?: string | null; privacy_mode?: string | null }[] | null | undefined,
+  failed?: boolean,
+): Set<string> {
+  const ids = [...new Set(requested.filter(Boolean))];
+  if (ids.length === 0) {
+    return new Set();
+  }
+  if (failed) {
+    return new Set(ids);
+  }
+  const found = new Map(
+    (rows ?? [])
+      .filter((row) => row?.id)
+      .map((row) => [String(row.id), row.privacy_mode]),
+  );
+  return new Set(
+    ids.filter((id) => !found.has(id) || !homeFeedAllowsChallengeContent(found.get(id))),
+  );
 }
 
 /** After someone joins, reject the tap and keep the saved value. One-line error. */

@@ -192,6 +192,9 @@ export function getInviteAcceptMessage(error: unknown): string {
   if (blob.includes('not_invited') || blob.includes('not invited')) {
     return 'This challenge is private. Ask the host for an invite.';
   }
+  if (blob.includes('isn’t available') || blob.includes('isn\'t available') || blob.includes('blocked')) {
+    return 'This invite isn’t available.';
+  }
   if (blob.includes('invite_used') || blob.includes('already used')) {
     return 'That invite was already used.';
   }
