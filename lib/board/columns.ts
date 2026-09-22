@@ -7,7 +7,7 @@ export const BOARD_ADJUST_COL = 44;
 export const BOARD_CHEVRON_COL = 22;
 export const BOARD_SIDE_COL = 62;
 export const BOARD_PTS_COL = 54;
-export const BOARD_MEDAL = 28;
+export const BOARD_MEDAL = 22;
 export const BOARD_GAP = 6;
 export const BOARD_NAME_GAP = 8;
 export const BOARD_ROW_MIN = 48;
@@ -148,15 +148,10 @@ export function boardMedalWash(tone: BoardMedalTone | null | undefined): string 
   return undefined;
 }
 
-/** First paint: ranks 1–3 open on comparable / points Boards. */
+/** First paint: every standing row is collapsed, including 1–3. */
 export function initialExpandedBoardIds(
-  rows: { userId: string; rank: number | null; bucket?: string }[],
-  kind: 'points' | 'other',
+  _rows?: { userId: string; rank: number | null; bucket?: string }[],
+  _kind?: 'points' | 'other',
 ): string[] {
-  if (kind !== 'points') {
-    return [];
-  }
-  return rows
-    .filter((row) => row.bucket !== 'dropped' && row.rank != null && row.rank <= 3)
-    .map((row) => row.userId);
+  return [];
 }

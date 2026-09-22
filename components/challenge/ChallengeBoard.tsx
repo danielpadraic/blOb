@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Image, Pressable, View } from 'react-native';
+import { useMemo, useState, type ReactNode } from 'react';
+import { Image, Platform, Pressable, ScrollView, View } from 'react-native';
 
 import { ChallengeLifecycleStatus } from '@/components/challenge/ChallengeLifecycleStatus';
 import { MissBudgetLines } from '@/components/challenge/MissBudgetLines';
@@ -28,16 +28,16 @@ import {
   BOARD_SIDE_COL,
   boardColumnWidth,
   boardEmptyCopy,
-  boardHeaderSharesDetailsRow,
   boardLaneSideTotals,
   boardStatusHeaderLine,
   boardMedalTone,
   boardMedalWash,
   boardStatKind,
   boardQuantityProgress,
+  type BoardLaneSideTotal,
   type BoardStatKind,
-  initialExpandedBoardIds,
   boardRowTag,
+  pluralizeLaneLabel,
   boardSettledCopy,
   buildBoard,
   formatBoardNestedQty,
@@ -200,18 +200,6 @@ export function ChallengeBoard({
       ),
     [pointsBoard, quantityBoard, rankedPeople],
   );
-  const seededChallenge = useRef<string | null>(null);
-  useEffect(() => {
-    if (compact || seededChallenge.current === challenge.id) {
-      return;
-    }
-    if (rows.length === 0) {
-      return;
-    }
-    seededChallenge.current = challenge.id;
-    const kind = pointsBoard || comparableColumns.length > 0 ? 'points' : 'other';
-    setOpenIds(new Set(initialExpandedBoardIds(rows, kind)));
-  }, [challenge.id, compact, comparableColumns.length, pointsBoard, rows]);
   const participantById = useMemo(() => {
     const map = new Map<string, ChallengeParticipantWithProfile>();
     for (const row of roster ?? []) {
@@ -231,34 +219,21 @@ export function ChallengeBoard({
         : [],
     [participantById, rows, scoringLanes],
   );
-  const headerFormat =
-    quantityBoard ? 'quantity' : scoringLanes.length > 0 ? 'lanes' : pointsBoard ? 'points' : 'consistency';
+  const hasLaneScoreboard = scoringLanes.length >= 1;
+  const headerFormat = quantityBoard ? 'quantity' : pointsBoard ? 'points' : 'consistency';
   const leadingScore = racing.reduce((max, row) => Math.max(max, Number(row.points) || 0), 0);
-  const headerPlain = boardStatusHeaderLine({
-    format: headerFormat,
-    racingCount: racing.length,
-    leadingScore,
-    remainingCount: view.remainingCount,
-    caughtUpCount: view.caughtUpCount,
-    droppedCount: view.droppedCount,
-    inCount,
-    doneCount,
-    laneTotals,
-  });
-  const headerPrefixed =
-    headerFormat === 'lanes'
-      ? boardStatusHeaderLine({
-          format: 'lanes',
-          racingCount: racing.length,
-          laneTotals,
-          sidesPrefix: true,
-        })
-      : headerPlain;
-  const headerLine = boardHeaderSharesDetailsRow(headerPrefixed, hasNested, compact)
-    ? headerPrefixed
-    : headerPlain;
-  const headerOnOwnRow =
-    headerFormat === 'lanes' && hasNested && !boardHeaderSharesDetailsRow(headerLine, true, compact);
+  const headerLine = hasLaneScoreboard
+    ? ''
+    : boardStatusHeaderLine({
+        format: headerFormat,
+        racingCount: racing.length,
+        leadingScore,
+        remainingCount: view.remainingCount,
+        caughtUpCount: view.caughtUpCount,
+        droppedCount: view.droppedCount,
+        inCount,
+        doneCount,
+      });
   const allDetailsOpen = hasNested && racingIds.length > 0 && racingIds.every((id) => openIds.has(id));
   const quantityUnit =
     [...progressByUser.values()].find((item) => item?.unit)?.unit || 'mi';
@@ -341,176 +316,111 @@ export function ChallengeBoard({
     </Pressable>
   ) : null;
 
-  const table = view.empty ? (
+  const standingRows = view.empty ? (
     <MascotState kind="empty" compact title={boardEmptyCopy(view)} />
   ) : (
-    <View>
-      <BoardHeaderRow
-        compact={compact}
-        hasSide={scoringLanes.length > 0}
-        scoreHeader={scoreHeader}
-        scoreWidth={scoreWidth}
-        hasChevron={hasNested}
-        showAdjust={showAdjustCol}
-      />
-      {rows.map((row) => {
-        const participant = participantById.get(row.userId);
-        const needsLane = participantNeedsScoringLane(comparableConfig, participant?.scoring_lane);
-        const dropped = row.bucket === 'dropped';
-        const displayRank = row.rank == null || needsLane || dropped ? null : row.rank;
-        const progress = progressByUser.get(row.userId);
-        const score = needsLane
-          ? '—'
-          : quantityBoard
-            ? progress?.label?.trim() ||
-              (progress && progress.target > 0
-                ? `${formatBoardNestedQty(progress.logged)} / ${formatBoardNestedQty(progress.target)} ${progress.unit}`.trim()
-                : progress
-                  ? formatBoardNestedQty(progress.logged)
-                  : '0')
-            : consistencyBoard
-              ? `${Number(row.days) || 0}/${requiredDays}`
-              : formatBoardPoints(row.points);
-        const nested = nestedLines({
-          comparableColumns,
-          totals: participant?.metric_totals ?? null,
-          consistencyBoard,
-          quantityBoard,
-          days: Number(row.days) || 0,
-          requiredDays,
-          status: boardRowTag(row, view.settled, {
-            quantityDone: quantityBoard ? Boolean(progress?.done) : false,
-          }),
-          showMissLine,
-          missCap,
-          missesUsed,
-          progress,
-        });
-        return (
-          <BoardRankRow
-            key={row.userId}
-            compact={compact}
-            rank={displayRank == null ? '—' : String(displayRank)}
-            medal={dropped || needsLane ? null : boardMedalTone(displayRank)}
-            name={row.name}
-            you={row.you}
-            username={row.username}
-            userId={row.userId}
-            avatarUrl={row.avatarUrl}
-            muted={dropped}
-            hasSide={scoringLanes.length > 0}
-            side={
-              scoringLanes.length ? (
-                <ScoringLaneChip
-                  lanes={scoringLanes}
-                  laneId={participant?.scoring_lane}
-                  canAssign={canAssignLane}
-                  density="mark"
-                  busy={setLane.isPending}
-                  onAssign={(laneId) => setLane.mutate({ userId: row.userId, laneId })}
-                />
-              ) : null
-            }
-            score={score}
-            scoreWidth={scoreWidth}
-            expanded={openIds.has(row.userId)}
-            canExpand={hasNested && nested.length > 0}
-            nested={nested}
-            onToggle={() => toggleRow(row.userId)}
-            showAdjust={showAdjustCol}
-            participantStatus={participant?.status}
-          />
-        );
-      })}
-    </View>
+    rows.map((row) => {
+      const participant = participantById.get(row.userId);
+      const needsLane = participantNeedsScoringLane(comparableConfig, participant?.scoring_lane);
+      const dropped = row.bucket === 'dropped';
+      const displayRank = row.rank == null || needsLane || dropped ? null : row.rank;
+      const progress = progressByUser.get(row.userId);
+      const score = needsLane
+        ? '—'
+        : quantityBoard
+          ? progress?.label?.trim() ||
+            (progress && progress.target > 0
+              ? `${formatBoardNestedQty(progress.logged)} / ${formatBoardNestedQty(progress.target)} ${progress.unit}`.trim()
+              : progress
+                ? formatBoardNestedQty(progress.logged)
+                : '0')
+          : consistencyBoard
+            ? `${Number(row.days) || 0}/${requiredDays}`
+            : formatBoardPoints(row.points);
+      const nested = nestedLines({
+        comparableColumns,
+        totals: participant?.metric_totals ?? null,
+        consistencyBoard,
+        quantityBoard,
+        days: Number(row.days) || 0,
+        requiredDays,
+        status: boardRowTag(row, view.settled, {
+          quantityDone: quantityBoard ? Boolean(progress?.done) : false,
+        }),
+        showMissLine,
+        missCap,
+        missesUsed,
+        progress: progress ?? null,
+      });
+      return (
+        <BoardRankRow
+          key={row.userId}
+          compact={compact}
+          rank={displayRank == null ? '—' : String(displayRank)}
+          medal={dropped || needsLane ? null : boardMedalTone(displayRank)}
+          name={row.name}
+          you={row.you}
+          username={row.username}
+          userId={row.userId}
+          avatarUrl={row.avatarUrl}
+          muted={dropped}
+          hasSide={scoringLanes.length > 0}
+          side={
+            scoringLanes.length ? (
+              <ScoringLaneChip
+                lanes={scoringLanes}
+                laneId={participant?.scoring_lane}
+                canAssign={canAssignLane}
+                density="mark"
+                busy={setLane.isPending}
+                onAssign={(laneId) => setLane.mutate({ userId: row.userId, laneId })}
+              />
+            ) : null
+          }
+          score={score}
+          scoreWidth={scoreWidth}
+          expanded={openIds.has(row.userId)}
+          canExpand={hasNested && nested.length > 0}
+          nested={nested}
+          onToggle={() => toggleRow(row.userId)}
+          showAdjust={showAdjustCol}
+          participantStatus={participant?.status}
+        />
+      );
+    })
   );
 
-  if (compact) {
-    return (
-      <Card className="gap-2" style={{ padding: 12 }}>
-        {headerOnOwnRow ? (
-          <View className="gap-1">
-            <View className="flex-row items-center justify-end">{detailsControl}</View>
-            <AppText
-              className="text-[12px] font-semibold"
-              style={{ color: THEME.textMuted, fontVariant: ['tabular-nums'] }}>
-              {headerLine}
-            </AppText>
-          </View>
-        ) : (
-          <View className="flex-row items-center justify-between">
-            <AppText
-              className="text-[12px] font-semibold"
-              style={{ color: THEME.textMuted, ...flexChildMin(), fontVariant: ['tabular-nums'] }}>
-              {headerLine}
-            </AppText>
-            {detailsControl}
-          </View>
-        )}
-        {error ? (
-          <AppText className="text-sm leading-5 text-coral-dark">
-            Couldn’t load the board.{' '}
-            {error.includes('network') || error.includes('offline')
-              ? 'You’re offline. It will update when you’re back.'
-              : 'Try again.'}
-          </AppText>
-        ) : (
-          table
-        )}
-        {onOpenBoard ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open board"
-            onPress={onOpenBoard}
-            style={{ minHeight: 44, justifyContent: 'center' }}>
-            <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
-              View board
-            </AppText>
-          </Pressable>
-        ) : null}
-      </Card>
-    );
-  }
+  const columnHeader = view.empty ? null : (
+    <BoardHeaderRow
+      compact={compact}
+      hasSide={scoringLanes.length > 0}
+      scoreHeader={scoreHeader}
+      scoreWidth={scoreWidth}
+      hasChevron={hasNested}
+      showAdjust={showAdjustCol}
+    />
+  );
 
-  return (
-    <Card className="gap-3">
-      <View className="flex-row items-center justify-between">
-        <FieldNoteLabel
-          note={quantityBoard ? 'boardQuantity' : pointsBoard ? 'boardPoints' : 'board'}
-          textClassName="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
-          Board
-        </FieldNoteLabel>
-        <View className="flex-row items-center" style={{ gap: 8 }}>
-          <BoardBulkAdjustButton />
-          {isOfficialChallenge(challenge) ? (
-            <ChallengeLifecycleStatus compact status={challenge.status} />
-          ) : null}
-        </View>
-      </View>
-
-      {headerOnOwnRow ? (
-        <View className="gap-1">
-          <View className="flex-row items-center justify-end">{detailsControl}</View>
-          <AppText
-            className="text-[13px] font-semibold"
-            style={{ color: THEME.textMuted, fontVariant: ['tabular-nums'] }}>
-            {headerLine}
-          </AppText>
-        </View>
-      ) : (
-        <View className="flex-row items-center justify-between" style={{ gap: 8 }}>
-          <AppText
-            className="text-[13px] font-semibold"
-            style={{ color: THEME.textMuted, ...flexChildMin(), fontVariant: ['tabular-nums'] }}>
-            {headerLine}
-          </AppText>
-          {detailsControl}
-        </View>
+  const scoreboard = (
+    <Card padded={!hasLaneScoreboard} className="gap-3" style={hasLaneScoreboard ? { overflow: 'hidden', padding: 0 } : compact ? { padding: 12 } : undefined}>
+      {hasLaneScoreboard ? (
+        scoringLanes.length === 2 ? (
+          <VsScoreboard totals={laneTotals} compact={compact} />
+        ) : (
+          <LaneChipStrip totals={laneTotals} />
+        )
+      ) : headerLine ? (
+        <AppText
+          className="text-[13px] font-semibold"
+          style={{ color: THEME.textMuted, fontVariant: ['tabular-nums'] }}>
+          {headerLine}
+        </AppText>
+      ) : null}
+      {quantityBoard || pointsBoard || hasLaneScoreboard || compact ? null : (
+        <MissBudgetLines challenge={challenge} used={missesUsed} />
       )}
-      {quantityBoard ? null : <MissBudgetLines challenge={challenge} used={missesUsed} />}
-
       {view.settled ? (
-        <View className="gap-2">
+        <View className="gap-2" style={hasLaneScoreboard ? { padding: 16 } : undefined}>
           {settledCopy.showBob ? (
             <MascotState kind="success" compact title={settledCopy.title} body={settledCopy.body} />
           ) : (
@@ -541,10 +451,28 @@ export function ChallengeBoard({
           share={view.shareEstimate}
           prizePool={view.prizePool}
           joined={joined}
-          pointsBoard={pointsBoard}
+          pointsBoard={pointsBoard || hasLaneScoreboard}
+          padded={hasLaneScoreboard}
+          compact={compact}
         />
       )}
+    </Card>
+  );
 
+  const standings = (
+    <Card className="gap-2" style={compact ? { padding: 12, overflow: 'visible' } : { overflow: 'visible' }}>
+      <View className="flex-row items-center justify-between" style={{ gap: 8 }}>
+        <FieldNoteLabel
+          note={quantityBoard ? 'boardQuantity' : pointsBoard ? 'boardPoints' : 'board'}
+          textClassName="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+          Board
+        </FieldNoteLabel>
+        <View className="flex-row items-center" style={{ gap: 8 }}>
+          {compact ? null : <BoardBulkAdjustButton />}
+          {isOfficialChallenge(challenge) ? <ChallengeLifecycleStatus compact status={challenge.status} /> : null}
+          {detailsControl}
+        </View>
+      </View>
       {error ? (
         <AppText className="text-sm leading-5 text-coral-dark">
           Couldn’t load the board.{' '}
@@ -553,9 +481,21 @@ export function ChallengeBoard({
             : 'Try again.'}
         </AppText>
       ) : (
-        table
+        <StandingsBody header={columnHeader} freeze={!compact}>
+          {standingRows}
+        </StandingsBody>
       )}
-
+      {onOpenBoard ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open board"
+          onPress={onOpenBoard}
+          style={{ minHeight: 44, justifyContent: 'center' }}>
+          <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
+            View board
+          </AppText>
+        </Pressable>
+      ) : null}
       {view.settled && openReceipt && settlement ? (
         <SettlementSummary
           settlement={settlement}
@@ -573,6 +513,8 @@ export function ChallengeBoard({
       ) : null}
     </Card>
   );
+
+  return <View style={{ gap: compact ? 10 : 12 }}>{scoreboard}{standings}</View>;
 }
 
 function nestedLines(input: {
@@ -631,16 +573,27 @@ function ShareLine({
   prizePool,
   joined,
   pointsBoard,
+  padded = false,
+  compact = false,
 }: {
   challenge: Challenge;
   share: number;
   prizePool: number;
   joined: boolean;
   pointsBoard: boolean;
+  padded?: boolean;
+  compact?: boolean;
 }) {
   if (pointsBoard) {
     return (
-      <View className="flex-row items-center" style={{ gap: 12 }}>
+      <View
+        className="flex-row items-center"
+        style={{
+          gap: 12,
+          padding: padded ? 16 : 0,
+          borderTopWidth: padded ? 1 : 0,
+          borderTopColor: THEME.border,
+        }}>
         <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
           <FieldNoteLabel
             note="prizePool"
@@ -655,8 +608,8 @@ function ShareLine({
             zeroAsNumber
           />
         </View>
-        <View style={{ flexShrink: 0, backgroundColor: 'transparent' }}>
-          <BlobMascot variant="wave" size={72} />
+        <View style={{ flexShrink: 0, height: compact ? 72 : 80, justifyContent: 'center', backgroundColor: 'transparent' }}>
+          <BlobMascot variant="wave" size={compact ? 72 : 80} />
         </View>
       </View>
     );
@@ -726,23 +679,23 @@ function BoardHeaderRow({
         borderBottomColor: THEME.border,
       }}>
       <AppText
-        className="text-center text-[10px] font-semibold"
+        className="text-center text-[11px] font-semibold"
         style={{ width: BOARD_RANK_COL, flexShrink: 0, marginRight: BOARD_GAP, ...labelStyle }}>
         #
       </AppText>
       <View style={{ width: BOARD_AVATAR, flexShrink: 0, marginRight: BOARD_NAME_GAP }} />
-      <AppText className="text-[10px] font-semibold" style={{ flex: 1, ...flexChildMin(), marginRight: BOARD_GAP, ...labelStyle }}>
+      <AppText className="text-[11px] font-semibold" style={{ flex: 1, ...flexChildMin(), marginRight: BOARD_GAP, ...labelStyle }}>
         PLAYER
       </AppText>
       {hasSide ? (
         <AppText
-          className="text-[10px] font-semibold"
+          className="text-[11px] font-semibold"
           style={{ width: BOARD_SIDE_COL, flexShrink: 0, marginRight: BOARD_GAP, ...labelStyle }}>
           SIDE
         </AppText>
       ) : null}
       <AppText
-        className="text-[10px] font-semibold"
+        className="text-[11px] font-semibold"
         style={{ width: Math.max(BOARD_PTS_COL, scoreWidth), flexShrink: 0, textAlign: 'right', ...labelStyle }}>
         {scoreHeader.toUpperCase()}
       </AppText>
@@ -806,7 +759,7 @@ function BoardRankRow({
       style={{
         borderBottomWidth: 1,
         borderBottomColor: THEME.border,
-        backgroundColor: wash ?? THEME.surface,
+        backgroundColor: expanded && wash ? wash : THEME.surface,
         overflow: 'visible',
       }}>
       <Pressable
@@ -902,7 +855,7 @@ function BoardRankRow({
               justifyContent: 'center',
             }}>
             <AppText className="text-[14px] font-semibold" style={{ color: THEME.textMuted }}>
-              {expanded ? '▾' : '▸'}
+              {expanded ? '▴' : '▾'}
             </AppText>
           </View>
         ) : null}
@@ -972,6 +925,264 @@ function BoardStatGlyph({ kind, label }: { kind?: BoardStatKind | null; label: s
       <AppText className="text-[10px] font-bold" style={{ color: THEME.accent, includeFontPadding: false }}>
         {letter}
       </AppText>
+    </View>
+  );
+}
+
+const LANE_MINT_WASH = 'rgba(44, 155, 137, 0.08)';
+const LANE_CREAM_WASH = 'rgba(215, 166, 47, 0.08)';
+const VS_DISC = 30;
+
+function iconWellStyle(fill: string) {
+  return {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: fill,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    marginBottom: 8,
+  };
+}
+
+function SproutWell() {
+  return (
+    <View style={iconWellStyle(THEME.accentSoft)}>
+      <View style={{ alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 10 }}>
+          <View
+            style={{
+              width: 7,
+              height: 9,
+              borderRadius: 7,
+              backgroundColor: THEME.accent,
+              transform: [{ rotate: '-28deg' }],
+            }}
+          />
+          <View
+            style={{
+              width: 7,
+              height: 9,
+              borderRadius: 7,
+              backgroundColor: THEME.accentBright,
+              marginLeft: -3,
+              transform: [{ rotate: '28deg' }],
+            }}
+          />
+        </View>
+        <View style={{ width: 2, height: 6, borderRadius: 1, backgroundColor: THEME.accent, marginTop: -1 }} />
+      </View>
+    </View>
+  );
+}
+
+function TrophyWell() {
+  return (
+    <View style={iconWellStyle(THEME.calloutSoft)}>
+      <View style={{ alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
+          <View style={{ width: 3, height: 7, borderRadius: 1, backgroundColor: THEME.gold, marginRight: 1 }} />
+          <View
+            style={{
+              width: 12,
+              height: 9,
+              borderTopLeftRadius: 2,
+              borderTopRightRadius: 2,
+              borderBottomLeftRadius: 5,
+              borderBottomRightRadius: 5,
+              backgroundColor: THEME.gold,
+            }}
+          />
+          <View style={{ width: 3, height: 7, borderRadius: 1, backgroundColor: THEME.gold, marginLeft: 1 }} />
+        </View>
+        <View style={{ width: 3, height: 4, backgroundColor: THEME.gold }} />
+        <AppText
+          className="text-[5px] font-extrabold"
+          style={{ color: THEME.gold, lineHeight: 6, includeFontPadding: false, marginTop: -1 }}>
+          —
+        </AppText>
+      </View>
+    </View>
+  );
+}
+
+function LaneSideColumn({
+  total,
+  wash,
+  well,
+  compact,
+  totalSize,
+}: {
+  total: BoardLaneSideTotal;
+  wash: string;
+  well: 'sprout' | 'trophy';
+  compact: boolean;
+  totalSize: number;
+}) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: wash,
+        alignItems: 'center',
+        paddingVertical: compact ? 14 : 18,
+        paddingHorizontal: 10,
+      }}>
+      {well === 'sprout' ? <SproutWell /> : <TrophyWell />}
+      <AppText
+        className="text-[12px] font-semibold"
+        numberOfLines={1}
+        style={{ color: THEME.textPrimary, marginBottom: 4 }}>
+        {pluralizeLaneLabel(total.label)}
+      </AppText>
+      <AppText
+        className="font-extrabold"
+        style={{
+          color: THEME.textPrimary,
+          fontSize: totalSize,
+          lineHeight: totalSize + 4,
+          fontVariant: ['tabular-nums'],
+        }}>
+        {formatBoardPoints(total.points)}
+      </AppText>
+      <AppText className="text-[11px]" style={{ color: THEME.textMuted, marginTop: 2 }}>
+        Total Points
+      </AppText>
+    </View>
+  );
+}
+
+function VsScoreboard({ totals, compact }: { totals: BoardLaneSideTotal[]; compact: boolean }) {
+  const left = totals[0];
+  const right = totals[1];
+  if (!left || !right) {
+    return <LaneChipStrip totals={totals} />;
+  }
+  return (
+    <View style={{ position: 'relative' }}>
+      <View style={{ flexDirection: 'row' }}>
+        <LaneSideColumn
+          total={left}
+          wash={LANE_MINT_WASH}
+          well="sprout"
+          compact={compact}
+          totalSize={compact ? 28 : 32}
+        />
+        <LaneSideColumn
+          total={right}
+          wash={LANE_CREAM_WASH}
+          well="trophy"
+          compact={compact}
+          totalSize={compact ? 28 : 32}
+        />
+      </View>
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: 0,
+          bottom: 0,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+        <View
+          style={{
+            width: VS_DISC,
+            height: VS_DISC,
+            borderRadius: VS_DISC / 2,
+            backgroundColor: THEME.surface,
+            borderWidth: 1,
+            borderColor: THEME.border,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+          <AppText className="text-[10px] font-bold" style={{ color: THEME.textPrimary, letterSpacing: 0.3 }}>
+            VS
+          </AppText>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function LaneChipStrip({ totals }: { totals: BoardLaneSideTotal[] }) {
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        paddingHorizontal: 12,
+        paddingTop: 12,
+        paddingBottom: 4,
+      }}>
+      {totals.map((total) => (
+        <View
+          key={total.id}
+          style={{
+            borderWidth: 1,
+            borderColor: THEME.border,
+            borderRadius: 999,
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            minWidth: 96,
+          }}>
+          <AppText className="text-[12px] font-semibold" numberOfLines={1} style={{ color: THEME.textPrimary }}>
+            {pluralizeLaneLabel(total.label)}
+          </AppText>
+          <AppText
+            className="text-[16px] font-extrabold"
+            style={{ color: THEME.textPrimary, fontVariant: ['tabular-nums'] }}>
+            {formatBoardPoints(total.points)}
+          </AppText>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function StandingsBody({
+  header,
+  freeze,
+  children,
+}: {
+  header: ReactNode;
+  freeze: boolean;
+  children: ReactNode;
+}) {
+  if (!header) {
+    return <View>{children}</View>;
+  }
+
+  const webSticky =
+    freeze && Platform.OS === 'web'
+      ? ({
+          position: 'sticky',
+          top: 0,
+          zIndex: 3,
+          backgroundColor: THEME.surface,
+        } as const)
+      : { backgroundColor: THEME.surface };
+
+  if (freeze && Platform.OS !== 'web') {
+    return (
+      <ScrollView
+        nestedScrollEnabled
+        stickyHeaderIndices={[0]}
+        style={{ maxHeight: 520 }}
+        showsVerticalScrollIndicator={false}>
+        <View style={{ backgroundColor: THEME.surface }}>{header}</View>
+        {children}
+      </ScrollView>
+    );
+  }
+
+  return (
+    <View>
+      <View style={webSticky}>{header}</View>
+      {children}
     </View>
   );
 }

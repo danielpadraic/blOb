@@ -29,6 +29,7 @@ import {
   comparableLaneHeaderLine,
   consistencyBoardHeaderLine,
   pointsBoardHeaderLine,
+  pluralizeLaneLabel,
 } from '@/lib/board';
 import { checkinPointValue } from '@/lib/challengePoints';
 import { challengeGoalLabel } from '@/lib/challengeGoal';
@@ -363,7 +364,7 @@ describe('board row chrome', () => {
         ],
         'points',
       ),
-    ).toEqual(['01', '03', '06']);
+    ).toEqual([]);
     expect(initialExpandedBoardIds([{ userId: '01', rank: 1 }], 'other')).toEqual([]);
   });
 
@@ -450,5 +451,11 @@ describe('board status header', () => {
   it('puts long Side totals on their own row next to Show details', () => {
     expect(boardHeaderSharesDetailsRow('Rookie 52,000 · Veteran 36,839', true)).toBe(true);
     expect(boardHeaderSharesDetailsRow('Sides · Rookie 52,000 · Veteran 36,839', true)).toBe(false);
+  });
+
+  it('pluralizes Side labels for the VS card without hard-coding a company', () => {
+    expect(pluralizeLaneLabel('Rookie')).toBe('Rookies');
+    expect(pluralizeLaneLabel('Veteran')).toBe('Veterans');
+    expect(pluralizeLaneLabel('Rookies')).toBe('Rookies');
   });
 });

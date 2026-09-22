@@ -12,6 +12,7 @@ export {
   boardStatusHeaderLine,
   comparableLaneHeaderLine,
   consistencyBoardHeaderLine,
+  pluralizeLaneLabel,
   pointsBoardHeaderLine,
   type BoardHeaderFormat,
   type BoardLaneSideTotal,

@@ -39,6 +39,21 @@ export function boardLaneSideTotals(input: {
   }));
 }
 
+/** Rookie → Rookies. Already-plural labels stay. Never hard-codes a company name. */
+export function pluralizeLaneLabel(label: string): string {
+  const raw = String(label ?? '').trim();
+  if (!raw) {
+    return raw;
+  }
+  if (/s$/i.test(raw)) {
+    return raw;
+  }
+  if (/y$/i.test(raw) && !/[aeiou]y$/i.test(raw)) {
+    return `${raw.slice(0, -1)}ies`;
+  }
+  return `${raw}s`;
+}
+
 export function comparableLaneHeaderLine(
   totals: BoardLaneSideTotal[],
   opts?: { prefix?: boolean },
