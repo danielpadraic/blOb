@@ -7,6 +7,9 @@ export type JoinChargeInput = {
   challengeId: string;
   amountCents: MoneyCents;
   currency: 'usd' | 'coins';
+  rosterRole?: 'participant' | 'observer' | string | null;
+  scoringLane?: string | null;
+  selfModerator?: boolean;
 };
 
 export type JoinChargeResult =

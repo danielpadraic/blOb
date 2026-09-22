@@ -15,13 +15,14 @@ import {
   skipsCashGeo,
 } from '@/lib/geo/eligibility';
 import { bucksJoinCta } from '@/lib/joinCta';
+import type { JoinRolePicks } from '@/lib/joinRole';
 import type { Challenge } from '@/lib/types';
 import { getJoinChallengeMessage } from '@/utils/errors';
 
 type JoinConfirmContextValue = {
   open: (challenge: Challenge) => void;
   close: () => void;
-  confirm: () => void;
+  confirm: (picks?: JoinRolePicks) => void;
   loading: boolean;
   challenge: Challenge | null;
   error: string | null;
@@ -67,7 +68,7 @@ export function JoinConfirmProvider({ children }: { children: ReactNode }) {
     setChallenge(next);
   }, [geo, officialDob]);
 
-  const confirm = useCallback(async () => {
+  const confirm = useCallback(async (picks?: JoinRolePicks) => {
     if (!challenge || join.isPending) {
       return;
     }
@@ -86,7 +87,16 @@ export function JoinConfirmProvider({ children }: { children: ReactNode }) {
     }
     try {
       setError(null);
-      await join.mutateAsync(challenge.id);
+      await join.mutateAsync(
+        picks?.rosterRole
+          ? {
+              challengeId: challenge.id,
+              rosterRole: picks.rosterRole,
+              scoringLane: picks.rosterRole === 'observer' ? null : picks.scoringLane,
+              selfModerator: Boolean(picks.selfModerator),
+            }
+          : challenge.id,
+      );
       pendingRef.current = null;
       setChallenge(null);
     } catch (caught) {
@@ -122,8 +132,8 @@ export function JoinConfirmProvider({ children }: { children: ReactNode }) {
     () => ({
       open,
       close,
-      confirm: () => {
-        void confirm();
+      confirm: (picks?: JoinRolePicks) => {
+        void confirm(picks);
       },
       loading: join.isPending || Boolean(geo?.busy),
       challenge,

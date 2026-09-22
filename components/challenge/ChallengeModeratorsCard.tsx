@@ -54,10 +54,23 @@ export function ChallengeModeratorsCard({ challenge, participantIds }: Challenge
     !challengeIsSettledForRigor(challenge.status) &&
     (officialOps || challenge.created_by === user?.id);
   const competing = new Set(participantIds);
-  const rows = (mods.data ?? []).map((row) => ({
-    ...row,
-    profile: profiles.data?.find((profile) => profile.id === row.user_id) ?? null,
-  }));
+  const hostId = String(challenge.created_by ?? '').trim();
+  const hostProfile = useQuery({
+    queryKey: ['challenge-host-profile', challenge.id, hostId],
+    enabled: Boolean(hostId),
+    queryFn: async () => {
+      const list = await fetchPublicProfilesByIds([hostId]);
+      return list[0] ?? null;
+    },
+  });
+  const rows = (mods.data ?? [])
+    .filter((row) => row.user_id !== hostId)
+    .map((row) => ({
+      ...row,
+      profile: profiles.data?.find((profile) => profile.id === row.user_id) ?? null,
+    }));
+  const canDemote =
+    canManage || Boolean(user?.id && rows.some((row) => row.user_id === user.id));
 
   const remove = useMutation({
     mutationFn: (userId: string) => removeChallengeModerator(challenge.id, userId),
@@ -69,14 +82,30 @@ export function ChallengeModeratorsCard({ challenge, participantIds }: Challenge
     },
   });
 
-  if (!canAppoint && rows.length === 0) {
+  if (!hostId && !canAppoint && rows.length === 0) {
     return null;
   }
 
+  const hostName = personDisplayName(hostProfile.data);
   return (
     <Card className="mt-4 gap-3">
       <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
-        {copy('mods.title')}
+        Admins
+      </AppText>
+      {hostId ? (
+        <View className="flex-row items-center" style={{ gap: 10 }}>
+          <Avatar uri={hostProfile.data?.avatar_url} name={hostName} size={40} />
+          <View className="min-w-0 flex-1">
+            <AppText className="font-semibold text-charcoal" numberOfLines={1}>
+              {hostName}
+            </AppText>
+            <AppText className="text-sm text-muted">Admin</AppText>
+          </View>
+        </View>
+      ) : null}
+
+      <AppText className="mt-1 text-[11px] font-semibold uppercase tracking-widest text-muted">
+        Moderators
       </AppText>
       {rows.length === 0 ? (
         <AppText className="text-sm leading-5 text-muted">No moderators yet.</AppText>
@@ -84,8 +113,6 @@ export function ChallengeModeratorsCard({ challenge, participantIds }: Challenge
         <View className="gap-3">
           {rows.map((row) => {
             const name = personDisplayName(row.profile);
-            const handle = row.profile?.username ? `@${row.profile.username}` : '';
-            const notCompeting = !competing.has(row.user_id);
             return (
               <View key={row.user_id} className="flex-row items-center" style={{ gap: 10 }}>
                 <Avatar uri={row.profile?.avatar_url} name={name} size={40} />
@@ -93,27 +120,17 @@ export function ChallengeModeratorsCard({ challenge, participantIds }: Challenge
                   <AppText className="font-semibold text-charcoal" numberOfLines={1}>
                     {name}
                   </AppText>
-                  {handle ? (
-                    <AppText className="text-sm text-muted" numberOfLines={1}>
-                      {handle}
-                    </AppText>
-                  ) : null}
-                  {notCompeting ? (
-                    <View
-                      className="mt-1 self-start"
-                      style={{
-                        borderRadius: 999,
-                        paddingHorizontal: 8,
-                        paddingVertical: 3,
-                        backgroundColor: THEME.accentSoft,
-                      }}>
-                      <AppText className="text-[11px] font-bold" style={{ color: THEME.accent }}>
-                        {copy('mods.notCompeting')}
-                      </AppText>
-                    </View>
-                  ) : null}
+                  <AppText className="text-sm text-muted">Moderator</AppText>
                 </View>
-                {canManage ? (
+                {canDemote && row.user_id !== user?.id ? (
+                  <Button
+                    title={copy('mods.remove')}
+                    variant="ghost"
+                    size="sm"
+                    loading={remove.isPending && remove.variables === row.user_id}
+                    onPress={() => remove.mutate(row.user_id)}
+                  />
+                ) : canManage ? (
                   <Button
                     title={copy('mods.remove')}
                     variant="ghost"

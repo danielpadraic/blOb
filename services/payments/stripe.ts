@@ -41,7 +41,12 @@ export const stripePayments: PaymentsProvider = {
 
   async chargeJoin(input: JoinChargeInput): Promise<JoinChargeResult> {
     try {
-      await joinChallenge(input.challengeId);
+      await joinChallenge({
+        challengeId: input.challengeId,
+        rosterRole: input.rosterRole,
+        scoringLane: input.scoringLane,
+        selfModerator: input.selfModerator,
+      });
       return {
         ok: true,
         provider: 'stripe',

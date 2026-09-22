@@ -545,6 +545,7 @@ export interface ChallengeParticipant {
   metric_totals?: Record<string, number> | null;
   live_mute?: LiveMute | string | null;
   scoring_lane?: string | null;
+  roster_role?: 'participant' | 'observer' | string | null;
   place?: number | null;
   result?: string | null;
 }
@@ -2093,7 +2094,12 @@ export type Database = {
         Returns: { ok: boolean; hidden?: boolean; flag_count?: number };
       };
       join_challenge: {
-        Args: { p_challenge_id: string };
+        Args: {
+          p_challenge_id: string;
+          p_roster_role?: string;
+          p_scoring_lane?: string | null;
+          p_self_moderator?: boolean;
+        };
         Returns: { ok: boolean; challenge_id: string; prize_pool: number };
       };
       geo_cash_gate: {

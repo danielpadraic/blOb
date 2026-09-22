@@ -345,7 +345,7 @@ export function useChallenge(id: string | undefined) {
 }
 
 const PARTICIPANT_COLUMNS =
-  'id, challenge_id, user_id, status, days_completed, points, joined_at, completed_at, eliminated_at, distance_meters_total, metric_totals, live_mute, scoring_lane';
+  'id, challenge_id, user_id, status, days_completed, points, joined_at, completed_at, eliminated_at, distance_meters_total, metric_totals, live_mute, scoring_lane, roster_role';
 const PARTICIPANT_COLUMNS_NO_LANE =
   'id, challenge_id, user_id, status, days_completed, points, joined_at, completed_at, eliminated_at, distance_meters_total, metric_totals, live_mute';
 const PARTICIPANT_COLUMNS_NO_POINTS =
@@ -369,6 +369,7 @@ function asParticipant(row: ChallengeParticipant, extras?: Partial<ChallengePart
         : extras?.metric_totals ?? null,
     live_mute: asLiveMute(row.live_mute ?? extras?.live_mute),
     scoring_lane: row.scoring_lane ?? extras?.scoring_lane ?? null,
+    roster_role: row.roster_role ?? extras?.roster_role ?? 'participant',
   };
 }
 
@@ -536,13 +537,23 @@ export function useJoinChallenge() {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async (challengeId: string) => {
+    mutationFn: async (
+      input:
+        | string
+        | {
+            challengeId: string;
+            rosterRole?: string | null;
+            scoringLane?: string | null;
+            selfModerator?: boolean;
+          },
+    ) => {
       if (!user) {
         throw new Error('You need to be signed in.');
       }
-      return joinChallenge(challengeId);
+      return joinChallenge(input);
     },
-    onMutate: async (challengeId): Promise<JoinContext> => {
+    onMutate: async (input): Promise<JoinContext> => {
+      const challengeId = typeof input === 'string' ? input : input.challengeId;
       await Promise.all([
         queryClient.cancelQueries({ queryKey: ['challenge', challengeId] }),
         queryClient.cancelQueries({ queryKey: ['challenge-participants', challengeId] }),
@@ -597,6 +608,9 @@ export function useJoinChallenge() {
           joined_at: new Date().toISOString(),
           completed_at: null,
           eliminated_at: null,
+          roster_role:
+            typeof input === 'string' ? 'participant' : input.rosterRole ?? 'participant',
+          scoring_lane: typeof input === 'string' ? null : input.scoringLane ?? null,
         };
         if (!alreadyIn) {
           queryClient.setQueryData<ChallengeParticipantWithProfile[]>(
@@ -648,7 +662,8 @@ export function useJoinChallenge() {
         previousProfile,
       };
     },
-    onError: (_error, challengeId, context) => {
+    onError: (_error, input, context) => {
+      const challengeId = typeof input === 'string' ? input : input.challengeId;
       if (!context) {
         return;
       }
@@ -666,12 +681,14 @@ export function useJoinChallenge() {
         queryClient.setQueryData(['profile', user.id, 'self'], context.previousProfile);
       }
     },
-    onSettled: (_data, _error, challengeId) => {
+    onSettled: (_data, _error, input) => {
+      const challengeId = typeof input === 'string' ? input : input.challengeId;
       void queryClient.invalidateQueries({ queryKey: ['challenge', challengeId] });
       void queryClient.invalidateQueries({
         queryKey: ['challenge-participants', challengeId],
       });
       void queryClient.invalidateQueries({ queryKey: ['my-participation', challengeId] });
+      void queryClient.invalidateQueries({ queryKey: ['challenge-moderators', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['challenges'] });
       void queryClient.invalidateQueries({ queryKey: ['lobby-discover'] });
       void queryClient.invalidateQueries({ queryKey: ['lobby-joined'] });

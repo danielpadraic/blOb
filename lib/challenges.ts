@@ -240,15 +240,19 @@ export function isLiveCompetitorStatus(status: string | null | undefined): boole
 export function isLiveCompetitor(row: {
   status?: string | null;
   eliminated_at?: string | null;
+  roster_role?: string | null;
 } | null | undefined): boolean {
   if (!row) {
+    return false;
+  }
+  if (String(row.roster_role ?? '').toLowerCase() === 'observer') {
     return false;
   }
   return isLiveCompetitorStatus(row.status) && !row.eliminated_at;
 }
 
 export function countLiveCompetitors(
-  rows: { status?: string | null; eliminated_at?: string | null }[] | null | undefined,
+  rows: { status?: string | null; eliminated_at?: string | null; roster_role?: string | null }[] | null | undefined,
 ): number {
   return (rows ?? []).filter((row) => isLiveCompetitor(row)).length;
 }
@@ -1299,7 +1303,15 @@ export async function fetchChallengeShareState(id: string): Promise<ChallengeSha
   return { reason: 'hidden', title: null };
 }
 
-export async function joinChallenge(challengeId: string): Promise<ChallengeParticipant> {
+export async function joinChallenge(
+  challengeId: string | {
+    challengeId: string;
+    rosterRole?: string | null;
+    scoringLane?: string | null;
+    selfModerator?: boolean;
+  },
+): Promise<ChallengeParticipant> {
+  const input = typeof challengeId === 'string' ? { challengeId } : challengeId;
   const { data: session } = await supabase.auth.getUser();
   const userId = session.user?.id;
   if (!userId) {
@@ -1307,9 +1319,12 @@ export async function joinChallenge(challengeId: string): Promise<ChallengeParti
   }
   const charged = await getPaymentsProvider().chargeJoin({
     userId,
-    challengeId,
+    challengeId: input.challengeId,
     amountCents: 0,
     currency: 'coins',
+    rosterRole: input.rosterRole,
+    scoringLane: input.scoringLane,
+    selfModerator: input.selfModerator,
   });
   if (!charged.ok) {
     throw new Error(charged.message);
@@ -1319,14 +1334,14 @@ export async function joinChallenge(challengeId: string): Promise<ChallengeParti
   const { data, error } = await supabase
     .from('challenge_participants')
     .select('id, challenge_id, user_id, status, days_completed, joined_at, completed_at, eliminated_at')
-    .eq('challenge_id', challengeId)
+    .eq('challenge_id', input.challengeId)
     .eq('user_id', userId)
     .maybeSingle();
   if (error) {
     reportAppError({
       route: 'join_challenge',
       error,
-      payload: { challenge_id: challengeId, stage: 'load_participant' },
+      payload: { challenge_id: input.challengeId, stage: 'load_participant' },
     });
     throw new Error(getErrorMessage(error));
   }

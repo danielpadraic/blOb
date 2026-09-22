@@ -18,6 +18,16 @@ import { bucksJoinCta } from '@/lib/joinCta';
 import { copy } from '@/lib/copy';
 import { officialDetailsParagraphs } from '@/copy/officialBob';
 import { useMyProfile } from '@/hooks/useProfile';
+import {
+  allowsSelfModeratorCheckbox,
+  emptyJoinRolePicks,
+  joinLaneHelper,
+  joinLaneLabel,
+  joinRoleReady,
+  joinScoringLanes,
+  usesJoinRoleSheet,
+  type JoinRolePicks,
+} from '@/lib/joinRole';
 
 type JoinConfirmModalProps = {
   visible: boolean;
@@ -25,7 +35,7 @@ type JoinConfirmModalProps = {
   loading?: boolean;
   error?: string | null;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: (picks?: JoinRolePicks) => void;
 };
 
 const DISMISS_Y = 88;
@@ -132,6 +142,7 @@ export function JoinConfirmModal({
   const insets = useSafeAreaInsets();
   const { profile } = useMyProfile();
   const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [picks, setPicks] = useState<JoinRolePicks>(emptyJoinRolePicks);
   const buyInAmount = Math.max(Number(challenge.buy_in_amount) || 0, 0);
   const bucks = isBucksChallenge(challenge);
   const buyIn = bucks ? formatCash(buyInAmount) : formatWalletNumber(buyInAmount);
@@ -156,6 +167,7 @@ export function JoinConfirmModal({
   useEffect(() => {
     if (!visible) {
       setChecked({});
+      setPicks(emptyJoinRolePicks());
       translateY.value = 0;
     }
   }, [translateY, visible]);
@@ -206,6 +218,160 @@ export function JoinConfirmModal({
     paddingTop: 6,
     paddingBottom: Math.max(insets.bottom, 16) + 8,
   };
+
+  const roleSheet = usesJoinRoleSheet(challenge);
+  const lanes = joinScoringLanes(challenge);
+  const showSides = picks.rosterRole === 'participant' && lanes.length > 0;
+  const selfModOk = allowsSelfModeratorCheckbox(challenge);
+  const roleReady = joinRoleReady(picks, challenge);
+  const laneHelp = joinLaneHelper(challenge);
+
+  if (roleSheet) {
+    return (
+      <ChromeOverlay visible={visible} onClose={close} dim="heavy">
+        <GestureDetector gesture={handlePan}>
+          <Animated.View style={[sheetChrome, sheetStyle]}>
+            <View className="items-center pb-3 pt-2" accessibilityRole="adjustable" accessibilityLabel="Dismiss">
+              <View className="h-1 w-10 rounded-full" style={{ backgroundColor: THEME.border }} />
+            </View>
+            <AppText className="text-2xl font-bold text-charcoal">Join this challenge</AppText>
+
+            <AppText className="mt-5 text-[11px] font-semibold uppercase tracking-widest text-muted">
+              How you’ll be in the room
+            </AppText>
+            <View className="mt-2 gap-2">
+              {(
+                [
+                  {
+                    id: 'participant' as const,
+                    title: 'Participant',
+                    body: 'I compete. My numbers count.',
+                  },
+                  {
+                    id: 'observer' as const,
+                    title: 'Observer',
+                    body: 'I can watch Live and the Board. I don’t log or score.',
+                  },
+                ] as const
+              ).map((option) => {
+                const on = picks.rosterRole === option.id;
+                return (
+                  <Pressable
+                    key={option.id}
+                    onPress={() =>
+                      setPicks((current) => ({
+                        ...current,
+                        rosterRole: option.id,
+                        scoringLane: option.id === 'observer' ? null : current.scoringLane,
+                      }))
+                    }
+                    className="rounded-blob border px-4 py-3"
+                    style={{
+                      backgroundColor: on ? THEME.accentSoft : THEME.surface,
+                      borderColor: on ? THEME.accent : THEME.line,
+                      borderWidth: 1.5,
+                      borderRadius: THEME.radius,
+                    }}>
+                    <AppText className="font-semibold text-charcoal">{option.title}</AppText>
+                    <AppText className="mt-1 text-sm leading-5 text-muted">{option.body}</AppText>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {showSides ? (
+              <View className="mt-5">
+                <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
+                  Side
+                </AppText>
+                {laneHelp ? (
+                  <AppText className="mt-1 text-sm leading-5 text-muted">{laneHelp}</AppText>
+                ) : null}
+                <View className="mt-2 gap-2">
+                  {lanes.map((lane) => {
+                    const on = picks.scoringLane === lane.id;
+                    return (
+                      <Pressable
+                        key={lane.id}
+                        onPress={() => setPicks((current) => ({ ...current, scoringLane: lane.id }))}
+                        className="rounded-blob border px-4 py-3"
+                        style={{
+                          backgroundColor: on ? THEME.accentSoft : THEME.surface,
+                          borderColor: on ? THEME.accent : THEME.line,
+                          borderWidth: 1.5,
+                          borderRadius: THEME.radius,
+                        }}>
+                        <AppText className="font-semibold text-charcoal">{joinLaneLabel(lane)}</AppText>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
+
+            {selfModOk ? (
+              <Pressable
+                onPress={() =>
+                  setPicks((current) => ({ ...current, selfModerator: !current.selfModerator }))
+                }
+                className="mt-5 flex-row items-start gap-3 rounded-blob border px-4 py-3"
+                style={{
+                  backgroundColor: THEME.surface,
+                  borderColor: picks.selfModerator ? THEME.primary : THEME.line,
+                  borderWidth: 1.5,
+                  borderRadius: THEME.radius,
+                }}>
+                <View
+                  className="mt-0.5 h-5 w-5 items-center justify-center rounded-md border"
+                  style={{
+                    backgroundColor: picks.selfModerator ? THEME.primary : THEME.background,
+                    borderColor: picks.selfModerator ? THEME.primary : THEME.line,
+                  }}>
+                  {picks.selfModerator ? (
+                    <AppText className="text-[11px] font-bold" style={{ color: THEME.primaryForeground }}>
+                      ✓
+                    </AppText>
+                  ) : null}
+                </View>
+                <View className="flex-1">
+                  <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
+                    Help run it
+                  </AppText>
+                  <AppText className="mt-1 font-semibold text-charcoal">I’m a moderator</AppText>
+                </View>
+              </Pressable>
+            ) : null}
+
+            {error ? (
+              <AppText className="mt-4 text-sm leading-5 text-coral-dark">{error}</AppText>
+            ) : null}
+            <View className="mt-6 gap-3">
+              {payEntry ? (
+                <JoinCtaButton
+                  verb="Participate"
+                  size="lg"
+                  currency={challenge.currency}
+                  amount={buyInAmount}
+                  loading={loading}
+                  disabled={!roleReady}
+                  onPress={() => onConfirm(picks)}
+                />
+              ) : (
+                <Button
+                  title={isFree ? 'Participate free' : 'Join'}
+                  size="lg"
+                  loading={loading}
+                  disabled={!roleReady}
+                  onPress={() => onConfirm(picks)}
+                />
+              )}
+              <Button title="Not now" variant="ghost" onPress={close} disabled={loading} />
+            </View>
+          </Animated.View>
+        </GestureDetector>
+      </ChromeOverlay>
+    );
+  }
 
   if (official) {
     return (

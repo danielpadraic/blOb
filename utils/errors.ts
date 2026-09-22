@@ -233,6 +233,19 @@ export function getJoinChallengeMessage(error: unknown): string {
   ) {
     return 'Couldn’t complete that just now. Try again.';
   }
+  const joined = `${text} ${raw}`;
+  if (/SIDE_REQUIRED/i.test(joined)) {
+    return 'Pick Rookie or Veteran to join as a participant.';
+  }
+  if (/BAD_SIDE/i.test(joined)) {
+    return 'That side isn’t on this challenge.';
+  }
+  if (/SELF_MOD_FORBIDDEN/i.test(joined)) {
+    return 'This room doesn’t allow joining as a moderator.';
+  }
+  if (/BAD_ROSTER_ROLE/i.test(joined)) {
+    return 'Pick Participant or Observer.';
+  }
   return text;
 }
 
@@ -285,6 +298,9 @@ export function getCheckinSubmitMessage(error: unknown): string {
   }
   if (raw.includes('not_participant') || raw.includes('join this challenge')) {
     return 'Join this challenge before you check in.';
+  }
+  if (raw.includes('observer_no_log')) {
+    return 'Observers don’t log. You can watch Live and the Board.';
   }
   if (raw.includes('begin check-in first')) {
     return 'Begin check-in first.';

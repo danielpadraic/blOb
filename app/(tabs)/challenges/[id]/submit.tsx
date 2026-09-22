@@ -58,6 +58,7 @@ import {
   proxyCheckinLiveBody,
   viewerCanProxyCheckin,
 } from '@/lib/challengeMods';
+import { isRosterObserver } from '@/lib/joinRole';
 import { personDisplayName } from '@/lib/social';
 import { isHomeSocialFeedKey, liveListKey, seedChallengeLivePost } from '@/hooks/useFeed';
 import { rememberSentLiveCheckin } from '@/lib/liveLanding';
@@ -1983,6 +1984,20 @@ function SubmitWorkoutInner() {
           kind="empty"
           title={proxyBlocked === 'They already dropped.' ? copy('board.alreadyDropped') : proxyBlocked}
           body={proxyBlocked}
+          actionLabel="Back to challenge"
+          onAction={() => leaveCheckin()}
+        />
+      </Screen>
+    );
+  }
+
+  if (!isProxy && isRosterObserver(participation)) {
+    return (
+      <Screen padded={false} edges={['left', 'right', 'bottom']}>
+        <MascotState
+          kind="empty"
+          title="Observers don’t log"
+          body="You can watch Live and the Board. You don’t honor-log or score."
           actionLabel="Back to challenge"
           onAction={() => leaveCheckin()}
         />

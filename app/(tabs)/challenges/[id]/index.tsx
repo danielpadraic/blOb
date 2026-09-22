@@ -106,6 +106,7 @@ import { ChallengePageTabs, challengeTabsForViewer, asChallengePageTab, type Cha
 import { challengeMentionMemberIds, fetchChallengeModeratorIds } from '@/lib/challengeMods';
 import { useOfficialOps } from '@/hooks/useOfficialOps';
 import { useChallengeInviteLink, inviteTokenFromParam } from '@/hooks/useChallengeInviteLink';
+import { isRosterObserver } from '@/lib/joinRole';
 import { canSeeChallengeLobby, canSeeCorporateLive } from '@/lib/privacyMode';
 import { needsInviteShareLink } from '@/lib/challengeInviteShare';
 import { LiveAlertsButton } from '@/components/challenge/LiveMuteSheet';
@@ -1163,6 +1164,7 @@ export default function ChallengeDetailScreen() {
   const stickyCheckin =
     isJoined &&
     !isCalloutObserver &&
+    !isRosterObserver(participation) &&
     challenge.status === 'live' &&
     !windowEnded &&
     !viewerOut &&

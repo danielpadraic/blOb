@@ -143,20 +143,44 @@ export async function publishChallenge(
 const JOIN_UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Live: join_challenge(p_challenge_id uuid). One uuid key. No currency/amount/json. */
-export async function joinChallenge(challengeId: string): Promise<JoinChallengeResult> {
-  const id = String(challengeId ?? '').trim();
+export type JoinChallengeArgs = {
+  challengeId: string;
+  rosterRole?: string | null;
+  scoringLane?: string | null;
+  selfModerator?: boolean;
+};
+
+/** Live: join_challenge. Role / lane / self-mod optional; one request. */
+export async function joinChallenge(
+  challengeId: string | JoinChallengeArgs,
+): Promise<JoinChallengeResult> {
+  const input = typeof challengeId === 'string' ? { challengeId } : challengeId;
+  const id = String(input.challengeId ?? '').trim();
   if (!JOIN_UUID.test(id)) {
     reportAppError({
       route: 'join_challenge',
       code: 'invalid_id',
-      payload: { challenge_id: challengeId },
+      payload: { challenge_id: input.challengeId },
     });
     throw new Error('Couldn’t join. Try again.');
   }
-  const { data, error } = await supabase.rpc('join_challenge', {
-    p_challenge_id: id,
-  });
+  const payload: {
+    p_challenge_id: string;
+    p_roster_role?: string;
+    p_scoring_lane?: string | null;
+    p_self_moderator?: boolean;
+  } = { p_challenge_id: id };
+  const role = String(input.rosterRole ?? '').trim().toLowerCase();
+  if (role === 'participant' || role === 'observer') {
+    payload.p_roster_role = role;
+  }
+  if (input.scoringLane != null && String(input.scoringLane).trim()) {
+    payload.p_scoring_lane = String(input.scoringLane).trim();
+  }
+  if (input.selfModerator) {
+    payload.p_self_moderator = true;
+  }
+  const { data, error } = await supabase.rpc('join_challenge', payload);
   if (error) {
     logPostgrestError('join_challenge', error);
     reportAppError({ route: 'join_challenge', error, payload: { challenge_id: id } });

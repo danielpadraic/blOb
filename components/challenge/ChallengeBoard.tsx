@@ -46,6 +46,7 @@ import {
   shortBoardHeader,
 } from '@/lib/board';
 import { usesQuantityScoring, usesPointsBoard, usesComparablePointsScoring } from '@/lib/challengeExperience';
+import { isRosterObserver } from '@/lib/joinRole';
 import {
   comparableBoardColumns,
   comparablePointsFromChallenge,
@@ -99,12 +100,20 @@ export function ChallengeBoard({
   const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
   const compact = variant === 'compact';
   const quantityBoard = usesQuantityScoring(challenge);
+  const racingRoster = useMemo(
+    () => (roster ?? []).filter((row) => !isRosterObserver(row)),
+    [roster],
+  );
+  const observerRoster = useMemo(
+    () => (roster ?? []).filter((row) => isRosterObserver(row)),
+    [roster],
+  );
   const view = useMemo(
     () =>
       buildBoard({
         status: challenge.status,
         prizePool: Number(challenge.prize_pool) || Number(settlement?.settlement.prize_pool) || 0,
-        participants: (roster ?? []).map((row) => ({
+        participants: racingRoster.map((row) => ({
           user_id: row.user_id,
           days_completed: row.days_completed,
           points: row.points,
@@ -137,7 +146,7 @@ export function ChallengeBoard({
       completedUserIds,
       joined,
       quantityBoard,
-      roster,
+      racingRoster,
       settlement,
       viewerId,
     ],
@@ -485,6 +494,25 @@ export function ChallengeBoard({
           {standingRows}
         </StandingsBody>
       )}
+      {observerRoster.length > 0 ? (
+        <View className="mt-3 gap-2" style={{ borderTopWidth: 1, borderTopColor: THEME.line, paddingTop: 12 }}>
+          <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
+            Observers
+          </AppText>
+          {observerRoster.map((row) => {
+            const name = row.profile?.display_name?.trim() || row.profile?.username || 'Observer';
+            return (
+              <View key={row.user_id} className="flex-row items-center" style={{ gap: 10, minHeight: 44 }}>
+                <Avatar uri={row.profile?.avatar_url} name={name} size={32} />
+                <AppText className="flex-1 font-semibold text-charcoal" numberOfLines={1}>
+                  {name}
+                </AppText>
+                <AppText className="text-[12px] text-muted">Watching</AppText>
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
       {onOpenBoard ? (
         <Pressable
           accessibilityRole="button"
