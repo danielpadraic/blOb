@@ -276,6 +276,21 @@ export function isHonorCardUrl(url?: string | null, cardUrl?: string | null): bo
   return file.length > 0 && named.length > 0 && file === named;
 }
 
+/**
+ * Stored recap JPEG on this post — not the client-only `blob:honor-card` slide.
+ * Backfill and same-day replace use this so a second card is never appended.
+ */
+export function hasHonorRecapUrl(
+  media?: Array<string | null | undefined> | null,
+  stats?: CheckinProofStats | null,
+): boolean {
+  const named = namedHonorCardUrl(stats);
+  if (named) {
+    return true;
+  }
+  return uniqueProofUrls(media).some((url) => isHonorCardStoragePath(url));
+}
+
 export function honorSlideForPost(input: {
   stats?: CheckinProofStats | null;
   challengeTitle?: string | null;

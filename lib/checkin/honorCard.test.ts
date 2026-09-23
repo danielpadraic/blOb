@@ -4,6 +4,7 @@ import {
   HONOR_CARD_SLIDE,
   HONOR_CARD_SOURCE,
   buildHonorProofCard,
+  hasHonorRecapUrl,
   honorCardFieldsFromLog,
   honorPeriodLabel,
   honorSlideForPost,
@@ -128,6 +129,24 @@ describe('honor recap card', () => {
         previousCardUrl: 'https://cdn.test/u/honor_card-1.jpg',
       }),
     ).toEqual(['https://cdn.test/selfie.jpg', 'https://cdn.test/u/honor_card-2.jpg']);
+  });
+
+  it('recognizes a stored recap by path prefix or named card_url, not the drawable token', () => {
+    expect(hasHonorRecapUrl(['https://cdn.test/u/honor_card-9.jpg'], null)).toBe(true);
+    expect(
+      hasHonorRecapUrl(['https://cdn.test/selfie.jpg'], {
+        source: HONOR_CARD_SOURCE,
+        card_url: 'https://cdn.test/u/honor_card-9.jpg',
+      }),
+    ).toBe(true);
+    expect(
+      hasHonorRecapUrl([], {
+        source: HONOR_CARD_SOURCE,
+        honor_fields: [{ key: 'act-dials', label: 'Dials', value: 10, kind: 'count' }],
+      }),
+    ).toBe(false);
+    expect(hasHonorRecapUrl([HONOR_CARD_SLIDE], { source: HONOR_CARD_SOURCE })).toBe(false);
+    expect(hasHonorRecapUrl(['https://cdn.test/u/workout_card-1.jpg'], null)).toBe(false);
   });
 });
 

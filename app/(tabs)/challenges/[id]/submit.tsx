@@ -63,7 +63,7 @@ import { personDisplayName } from '@/lib/social';
 import { isHomeSocialFeedKey, liveListKey, seedChallengeLivePost } from '@/hooks/useFeed';
 import { rememberSentLiveCheckin } from '@/lib/liveLanding';
 import { runPostSendOcr } from '@/lib/health/runPostSendOcr';
-import { writeHonorCheckinCard } from '@/lib/checkin/attachHonorCard';
+import { attachHonorCardToCheckin } from '@/lib/checkin/attachHonorCard';
 import { buildHonorProofCard } from '@/lib/checkin/honorCard';
 import type { CheckinProofStats } from '@/lib/checkin/proofStats';
 import { saveCheckinMetricValues, submitLocationProof } from '@/lib/challenges/stagedCheckin';
@@ -1610,7 +1610,7 @@ function SubmitWorkoutInner() {
           postId = (post.data as { id?: string } | null)?.id;
           let mediaUrls = (post.data as { media_urls?: string[] } | null)?.media_urls ?? [];
           let checkinStats = (post.data as { checkin_stats?: unknown } | null)?.checkin_stats ?? null;
-          if (postId && comparableHonor && comparableConfig && uid) {
+          if (comparableHonor && comparableConfig && uid) {
             const honorModel = buildHonorProofCard({
               config: comparableConfig,
               metrics: honorMetricsFromDraft(comparableConfig, logDraft),
@@ -1622,19 +1622,19 @@ function SubmitWorkoutInner() {
               timeZone: challengeClockTz(challenge),
             });
             if (honorModel) {
-              try {
-                const honor = await writeHonorCheckinCard({
-                  userId: uid,
-                  postId,
-                  card: honorModel,
-                  laneId: subjectRow?.scoring_lane,
-                  existingMedia: mediaUrls,
-                  existingStats: (checkinStats as CheckinProofStats | null) ?? null,
-                });
+              const honor = await attachHonorCardToCheckin({
+                userId: uid,
+                checkinId,
+                postId,
+                card: honorModel,
+                laneId: subjectRow?.scoring_lane,
+                existingMedia: mediaUrls,
+                existingStats: (checkinStats as CheckinProofStats | null) ?? null,
+              });
+              if (honor) {
+                postId = honor.postId;
                 mediaUrls = honor.media_urls;
                 checkinStats = honor.checkin_stats;
-              } catch {
-                // The log already landed. Live still gets chips from a stats-only write.
               }
             }
           }

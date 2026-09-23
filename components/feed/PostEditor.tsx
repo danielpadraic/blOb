@@ -17,7 +17,7 @@ import { AppText } from '@/components/ui/AppText';
 import { WebTapButton } from '@/components/ui/WebTapButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useChallenge } from '@/hooks/useChallenge';
-import { writeHonorCheckinCard } from '@/lib/checkin/attachHonorCard';
+import { attachHonorCardToCheckin } from '@/lib/checkin/attachHonorCard';
 import { buildHonorProofCard } from '@/lib/checkin/honorCard';
 import { challengeClockTz } from '@/lib/checkinPeriod';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
@@ -344,23 +344,22 @@ export function PostEditor({
             timeZone: challengeClockTz(challenge.data),
           });
           if (honorModel) {
-            try {
-              const honor = await writeHonorCheckinCard({
-                userId: user.id,
-                postId: post.id,
-                card: honorModel,
-                laneId: post.checkin_stats?.scoring_lane,
-                existingMedia: nextMedia,
-                existingStats: post.checkin_stats ?? null,
-              });
+            const honor = await attachHonorCardToCheckin({
+              userId: user.id,
+              checkinId: String(post.checkin_id ?? ''),
+              postId: post.id,
+              card: honorModel,
+              laneId: post.checkin_stats?.scoring_lane,
+              existingMedia: nextMedia,
+              existingStats: post.checkin_stats ?? null,
+            });
+            if (honor) {
               nextMedia = honor.media_urls;
               applyEditedPostToFeeds(queryClient, {
-                id: post.id,
+                id: honor.postId,
                 media_urls: honor.media_urls,
                 checkin_stats: honor.checkin_stats,
               });
-            } catch {
-              // Numbers already saved. The drawn card still reads honor_fields on refresh.
             }
           }
         }
