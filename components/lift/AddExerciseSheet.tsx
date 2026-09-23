@@ -75,9 +75,11 @@ export function AddExerciseSheet({
   const [filter, setFilter] = useState<MuscleKey | null>(muscle ?? null);
   const [superset, setSuperset] = useState(false);
   const inputRef = useRef<TextInput>(null);
+  const pickingRef = useRef(false);
 
   useEffect(() => {
     if (visible) {
+      pickingRef.current = false;
       setQuery('');
       setFilter(muscle ?? null);
       setSuperset(false);
@@ -115,7 +117,21 @@ export function AddExerciseSheet({
   const restMatches = matchesRest(query);
 
   function pick(option: ExerciseOption) {
+    if (busy || pickingRef.current) {
+      return;
+    }
+    pickingRef.current = true;
     onSubmit({ option, createName: null, muscle: option.muscle, superset });
+    onClose();
+  }
+
+  function pickCreate() {
+    if (busy || pickingRef.current || !canCreate) {
+      return;
+    }
+    pickingRef.current = true;
+    onSubmit({ option: null, createName: trimmed, muscle: customMuscle, superset });
+    onClose();
   }
 
   function toggleFilter(key: MuscleKey) {
@@ -223,7 +239,13 @@ export function AddExerciseSheet({
           horizontal
           showsHorizontalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingBottom: 10 }}>
+          style={{ flexGrow: 0, flexShrink: 0 }}
+          contentContainerStyle={{
+            gap: 6,
+            paddingHorizontal: 16,
+            paddingBottom: 8,
+            alignItems: 'center',
+          }}>
           {MUSCLE_KEYS.map((key) => {
             const on = filter === key;
             return (
@@ -234,8 +256,8 @@ export function AddExerciseSheet({
                 accessibilityState={{ selected: on }}
                 onPress={() => toggleFilter(key)}
                 style={{
-                  minHeight: 36,
-                  paddingHorizontal: 14,
+                  minHeight: 28,
+                  paddingHorizontal: 10,
                   borderRadius: 999,
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -245,7 +267,7 @@ export function AddExerciseSheet({
                 }}>
                 <AppText
                   style={{
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: '700',
                     color: on ? THEME.accentForeground : THEME.textPrimary,
                   }}>
@@ -342,9 +364,7 @@ export function AddExerciseSheet({
               subtitle={`Your own exercise, filed under ${muscleShortLabel(customMuscle)}. Only you will see it.`}
               icon={GLYPH.plus}
               disabled={busy}
-              onPress={() =>
-                onSubmit({ option: null, createName: trimmed, muscle: customMuscle, superset })
-              }
+              onPress={pickCreate}
             />
           ) : null}
 

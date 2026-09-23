@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, TextInput, View } from 'react-native';
+import { Platform, TextInput, View } from 'react-native';
 
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
+import { WebTapButton } from '@/components/ui/WebTapButton';
+import { startHoldRepeat } from '@/lib/holdRepeat';
 import { formatLiftNumber } from '@/lib/lift/session';
 import { THEME } from '@/lib/theme';
 
@@ -14,8 +16,6 @@ import { THEME } from '@/lib/theme';
 
 const BUTTON_WIDTH = 34;
 const ROW_HEIGHT = 44;
-/** Visual width is tight so two of these fit a phone row; the tap area is not. */
-const HIT = { top: 4, bottom: 4, left: 5, right: 5 };
 /**
  * Two digits' worth of floor under the value.
  *
@@ -33,6 +33,7 @@ type NumberFieldProps = {
   label: string;
   placeholder?: string;
   editable?: boolean;
+  autoFocus?: boolean;
 };
 
 export function NumberField({
@@ -42,9 +43,11 @@ export function NumberField({
   label,
   placeholder = '0',
   editable = true,
+  autoFocus = false,
 }: NumberFieldProps) {
   const [text, setText] = useState(() => formatLiftNumber(value));
   const focused = useRef(false);
+  const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (!focused.current) {
@@ -69,7 +72,6 @@ export function NumberField({
         borderWidth: 1,
         borderColor: THEME.border,
         backgroundColor: editable ? THEME.surface : THEME.background,
-        overflow: 'hidden',
       }}>
       <StepButton
         direction={-1}
@@ -78,8 +80,10 @@ export function NumberField({
         onPress={() => onStep(-1)}
       />
       <TextInput
+        ref={inputRef}
         value={text}
         editable={editable}
+        autoFocus={autoFocus}
         onChangeText={setText}
         onFocus={() => {
           focused.current = true;
@@ -96,6 +100,7 @@ export function NumberField({
         style={{
           flex: 1,
           minWidth: MIN_VALUE_WIDTH,
+          zIndex: 2,
           height: ROW_HEIGHT - 2,
           textAlign: 'center',
           fontSize: 16,
@@ -103,7 +108,9 @@ export function NumberField({
           color: THEME.textPrimary,
           paddingHorizontal: 0,
           paddingVertical: 0,
-          ...(Platform.OS === 'web' ? { outlineStyle: 'none' as never } : null),
+          ...(Platform.OS === 'web'
+            ? ({ outlineStyle: 'none', cursor: 'text', userSelect: 'text' } as object)
+            : null),
         }}
       />
       <StepButton
@@ -127,27 +134,41 @@ function StepButton({
   disabled?: boolean;
   onPress: () => void;
 }) {
+  const stopRef = useRef<(() => void) | null>(null);
+  function startHold() {
+    if (disabled) {
+      return;
+    }
+    onPress();
+    stopRef.current?.();
+    stopRef.current = startHoldRepeat(onPress);
+  }
+  function stopHold() {
+    stopRef.current?.();
+    stopRef.current = null;
+  }
+  useEffect(() => () => stopHold(), []);
   return (
-    <Pressable
-      accessibilityRole="button"
+    <WebTapButton
       accessibilityLabel={label}
-      accessibilityState={{ disabled: Boolean(disabled) }}
       disabled={disabled}
-      hitSlop={HIT}
-      onPress={onPress}
-      style={({ pressed }) => ({
+      onPress={() => undefined}
+      onPressIn={startHold}
+      onPressOut={stopHold}
+      style={{
         width: BUTTON_WIDTH,
         height: ROW_HEIGHT,
+        zIndex: 1,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: pressed ? THEME.accentSoft : 'transparent',
+        backgroundColor: 'transparent',
         opacity: disabled ? 0.35 : 1,
-      })}>
+      }}>
       <Glyph
         name={direction === 1 ? GLYPH.plus : GLYPH.minus}
         color={THEME.textPrimary}
         size={15}
       />
-    </Pressable>
+    </WebTapButton>
   );
 }

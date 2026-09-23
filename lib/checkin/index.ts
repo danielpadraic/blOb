@@ -32,10 +32,12 @@ export {
 } from './rpc';
 export {
   CHECKIN_COMPLETE_BODY,
+  CHECKIN_STARTED_BODY,
   checkinComposerPrefill,
   checkinPostBody,
   checkinTaskLabel,
   isCheckinCompleteSentinel,
+  isCheckinStartedSentinel,
 } from './captions';
 export {
   CHECKIN_SAVE_PERMISSION,

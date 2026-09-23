@@ -91,6 +91,7 @@ import {
 } from '@/lib/checkin';
 import { checkinCameraFocused } from '@/lib/cameraAsk';
 import { requiredChallengeProofs } from '@/lib/challenges';
+import { remainingProofLabelsOf } from '@/lib/multiCheckin';
 import { blockingProofsForCheckin, dueProofsForCheckin } from '@/lib/taskCadence';
 import {
   beginCameraProof,
@@ -567,7 +568,10 @@ function SubmitWorkoutInner() {
           officialOps,
           participantStatus: subjectRow?.status,
           eliminatedAt: subjectRow?.eliminated_at,
-          periodComplete: checkinPeriodComplete(challenge, { checkinPhase: checkinQuery.data?.phase }),
+          periodComplete: checkinPeriodComplete(challenge, {
+            checkinPhase: checkinQuery.data?.phase,
+            remainingProofLabels: remainingProofLabelsOf(challenge, checkinQuery.data?.proof_parts),
+          }),
         })
     : null;
 
@@ -575,10 +579,23 @@ function SubmitWorkoutInner() {
     if (!id || !challenge || !checkinQuery.isFetched || isProxy) {
       return;
     }
-    if (checkinPeriodComplete(challenge, { checkinPhase: checkinQuery.data?.phase })) {
+    if (
+      checkinPeriodComplete(challenge, {
+        checkinPhase: checkinQuery.data?.phase,
+        remainingProofLabels: remainingProofLabelsOf(challenge, checkinQuery.data?.proof_parts),
+      })
+    ) {
       router.replace(challengeDetailHref(id, 'lobby', null, { tab: 'overview' }) as never);
     }
-  }, [challenge, checkinQuery.data?.phase, checkinQuery.isFetched, id, isProxy, router]);
+  }, [
+    challenge,
+    checkinQuery.data?.phase,
+    checkinQuery.data?.proof_parts,
+    checkinQuery.isFetched,
+    id,
+    isProxy,
+    router,
+  ]);
   /**
    * Challenges with no stored proofs get theirs synthesized, and makeProof mints a fresh id each
    * call. Recomputing per render changed every proof.id, remounting the note field on each
@@ -1349,12 +1366,17 @@ function SubmitWorkoutInner() {
         }
       }
     }
+    const mergedParts = { ...(checkinQuery.data?.proof_parts ?? {}) };
+    for (const proof of proofSteps) {
+      const part = slotPart(proof, drafts[proof.id], distanceUnit);
+      if (part && (part.url || (part.urls && part.urls.length) || part.health || part.text)) {
+        mergedParts[proof.id] = { ...mergedParts[proof.id], ...part };
+      }
+    }
+    const remainingNow = remainingProofLabelsOf(challenge, mergedParts);
     const readyNow =
       honorOnly ||
-      (blockingProofs.length > 0 &&
-        blockingProofs.every((proof) =>
-          partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }),
-        ));
+      remainingNow.length === 0;
     const attachedNow =
       honorOnly ||
       proofSteps.some((proof) =>
@@ -1393,7 +1415,7 @@ function SubmitWorkoutInner() {
         comparableHonor && comparableConfig
           ? comparableCheckinCaption(comparableConfig, logDraft.text)
           : null;
-      const body = comparableNotes ?? checkinPostBody(caption.text);
+      const body = comparableNotes ?? checkinPostBody(caption.text, readyNow);
       let saved: ChallengeCheckin | null = checkinQuery.data ?? null;
       let savedParts = { ...(checkinQuery.data?.proof_parts ?? {}) };
       const failedExtras: string[] = [];

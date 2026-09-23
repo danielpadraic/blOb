@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Platform, TextInput, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
 import { WebTapButton } from '@/components/ui/WebTapButton';
 import { copy } from '@/lib/copy';
+import { startHoldRepeat } from '@/lib/holdRepeat';
 import { THEME } from '@/lib/theme';
 
 const BUMP = 44;
@@ -202,10 +203,26 @@ function StepperBump({
   faded: boolean;
   onPress: () => void;
 }) {
+  const stopRef = useRef<(() => void) | null>(null);
+  function startHold() {
+    if (faded) {
+      return;
+    }
+    onPress();
+    stopRef.current?.();
+    stopRef.current = startHoldRepeat(onPress);
+  }
+  function stopHold() {
+    stopRef.current?.();
+    stopRef.current = null;
+  }
+  useEffect(() => () => stopHold(), []);
   return (
     <WebTapButton
       accessibilityLabel={label}
-      onPress={onPress}
+      onPress={() => undefined}
+      onPressIn={startHold}
+      onPressOut={stopHold}
       style={{
         width: BUMP,
         height: BUMP,

@@ -65,7 +65,6 @@ import {
 } from '@/lib/liveThread';
 import {
   LIVE_VIEWPORT_READY_MIN,
-  clearLiveInitialScroll,
   clearLiveMidScroll,
   hasLiveInitialScroll,
   liveLandingFocus,
@@ -492,13 +491,9 @@ export function LiveThread({
     if (focused) {
       return;
     }
-    // Overview / Board / leave. Next Live open lands latest — not a prior offset.
-    clearLiveInitialScroll(landingChallengeId);
-    clearLiveMidScroll(landingChallengeId);
-    firstPaintStartedRef.current = false;
+    // Overview / Board keeps the one-shot land. Only leaving the challenge clears it.
     firstPaintPendingRef.current = false;
-    restoringMidScrollRef.current = false;
-  }, [focused, landingChallengeId]);
+  }, [focused]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
@@ -620,24 +615,11 @@ export function LiveThread({
       return;
     }
     pinToLiveEdge(false, 'first-paint');
-    // Mark only once we are actually at the newest end (or the user scrolls up).
+    markLiveInitialScroll(landingChallengeId);
+    firstPaintPendingRef.current = false;
+    notifyFirstPaint();
   }, [emptyList, focused, highlightKey, landingChallengeId, notifyFirstPaint, pinToLiveEdge]);
   finishFirstPaintPinRef.current = finishFirstPaintPin;
-
-  useEffect(() => {
-    if (!firstPaintPendingRef.current) {
-      return;
-    }
-    const timer = setTimeout(() => {
-      if (!firstPaintPendingRef.current) {
-        return;
-      }
-      markLiveInitialScroll(landingChallengeId);
-      firstPaintPendingRef.current = false;
-      notifyFirstPaint();
-    }, 1200);
-    return () => clearTimeout(timer);
-  }, [focused, landingChallengeId, notifyFirstPaint, rows.length === 0]);
 
   const lastNewestIdRef = useRef<string | null>(null);
   useEffect(() => {

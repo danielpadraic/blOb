@@ -29,6 +29,7 @@ type SetRowProps = {
   unit: WeightUnit;
   /** A saved session renders the same row, just not editable. */
   readOnly?: boolean;
+  autoFocus?: boolean;
   canRemove?: boolean;
   onChange: (patch: Partial<Pick<LiftSetDraft, 'weight' | 'reps'>>) => void;
   onToggleComplete: () => void;
@@ -40,6 +41,7 @@ export function SetRow({
   label,
   unit,
   readOnly,
+  autoFocus,
   canRemove,
   onChange,
   onToggleComplete,
@@ -93,6 +95,7 @@ export function SetRow({
           <NumberField
             value={set.weight}
             label={`${label === 'W' ? 'Warm-up' : `Set ${label}`} weight in ${unit}`}
+            autoFocus={autoFocus}
             onCommit={(text) => onChange({ weight: clampWeightInput(text) })}
             onStep={(direction) => onChange({ weight: stepWeight(set.weight, direction, unit) })}
           />

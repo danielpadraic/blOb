@@ -7,6 +7,7 @@ import {
 } from '@/lib/challengeProofs';
 
 export const CHECKIN_COMPLETE_BODY = 'Check-in Complete';
+export const CHECKIN_STARTED_BODY = 'Check-in started';
 
 const SLOT_TITLE_CAPTIONS = new Set(
   [
@@ -18,13 +19,20 @@ const SLOT_TITLE_CAPTIONS = new Set(
   ].map((line) => line.trim().toLowerCase()),
 );
 
-/** Stored body when the composer is empty. Never treat this as something they typed. */
-export function isCheckinCompleteSentinel(text?: string | null): boolean {
-  const normalized = String(text ?? '')
+function normalizedCheckinLine(text?: string | null): string {
+  return String(text ?? '')
     .trim()
     .replace(/[-–—]/g, ' ')
     .replace(/\s+/g, ' ');
-  return /^check\s*in\s*complete\.?$/i.test(normalized);
+}
+
+/** Stored body when the composer is empty. Never treat this as something they typed. */
+export function isCheckinCompleteSentinel(text?: string | null): boolean {
+  return /^check\s*in\s*complete\.?$/i.test(normalizedCheckinLine(text));
+}
+
+export function isCheckinStartedSentinel(text?: string | null): boolean {
+  return /^check\s*in\s*started\.?$/i.test(normalizedCheckinLine(text));
 }
 
 function isSlotTitleCaption(text: string): boolean {
@@ -44,13 +52,24 @@ function isSlotTitleCaption(text: string): boolean {
 /** Composer field: real caption only. Empty if they never typed one. */
 export function checkinComposerPrefill(text?: string | null): string {
   const trimmed = String(text ?? '').trim();
-  return !trimmed || isCheckinCompleteSentinel(trimmed) || isSlotTitleCaption(trimmed) ? '' : trimmed;
+  return !trimmed ||
+    isCheckinCompleteSentinel(trimmed) ||
+    isCheckinStartedSentinel(trimmed) ||
+    isSlotTitleCaption(trimmed)
+    ? ''
+    : trimmed;
 }
 
-/** Feed post body: the share field, or Check-in Complete when that field is empty. */
-export function checkinPostBody(userCaption?: string | null): string {
+/**
+ * Feed post body: the share field, or Complete only when every required proof is in.
+ * A partial (selfie-only) empty composer is Check-in started.
+ */
+export function checkinPostBody(userCaption?: string | null, complete = true): string {
   const trimmed = checkinComposerPrefill(userCaption);
-  return trimmed || CHECKIN_COMPLETE_BODY;
+  if (trimmed) {
+    return trimmed;
+  }
+  return complete ? CHECKIN_COMPLETE_BODY : CHECKIN_STARTED_BODY;
 }
 
 export function checkinTaskLabel(challenge: {

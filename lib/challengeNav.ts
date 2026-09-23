@@ -278,6 +278,7 @@ export function checkinPickerHref(row: {
   id: string;
   checkinPhase?: string | null;
   submittedThisPeriod?: boolean;
+  remainingProofLabels?: readonly string[] | null;
   format?: string | null;
   challenge_type?: string | null;
   frequency?: string | null;
@@ -294,6 +295,7 @@ export function checkinPickerHref(row: {
   const complete = checkinPeriodComplete(row, {
     submittedThisPeriod: row.submittedThisPeriod,
     checkinPhase: row.checkinPhase,
+    remainingProofLabels: row.remainingProofLabels,
   });
   return String(pickerHref(id, complete && usesPeriodCheckinGate(row)));
 }

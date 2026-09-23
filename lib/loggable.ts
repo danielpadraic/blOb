@@ -229,9 +229,21 @@ export function isCheckinPickerRow(
 
 export function checkinPeriodComplete(
   challenge: Parameters<typeof usesPeriodCheckinGate>[0],
-  opts?: { submittedThisPeriod?: boolean; loggedThisPeriod?: boolean; checkinPhase?: string | null },
+  opts?: {
+    submittedThisPeriod?: boolean;
+    loggedThisPeriod?: boolean;
+    checkinPhase?: string | null;
+    /** Non-empty remaining required slots: selfie-only is never Complete. */
+    remainingProofLabels?: readonly string[] | null;
+  },
 ): boolean {
   if (!usesPeriodCheckinGate(challenge)) {
+    return false;
+  }
+  const remaining = (opts?.remainingProofLabels ?? [])
+    .map((label) => String(label ?? '').trim())
+    .filter(Boolean);
+  if (remaining.length > 0) {
     return false;
   }
   return Boolean(

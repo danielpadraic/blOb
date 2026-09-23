@@ -199,6 +199,7 @@ import { bucksJoinCta, INSUFFICIENT_JOIN_COPY } from '@/lib/joinCta';
 import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
 import { cashJoinUi, challengeMoneyShape } from '@/lib/geo/eligibility';
 import { isSubmittedCheckin, stickyCheckinFooterTitle } from '@/lib/challengeCheckin';
+import { remainingProofLabelsOf } from '@/lib/multiCheckin';
 import { viewerCanRosterManage } from '@/lib/hostRigor';
 import { buildBoard, yourStandingLine } from '@/lib/board';
 import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
@@ -435,13 +436,6 @@ export default function ChallengeDetailScreen() {
     }, [id, navigation]),
   );
   useEffect(() => {
-    if (liveTabFocused) {
-      return;
-    }
-    // Overview / Board. Next Live tap lands latest — not a leftover Day 13 offset.
-    clearLiveInitialScroll(id);
-  }, [id, liveTabFocused]);
-  useEffect(() => {
     applyLiveBackGesture(navigation, liveTabFocused && screenFocused);
   }, [liveTabFocused, navigation, screenFocused]);
   useLiveThreadFocus(id, liveTabFocused && screenFocused);
@@ -613,9 +607,16 @@ export default function ChallengeDetailScreen() {
     );
   }, [challenge, isJoined, roster.data, user?.id]);
   const durationDays = challengeDurationDays(challenge);
-  const loggedToday =
+  const remainingPeriodProofs = remainingProofLabelsOf(challenge, periodCheckin.data?.proof_parts);
+  const periodSubmitted =
     periodCheckin.data?.phase === 'submitted' || isSubmittedCheckin(periodCheckin.data);
-  const checkinPhase = loggedToday ? 'submitted' : (periodCheckin.data?.phase ?? 'none');
+  const loggedToday = remainingPeriodProofs.length === 0 && periodSubmitted;
+  const rawPhase = periodCheckin.data?.phase ?? 'none';
+  const checkinPhase = loggedToday
+    ? 'submitted'
+    : remainingPeriodProofs.length > 0 && (periodSubmitted || rawPhase === 'ready' || rawPhase === 'in_progress')
+      ? 'in_progress'
+      : rawPhase;
   const daysCompleted = heroRingDays({
     status: challengeQuery.data?.status,
     submitted: Math.max(submittedCheckins.data ?? 0, loggedToday && !usesTotalCountCheckins(challenge) ? 1 : 0),

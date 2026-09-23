@@ -157,6 +157,18 @@ describe('isLoggable format gate', () => {
     expect(isCheckinPickerRow(thirtyDay, IN, { now: NOW })).toBe(true);
     expect(checkinPeriodComplete(thirtyDay, { submittedThisPeriod: true })).toBe(true);
     expect(checkinPeriodComplete(thirtyDay, { checkinPhase: 'submitted' })).toBe(true);
+    expect(
+      checkinPeriodComplete(thirtyDay, {
+        checkinPhase: 'submitted',
+        remainingProofLabels: ['post-workout selfie', 'heart rate'],
+      }),
+    ).toBe(false);
+    expect(
+      checkinPeriodComplete(thirtyDay, {
+        submittedThisPeriod: true,
+        remainingProofLabels: [],
+      }),
+    ).toBe(true);
     expect(checkinPeriodComplete({ ...LIVE, format: 'points' }, { submittedThisPeriod: true })).toBe(
       false,
     );

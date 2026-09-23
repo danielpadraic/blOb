@@ -91,6 +91,15 @@ describe('checkinPickerHref', () => {
         checkinPhase: 'submitted',
       }),
     ).toBe(`/challenges/${PRAYER}`);
+    expect(
+      checkinPickerHref({
+        id: PRAYER,
+        format: 'consistency',
+        frequency: 'daily',
+        checkinPhase: 'submitted',
+        remainingProofLabels: ['post-workout selfie', 'heart rate'],
+      }),
+    ).toBe(`/challenges/${PRAYER}/submit`);
     expect(String(checkinPickerHref({ id: PRAYER }))).not.toContain('capture');
   });
 });

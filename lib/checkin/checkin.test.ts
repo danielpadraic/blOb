@@ -139,6 +139,9 @@ describe('official weekly proofs', () => {
     expect(checkinPostBody('  ')).toBe('Check-in Complete');
     expect(checkinPostBody('Check-in Complete')).toBe('Check-in Complete');
     expect(checkinPostBody('Check In Complete')).toBe('Check-in Complete');
+    expect(checkinPostBody('', false)).toBe('Check-in started');
+    expect(checkinPostBody('  ', false)).toBe('Check-in started');
+    expect(checkinPostBody('legs day', false)).toBe('legs day');
     expect(checkinPostBody('legs day')).toBe('legs day');
     expect(checkinPostBody(' legs day ')).toBe('legs day');
     expect(checkinComposerPrefill('')).toBe('');
@@ -148,6 +151,7 @@ describe('official weekly proofs', () => {
     expect(checkinComposerPrefill('legs day')).toBe('legs day');
     expect(checkinComposerPrefill('Post a pre-workout selfie.')).toBe('');
     expect(checkinComposerPrefill('How did it go?')).toBe('');
+    expect(checkinComposerPrefill('Check-in started')).toBe('');
     expect(canSendCheckin(true, false, 'none', false)).toBe(true);
     expect(canSendCheckin(true, true, 'submitted', false)).toBe(true);
     expect(canSendCheckin(false, true, 'ready', true)).toBe(false);

@@ -147,6 +147,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
   const [collapsedMuscles, setCollapsedMuscles] = useState<Set<string>>(new Set());
   const [collapsedExercises, setCollapsedExercises] = useState<Set<string>>(new Set());
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [focusExerciseKey, setFocusExerciseKey] = useState<string | null>(null);
   const [sheetMuscle, setSheetMuscle] = useState<MuscleKey | null>(null);
   /** The exercise being pointed at a different movement, keeping its sets. */
   const [swapFor, setSwapFor] = useState<string | null>(null);
@@ -327,21 +328,39 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
 
       if (identity) {
         rememberRecentExercise(identity.exerciseId);
-        edit((current) =>
-          swapKey
+        const prevKeys = new Set((draft.exercises ?? []).map((row) => row.key));
+        edit((current) => {
+          const next = swapKey
             ? swapExercise(current, swapKey, { ...identity, muscleKey: result.muscle })
             : addExercise(current, {
                 ...identity,
                 muscleKey: result.muscle,
                 superset: result.superset,
-              }),
-        );
+              });
+          const added = next.exercises.find((row) => !prevKeys.has(row.key));
+          if (added) {
+            setCollapsedMuscles((muscles) => {
+              const open = new Set(muscles);
+              open.delete(added.muscleKey);
+              return open;
+            });
+            setCollapsedExercises((exercises) => {
+              const open = new Set(exercises);
+              open.delete(added.key);
+              return open;
+            });
+            setFocusExerciseKey(added.key);
+            setTimeout(() => setFocusExerciseKey((key) => (key === added.key ? null : key)), 1200);
+          } else if (swapKey) {
+            setFocusExerciseKey(swapKey);
+            setTimeout(() => setFocusExerciseKey((key) => (key === swapKey ? null : key)), 1200);
+          }
+          return next;
+        });
       }
-      if (swapKey) {
-        setPickerOpen(false);
-        setSheetMuscle(null);
-        setSwapFor(null);
-      }
+      setPickerOpen(false);
+      setSheetMuscle(null);
+      setSwapFor(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not add that exercise.');
     }
@@ -671,6 +690,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
       <Stack.Screen options={{ ...backHeader, title: readOnly ? 'Lift' : 'Logging' }} />
       <KeyboardFormShell
         padded
+        protectFieldFocus
         closedFooterPad={tabBarLift(insets.bottom, 'sticky')}
         footer={
           readOnly ? (
@@ -1063,6 +1083,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
                             exercise={exercise}
                             unit={draft.unit}
                             readOnly={readOnly}
+                            autoFocusSet={focusExerciseKey === exercise.key}
                             collapsed={collapsedExercises.has(exercise.key)}
                             supersetLabel={labels[exercise.key] ?? null}
                             supersetAbove={grouped != null && previous?.supersetGroup === grouped}

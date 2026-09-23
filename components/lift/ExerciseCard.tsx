@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { SetRow, SetRowHeader } from '@/components/lift/SetRow';
 import { AppText } from '@/components/ui/AppText';
+import { useKeyboardForm } from '@/components/ui/KeyboardFormShell';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { setLabel } from '@/lib/lift/session';
 import type { LiftExerciseDraft, LiftSetDraft, LiftSetKind } from '@/lib/lift/types';
@@ -25,6 +26,7 @@ type ExerciseCardProps = {
   supersetAbove?: boolean;
   supersetBelow?: boolean;
   readOnly?: boolean;
+  autoFocusSet?: boolean;
   onToggleCollapsed: () => void;
   onChangeSet: (setKey: string, patch: Partial<Pick<LiftSetDraft, 'weight' | 'reps'>>) => void;
   onToggleSet: (setKey: string) => void;
@@ -47,6 +49,7 @@ export function ExerciseCard({
   supersetAbove,
   supersetBelow,
   readOnly,
+  autoFocusSet,
   onToggleCollapsed,
   onChangeSet,
   onToggleSet,
@@ -61,12 +64,27 @@ export function ExerciseCard({
 }: ExerciseCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const cardRef = useRef<View>(null);
+  const form = useKeyboardForm();
+  useEffect(() => {
+    if (!autoFocusSet || !cardRef.current) {
+      return;
+    }
+    const handle = setTimeout(() => {
+      if (cardRef.current) {
+        form?.scrollFieldIntoView(cardRef.current);
+      }
+    }, 160);
+    return () => clearTimeout(handle);
+  }, [autoFocusSet, form]);
   const workSets = exercise.sets.filter((set) => set.kind === 'work').length;
   const doneSets = exercise.sets.filter((set) => set.completedAt).length;
   const inSuperset = Boolean(supersetLabel);
 
   return (
     <View
+      ref={cardRef}
+      collapsable={false}
       style={{
         backgroundColor: THEME.surface,
         borderWidth: 1,
@@ -235,6 +253,7 @@ export function ExerciseCard({
                   label={setLabel(exercise.sets, index)}
                   unit={unit}
                   readOnly={readOnly}
+                  autoFocus={Boolean(autoFocusSet) && index === 0}
                   canRemove={exercise.sets.length > 1}
                   onChange={(patch) => onChangeSet(set.key, patch)}
                   onToggleComplete={() => onToggleSet(set.key)}

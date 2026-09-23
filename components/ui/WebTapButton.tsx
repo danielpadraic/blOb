@@ -5,6 +5,8 @@ const TAP = 44;
 
 type WebTapButtonProps = {
   onPress: () => void;
+  onPressIn?: () => void;
+  onPressOut?: () => void;
   accessibilityLabel: string;
   children: ReactNode;
   disabled?: boolean;
@@ -17,6 +19,8 @@ type WebTapButtonProps = {
  */
 export function WebTapButton({
   onPress,
+  onPressIn,
+  onPressOut,
   accessibilityLabel,
   children,
   disabled,
@@ -29,10 +33,17 @@ export function WebTapButton({
         type: 'button',
         'aria-label': accessibilityLabel,
         disabled: Boolean(disabled),
+        onPointerDown: () => {
+          if (!disabled) {
+            onPressIn?.();
+          }
+        },
+        onPointerUp: () => onPressOut?.(),
+        onPointerLeave: () => onPressOut?.(),
         onClick: (event: { stopPropagation: () => void; preventDefault: () => void }) => {
           event.preventDefault();
           event.stopPropagation();
-          if (!disabled) {
+          if (!disabled && !onPressIn) {
             onPress();
           }
         },
@@ -63,7 +74,9 @@ export function WebTapButton({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       disabled={disabled}
-      onPress={onPress}
+      onPress={onPressIn ? undefined : onPress}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
       hitSlop={12}
       style={style}>
       {children}
