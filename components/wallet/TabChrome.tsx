@@ -32,6 +32,7 @@ const TAB_CHROME_ROOTS = new Set([
   'checkin',
   'circles',
   'lift',
+  'counter',
 ]);
 
 export function isInsideTabChrome(segments: string[]): boolean {
@@ -53,7 +54,8 @@ export function isMainTabRoute(segments: string[]): boolean {
     root === 'capture' ||
     root === 'checkin' ||
     root === 'circles' ||
-    root === 'lift'
+    root === 'lift' ||
+    root === 'counter'
   ) {
     return false;
   }

@@ -486,6 +486,14 @@ export const LIFTS_HISTORY_HREF = '/profile/lifts' as Href;
  */
 export const LIFT_TIMER_HREF = '/lift/timer' as Href;
 
+/** Counter: live sheets, history, and a locked snapshot. Owner-only. */
+export const COUNTER_START_HREF = '/counter' as Href;
+export const COUNTER_HISTORY_HREF = '/counter/history' as Href;
+
+export function counterHref(id: string): Href {
+  return `/counter/${String(id ?? '').trim()}` as Href;
+}
+
 /** Literal path, like the check-in hrefs: an object `{ pathname, params }` breaks Safari. */
 export function liftSessionHref(id: string, extra?: { from?: 'history' }): Href {
   const sessionId = String(id ?? '').trim();

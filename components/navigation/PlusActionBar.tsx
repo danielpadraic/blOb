@@ -6,6 +6,7 @@ import { TourAnchor } from '@/components/tour/TourAnchor';
 import { useTourOptional } from '@/components/tour/TourContext';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
+import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import type { LoggableChallenge } from '@/hooks/useLoggableChallenge';
 import { asLoggableList } from '@/lib/loggable';
 import { copy } from '@/lib/copy';
@@ -15,6 +16,7 @@ export type QuickActionId =
   | 'log'
   | 'lift'
   | 'timer'
+  | 'counter'
   | 'create'
   | 'join'
   | 'post'
@@ -83,20 +85,9 @@ export function PlusActionBar({
           paddingHorizontal: 12,
         }}>
         <TourAnchor id={step === 'post' ? 'tour-plus-post' : 'tour-plus-root'}>
-        <View
-          style={{
-            width: barWidth,
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: THEME.surface,
-            borderRadius: 18,
-            borderWidth: 1,
-            borderColor: THEME.border,
-            overflow: 'hidden',
-            ...themeShadow('card'),
-          }}>
+        <View style={{ width: barWidth, gap: 8 }}>
           {step === 'post' ? (
-            <>
+            <View style={barStyle}>
               <BarButton
                 tourId="tour-plus-wave"
                 label={copy('wave.noun')}
@@ -126,53 +117,68 @@ export function PlusActionBar({
                   }
                 }}
               />
-            </>
+            </View>
           ) : (
             <>
-              <BarButton
-                tourId="tour-plus-checkin"
-                label="Check In"
-                onPress={() => {
-                  if (tourLocked) {
-                    return;
-                  }
-                  if (loggables.length === 1) {
-                    pickLog(loggables[0]);
-                    return;
-                  }
-                  onAction('log');
-                }}
-              />
-              <BarDivider />
-              <BarButton
-                tourId="tour-plus-post-btn"
-                label="Post"
-                onPress={() => {
-                  if (!tourLocked) {
-                    setStep('post');
-                  }
-                }}
-              />
-              <BarDivider />
-              <BarButton
-                tourId="tour-plus-lift"
-                label="Lift"
-                onPress={() => {
-                  if (!tourLocked) {
-                    onAction('lift');
-                  }
-                }}
-              />
-              <BarDivider />
-              <BarButton
-                tourId="tour-plus-timer"
-                label="Timer"
-                onPress={() => {
-                  if (!tourLocked) {
-                    onAction('timer');
-                  }
-                }}
-              />
+              <View style={barStyle}>
+                <BarButton
+                  tourId="tour-plus-checkin"
+                  label="Check In"
+                  onPress={() => {
+                    if (tourLocked) {
+                      return;
+                    }
+                    if (loggables.length === 1) {
+                      pickLog(loggables[0]);
+                      return;
+                    }
+                    onAction('log');
+                  }}
+                />
+                <BarDivider />
+                <BarButton
+                  tourId="tour-plus-post-btn"
+                  label="Post"
+                  onPress={() => {
+                    if (!tourLocked) {
+                      setStep('post');
+                    }
+                  }}
+                />
+              </View>
+              <View style={barStyle}>
+                <BarButton
+                  tourId="tour-plus-lift"
+                  glyph={GLYPH.lift}
+                  label="Lift"
+                  onPress={() => {
+                    if (!tourLocked) {
+                      onAction('lift');
+                    }
+                  }}
+                />
+                <BarDivider />
+                <BarButton
+                  tourId="tour-plus-timer"
+                  glyph={GLYPH.clock}
+                  label="Timer"
+                  onPress={() => {
+                    if (!tourLocked) {
+                      onAction('timer');
+                    }
+                  }}
+                />
+                <BarDivider />
+                <BarButton
+                  glyph={GLYPH.counter}
+                  label="Counter"
+                  onPress={() => {
+                    if (!tourLocked) {
+                      onAction('counter');
+                    }
+                  }}
+                />
+              </View>
             </>
           )}
         </View>
@@ -181,6 +187,17 @@ export function PlusActionBar({
     </ChromeOverlay>
   );
 }
+
+const barStyle = {
+  flexDirection: 'row' as const,
+  alignItems: 'center' as const,
+  backgroundColor: THEME.surface,
+  borderRadius: 18,
+  borderWidth: 1,
+  borderColor: THEME.border,
+  overflow: 'hidden' as const,
+  ...themeShadow('card'),
+};
 
 function BarDivider() {
   return <View style={{ width: 1, alignSelf: 'stretch', backgroundColor: THEME.border }} />;
@@ -191,11 +208,13 @@ function BarButton({
   onPress,
   disabled,
   tourId,
+  glyph,
 }: {
   label: string;
   onPress: () => void;
   disabled?: boolean;
   tourId?: string;
+  glyph?: (typeof GLYPH)[keyof typeof GLYPH];
 }) {
   const tour = useTourOptional();
   const lit = Boolean(tour?.active && tourId && tour.targetId === tourId);
@@ -211,12 +230,13 @@ function BarButton({
         minHeight: 44,
         alignItems: 'center',
         justifyContent: 'center',
-        // Four actions share this row on a phone, so the label truncates rather than wrapping —
-        // a second line would push the bar taller than the tab bar it floats above.
         paddingHorizontal: 6,
+        paddingVertical: glyph ? 8 : 0,
+        gap: glyph ? 4 : 0,
         opacity: disabled ? 0.38 : 1,
         backgroundColor: lit ? THEME.accentSoft : undefined,
       }}>
+      {glyph ? <Glyph name={glyph} color={THEME.textPrimary} size={16} /> : null}
       <AppText numberOfLines={1} className="text-[15px] font-extrabold text-charcoal">
         {label}
       </AppText>

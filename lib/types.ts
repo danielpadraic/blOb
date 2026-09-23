@@ -1,4 +1,5 @@
 import type { CheckinProofStats } from '@/lib/checkin/proofStats';
+import type { CounterMetricRow, CounterRow } from '@/lib/counter/types';
 import type { WorkoutRoute } from '@/lib/health/route';
 import type {
   LiftCustomExerciseRow,
@@ -1415,6 +1416,18 @@ export type Database = {
         Partial<LiftSessionRow>,
         Partial<LiftSessionRow>,
         [Relationship<'lift_sessions_user_id_fkey', 'user_id', 'profiles', 'id'>]
+      >;
+      counters: TableDef<
+        CounterRow,
+        Partial<CounterRow>,
+        Partial<CounterRow>,
+        [Relationship<'counters_user_id_fkey', 'user_id', 'profiles', 'id'>]
+      >;
+      counter_metrics: TableDef<
+        CounterMetricRow,
+        Partial<CounterMetricRow>,
+        Partial<CounterMetricRow>,
+        [Relationship<'counter_metrics_counter_id_fkey', 'counter_id', 'counters', 'id'>]
       >;
       lift_session_exercises: TableDef<
         LiftSessionExerciseRow,

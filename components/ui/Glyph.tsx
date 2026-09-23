@@ -86,6 +86,7 @@ export const GLYPH = {
     android: 'fitness_center',
     web: 'fitness_center',
   },
+  counter: { ios: 'plusminus', android: 'exposure', web: 'exposure' },
   trendUp: { ios: 'chart.line.uptrend.xyaxis', android: 'trending_up', web: 'trending_up' },
 } as const satisfies Record<string, GlyphName>;
 

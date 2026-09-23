@@ -44,6 +44,7 @@ import { clearLastOpenChallenge, goHome, pushCheckinPickerRow } from '@/lib/chal
 import {
   CIRCLES_CREATE_HREF,
   isWatchSurfacePath,
+  COUNTER_START_HREF,
   LIFT_START_HREF,
   LIFT_TIMER_HREF,
   LOBBY_HREF,
@@ -363,6 +364,10 @@ function TabLayoutInner() {
       go(LIFT_TIMER_HREF);
       return;
     }
+    if (id === 'counter') {
+      go(COUNTER_START_HREF);
+      return;
+    }
     if (id === 'create') {
       const root = (segments as string[]).filter((segment) => !segment.startsWith('('))[0];
       go(root === 'feed' ? '/challenges/create?returnTo=feed' : '/challenges/create');
@@ -472,6 +477,7 @@ function TabLayoutInner() {
           <Tabs.Screen name="capture" options={{ href: null, title: 'Capture' }} />
           <Tabs.Screen name="checkin" options={{ href: null, title: 'Multi Check-In' }} />
           <Tabs.Screen name="lift" options={{ href: null, title: 'Lift' }} />
+          <Tabs.Screen name="counter" options={{ href: null, title: 'Counter' }} />
           <Tabs.Screen
             name="profile"
             options={{

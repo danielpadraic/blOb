@@ -16,6 +16,7 @@ export const NOTIFICATION_ROUTE_SEGMENTS: readonly string[] = [
   'checkin',
   'circles',
   'compose',
+  'counter',
   'feed',
   'forgot-password',
   'friends',
