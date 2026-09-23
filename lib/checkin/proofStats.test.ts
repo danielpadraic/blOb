@@ -67,12 +67,31 @@ describe('proof stat chips', () => {
     expect(chips.map((chip) => chip.label)).toEqual(['Workout Time 10:00', '90 cal']);
   });
 
-  it('renders nothing for a Prayer or honor check-in', () => {
+  it('renders nothing for a Prayer or empty honor check-in', () => {
     expect(proofStatChips(null)).toEqual([]);
     expect(proofStatChips(undefined)).toEqual([]);
     expect(proofStatChips({})).toEqual([]);
     expect(hasProofStats(null)).toBe(false);
     expect(hasProofStats(STRENGTH)).toBe(true);
+  });
+
+  it('prints honor form fields from scoring_config, including zeros', () => {
+    const chips = proofStatChips({
+      source: 'honor_card',
+      honor_fields: [
+        { key: 'act-dials', label: 'Dials', chip_label: 'Dials', value: 0, kind: 'count' },
+        { key: 'act-ap', label: 'AP', chip_label: 'AP', value: 400, kind: 'money' },
+      ],
+    });
+    expect(chips.map((chip) => chip.label)).toEqual(['0 Dials', '$400 AP']);
+    expect(
+      hasProofStats({
+        source: 'honor_card',
+        honor_fields: [
+          { key: 'act-dials', label: 'Dials', chip_label: 'Dials', value: 0, kind: 'count' },
+        ],
+      }),
+    ).toBe(true);
   });
 
   it('rounds long distances to one decimal', () => {

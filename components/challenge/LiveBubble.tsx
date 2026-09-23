@@ -22,6 +22,7 @@ import { isLiveComment } from '@/lib/commentEdit';
 import { loggedByNameFromStats, proxyLoggedByLine, splitProxyCheckinContent } from '@/lib/challengeMods';
 import { checkinCardCaption } from '@/lib/checkinPost';
 import { copy } from '@/lib/copy';
+import { honorSlideForPost, isHonorCardSlide } from '@/lib/checkin/honorCard';
 import { isWorkoutCardSlide, workoutSlideForPost } from '@/lib/health/postWorkoutCard';
 import {
   formatLiveClock,
@@ -120,11 +121,13 @@ export const LiveBubble = memo(function LiveBubble({
       }),
     [post.checkin_id, post.checkin_stats],
   );
+  const honor = useMemo(() => honorSlideForPost({ stats: post.checkin_stats }), [post.checkin_stats]);
   const items: LightboxItem[] = visuals.map((uri) => ({
     uri,
     label: liveProofCaption(post, uri, checkin ? headline : caption),
     meta: time,
     workout: workout && isWorkoutCardSlide(uri) ? workout : null,
+    honor: honor && (isHonorCardSlide(uri) || uri.split('?')[0] === honor.url.split('?')[0]) ? honor : null,
   }));
   const alignEnd = mine && !system;
   const canSwipeReply = Boolean(onReply) && !removed && !editing;
@@ -424,6 +427,7 @@ export const LiveBubble = memo(function LiveBubble({
                     postId={post.id}
                     urls={visuals}
                     workout={workout}
+                    honor={honor}
                     pauseCycle
                     liveInline
                     lightboxOrigin={

@@ -13,9 +13,8 @@ type Props = {
 };
 
 /**
- * Compact stats chips for a fitness check-in post. Renders nothing when the payload is absent or
- * carries no numbers, which is how Prayer, honor and every non-fitness category stay clean.
- * Shared by Live and Home so iOS, Android and Web read the same.
+ * Compact stats chips for a check-in post. Fitness uses duration / HR / miles. Honor / points
+ * uses the scoring_config fields stored on the post. Shared by Live and Home.
  *
  * Chips only. The body text beside them is whatever the user typed, never a generated sentence.
  */

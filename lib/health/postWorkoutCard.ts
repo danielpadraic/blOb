@@ -1,4 +1,5 @@
 import { uniqueProofUrls } from '@/lib/challengeProofs';
+import { isHonorCardSlide, isHonorCardStoragePath } from '@/lib/checkin/honorCard';
 import type { CheckinProofStats } from '@/lib/checkin/proofStats';
 import { activityTypeOf, labelFromActivityType, workoutFromStoredSession } from '@/lib/health/cardRedraw';
 import type { CheckinHealthProof } from '@/lib/health/checkinHealthProof';
@@ -46,6 +47,9 @@ export function isWorkoutCardUrl(url?: string | null, cardUrl?: string | null): 
 
 /** Recap JPEG (or leftover token). Selfies and screenshots return false. */
 export function isRecapCardUrl(url?: string | null, cardUrl?: string | null): boolean {
+  if (isHonorCardSlide(url) || isHonorCardStoragePath(url)) {
+    return true;
+  }
   if (isWorkoutCardSlide(url) || isWorkoutCardStoragePath(url)) {
     return true;
   }

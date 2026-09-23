@@ -10,6 +10,7 @@ import { CommentThread } from '@/components/feed/CommentThread';
 import { InlineComposer } from '@/components/feed/InlineComposer';
 import { PostMediaCarousel } from '@/components/feed/PostMediaCarousel';
 import type { WorkoutSlide } from '@/components/feed/MediaLightbox';
+import { honorSlideForPost } from '@/lib/checkin/honorCard';
 import { isWorkoutCardSlide, workoutSlideForPost } from '@/lib/health/postWorkoutCard';
 import { MentionText } from '@/components/feed/MentionText';
 import { InChallengeChip, OriginChip } from '@/components/feed/OriginChip';
@@ -196,6 +197,10 @@ function PostCardInner({
         checkinId: post.checkin_id,
       }),
     [challengeTitle, post.checkin_id, post.checkin_stats],
+  );
+  const honorSlide = useMemo(
+    () => honorSlideForPost({ stats: post.checkin_stats, challengeTitle }),
+    [challengeTitle, post.checkin_stats],
   );
   const city = postLocality(post);
   const inCircleRoom = Boolean(challengeFeed && circleId);
@@ -552,6 +557,8 @@ function PostCardInner({
             pauseCycle={threadOpen || menuOpen}
             homeInline={homeFeed}
             workout={workoutSlide}
+            honor={honorSlide}
+            stats={post.checkin_stats}
           />
         )}
 
@@ -960,6 +967,8 @@ function ProofMedia({
   pauseCycle,
   homeInline,
   workout,
+  honor,
+  stats,
 }: {
   postId: string;
   urls: string[];
@@ -969,8 +978,10 @@ function ProofMedia({
   pauseCycle?: boolean;
   homeInline?: boolean;
   workout?: (WorkoutSlide & { url: string }) | null;
+  honor?: ReturnType<typeof honorSlideForPost>;
+  stats?: PostWithMeta['checkin_stats'];
 }) {
-  const visuals = mediaUrlsForPost({ urls, hidden, isOwner, stats: workout?.stats });
+  const visuals = mediaUrlsForPost({ urls, hidden, isOwner, stats: stats ?? workout?.stats });
   const others = urls.filter((url) => {
     if (!url) {
       return false;
@@ -1004,6 +1015,7 @@ function ProofMedia({
         pauseCycle={pauseCycle}
         homeInline={homeInline}
         workout={workout}
+        honor={honor}
       />
       {others.map((url) => (
         <MediaChip key={url} url={url} />

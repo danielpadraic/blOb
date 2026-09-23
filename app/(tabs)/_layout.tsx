@@ -33,6 +33,7 @@ import { WalletHost } from '@/components/wallet/WalletHost';
 import { useLoggableChallenges, type LoggableChallenge } from '@/hooks/useLoggableChallenge';
 import { useNotificationsRealtime } from '@/hooks/useNotifications';
 import { HealthLogPromptHost } from '@/components/health/HealthLogPrompt';
+import { HonorCardRasterHost } from '@/components/challenge/HonorCardRasterHost';
 import { WorkoutCardRedrawHost } from '@/components/health/WorkoutCardRedrawHost';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useMyProfile } from '@/hooks/useProfile';
@@ -485,6 +486,7 @@ function TabLayoutInner() {
         <SearchOverlay visible={searchOpen} onClose={() => setSearchOpen(false)} />
         <HealthLogPromptHost />
         <WorkoutCardRedrawHost />
+        <HonorCardRasterHost />
         {onOnboarding ? null : <InterestsHomeHost />}
         {onOnboarding ? null : <OfficialPitchHost />}
         </SocialSheetsHost>

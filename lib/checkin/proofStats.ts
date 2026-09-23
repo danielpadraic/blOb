@@ -1,9 +1,10 @@
+import { formatIncrementCount, formatMoneySentenceAmount, shortComparableBoardLabel } from '@/lib/comparablePoints';
 import { formatHealthDuration } from '@/lib/health/durationChip';
 
 /**
- * Display-safe fitness stats carried on a check-in post (`posts.checkin_stats`).
- * Derived server-side from the Health snapshot. Never carries a vendor workout id and never
- * carries body metrics. Distinct from `healthProofLines`, which formats the challenge overview.
+ * Display-safe check-in stats carried on a post (`posts.checkin_stats`).
+ * Fitness numbers come from the Health snapshot. Honor / points numbers come from the
+ * scoring_config fields that were on that log. Never a generated caption.
  */
 export type CheckinProofStats = {
   activity?: string | null;
@@ -42,6 +43,23 @@ export type CheckinProofStats = {
   /** Host or moderator who logged this check-in for the participant. */
   logged_by?: string | null;
   logged_by_name?: string | null;
+  /**
+   * Honor / comparable-points recap. `honor_card` is the stable backfill mark.
+   * Fields are the activities + multiplier + money rows from scoring_config, not a hardcoded list.
+   */
+  source?: string | null;
+  honor_fields?: Array<{
+    key?: string;
+    label?: string;
+    chip_label?: string;
+    value?: number;
+    kind?: string;
+    icon_key?: string;
+  }> | null;
+  scoring_lane?: string | null;
+  lane_label?: string | null;
+  challenge_title?: string | null;
+  period_label?: string | null;
 };
 
 export type ProofStatChip = { key: string; label: string };
@@ -73,15 +91,47 @@ function milesLabel(miles: number): string {
   return `${miles < 10 ? miles.toFixed(2) : miles.toFixed(1)} mi`;
 }
 
+function honorFieldChips(stats: CheckinProofStats): ProofStatChip[] {
+  const rows = Array.isArray(stats.honor_fields) ? stats.honor_fields : [];
+  const chips: ProofStatChip[] = [];
+  for (const row of rows) {
+    const key = String(row?.key ?? '').trim();
+    const label = String(row?.label ?? '').trim();
+    if (!key || !label) {
+      continue;
+    }
+    const raw = Number(row?.value);
+    const value = Number.isFinite(raw) && raw >= 0 ? raw : 0;
+    const chipName = String(row?.chip_label ?? '').trim() || shortComparableBoardLabel(label);
+    if (row?.kind === 'money') {
+      const money = formatMoneySentenceAmount(value);
+      chips.push({
+        key,
+        label: chipName && !money.includes(chipName) ? `${money} ${chipName}` : money,
+      });
+      continue;
+    }
+    chips.push({ key, label: `${formatIncrementCount(value)} ${chipName}`.trim() });
+  }
+  return chips;
+}
+
 /**
- * Compact chips for the post. Missing fields are dropped rather than shown as zero, so an honor
- * or non-fitness check-in produces an empty row and renders nothing.
+ * Compact chips for the post.
  *
- * Order matches the composer: duration · calories · distance · average HR.
+ * Fitness: missing fields are dropped rather than shown as zero.
+ * Honor / points: every form field is a chip, including zeros. Details text is never a chip.
+ *
+ * Order matches the composer: duration · calories · distance · average HR — or the scoring_config
+ * activity / multiplier / money rows in form order.
  */
 export function proofStatChips(stats?: CheckinProofStats | null): ProofStatChip[] {
   if (!stats || typeof stats !== 'object' || Array.isArray(stats)) {
     return [];
+  }
+  const honor = honorFieldChips(stats);
+  if (honor.length > 0 || String(stats.source ?? '').trim() === 'honor_card') {
+    return honor;
   }
   const chips: ProofStatChip[] = [];
   const duration = formatHealthDuration(stats.duration_sec);

@@ -63,6 +63,9 @@ import { personDisplayName } from '@/lib/social';
 import { isHomeSocialFeedKey, liveListKey, seedChallengeLivePost } from '@/hooks/useFeed';
 import { rememberSentLiveCheckin } from '@/lib/liveLanding';
 import { runPostSendOcr } from '@/lib/health/runPostSendOcr';
+import { writeHonorCheckinCard } from '@/lib/checkin/attachHonorCard';
+import { buildHonorProofCard } from '@/lib/checkin/honorCard';
+import type { CheckinProofStats } from '@/lib/checkin/proofStats';
 import { saveCheckinMetricValues, submitLocationProof } from '@/lib/challenges/stagedCheckin';
 import { readLocationFix, locationPermissionGrantedThisSession } from '@/lib/locationDevice';
 import { parseLocationPlace } from '@/lib/locationProof';
@@ -1583,8 +1586,36 @@ function SubmitWorkoutInner() {
             .is('deleted_at', null)
             .maybeSingle();
           postId = (post.data as { id?: string } | null)?.id;
-          const mediaUrls = (post.data as { media_urls?: string[] } | null)?.media_urls ?? [];
-          const checkinStats = (post.data as { checkin_stats?: unknown } | null)?.checkin_stats ?? null;
+          let mediaUrls = (post.data as { media_urls?: string[] } | null)?.media_urls ?? [];
+          let checkinStats = (post.data as { checkin_stats?: unknown } | null)?.checkin_stats ?? null;
+          if (postId && comparableHonor && comparableConfig && uid) {
+            const honorModel = buildHonorProofCard({
+              config: comparableConfig,
+              metrics: honorMetricsFromDraft(comparableConfig, logDraft),
+              laneId: subjectRow?.scoring_lane,
+              title: challengeDisplayTitle(challenge),
+              periodKey: String(
+                checkinQuery.data?.period_key || submitted?.period_key || checkinPeriodKey(challenge) || '',
+              ),
+              timeZone: challengeClockTz(challenge),
+            });
+            if (honorModel) {
+              try {
+                const honor = await writeHonorCheckinCard({
+                  userId: uid,
+                  postId,
+                  card: honorModel,
+                  laneId: subjectRow?.scoring_lane,
+                  existingMedia: mediaUrls,
+                  existingStats: (checkinStats as CheckinProofStats | null) ?? null,
+                });
+                mediaUrls = honor.media_urls;
+                checkinStats = honor.checkin_stats;
+              } catch {
+                // The log already landed. Live still gets chips from a stats-only write.
+              }
+            }
+          }
           if (postId) {
             const captions = mediaCaptionsForUrls(mediaUrls, proofSteps, savedParts, proofCaptions);
             const postPatch: Record<string, unknown> = {

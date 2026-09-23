@@ -144,6 +144,12 @@ function statsRichness(stats: unknown): number {
   if (Array.isArray(row.hr_series) && row.hr_series.length > 0) {
     score += 1;
   }
+  if (Array.isArray(row.honor_fields) && row.honor_fields.length > 0) {
+    score += row.honor_fields.length;
+  }
+  if (String(row.source ?? '').trim() === 'honor_card') {
+    score += 2;
+  }
   return score;
 }
 

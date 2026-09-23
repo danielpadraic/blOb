@@ -249,6 +249,8 @@ describe('matching a post’s media against the card the server named', () => {
     expect(isRecapCardUrl(pathCard)).toBe(true);
     expect(isRecapCardUrl(selfie, CARD)).toBe(false);
     expect(isRecapCardUrl(selfie)).toBe(false);
+    expect(isRecapCardUrl('https://x.supabase.co/storage/v1/object/sign/p/honor_card-9.jpg')).toBe(true);
+    expect(isRecapCardUrl('blob:honor-card')).toBe(true);
   });
 });
 

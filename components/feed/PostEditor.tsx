@@ -17,6 +17,10 @@ import { AppText } from '@/components/ui/AppText';
 import { WebTapButton } from '@/components/ui/WebTapButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useChallenge } from '@/hooks/useChallenge';
+import { writeHonorCheckinCard } from '@/lib/checkin/attachHonorCard';
+import { buildHonorProofCard } from '@/lib/checkin/honorCard';
+import { challengeClockTz } from '@/lib/checkinPeriod';
+import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { applyEditedPostToFeeds, useEditPost, useHidePostFromHome } from '@/hooks/usePostEdit';
 import { useQueryClient } from '@tanstack/react-query';
 import { requiredChallengeProofs } from '@/lib/challenges';
@@ -105,7 +109,7 @@ export function PostEditor({
     queryFn: async () => {
       const { data, error } = await supabase
         .from('challenge_checkins')
-        .select('id, metric_values, notes, proof_parts')
+        .select('id, metric_values, notes, proof_parts, period_key')
         .eq('id', post.checkin_id as string)
         .maybeSingle();
       if (error) {
@@ -116,6 +120,7 @@ export function PostEditor({
         metric_values?: unknown;
         notes?: string | null;
         proof_parts?: unknown;
+        period_key?: string | null;
       } | null;
     },
   });
@@ -316,7 +321,7 @@ export function PostEditor({
             replacements[draft.proofId] = remote;
           }
         }
-        const nextMedia = uniqueProofUrls([...mediaUrls, ...uploaded]);
+        let nextMedia = uniqueProofUrls([...mediaUrls, ...uploaded]);
         await edit.mutateAsync({
           postId: post.id,
           caption: honorCaption,
@@ -329,6 +334,36 @@ export function PostEditor({
             honorIncrement && honorConfig ? honorMetricsFromDraft(honorConfig, honorDraft) : null,
           honorChoices: honorIncrement ? honorDraft.choices : null,
         });
+        if (honorChanged && honorConfig) {
+          const honorModel = buildHonorProofCard({
+            config: honorConfig,
+            metrics: honorMetricsFromDraft(honorConfig, honorDraft),
+            laneId: post.checkin_stats?.scoring_lane,
+            title: challengeDisplayTitle(challenge.data),
+            periodKey: String(honorRow.data?.period_key ?? ''),
+            timeZone: challengeClockTz(challenge.data),
+          });
+          if (honorModel) {
+            try {
+              const honor = await writeHonorCheckinCard({
+                userId: user.id,
+                postId: post.id,
+                card: honorModel,
+                laneId: post.checkin_stats?.scoring_lane,
+                existingMedia: nextMedia,
+                existingStats: post.checkin_stats ?? null,
+              });
+              nextMedia = honor.media_urls;
+              applyEditedPostToFeeds(queryClient, {
+                id: post.id,
+                media_urls: honor.media_urls,
+                checkin_stats: honor.checkin_stats,
+              });
+            } catch {
+              // Numbers already saved. The drawn card still reads honor_fields on refresh.
+            }
+          }
+        }
       }
       onSaved?.();
       onClose();

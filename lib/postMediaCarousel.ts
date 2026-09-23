@@ -1,4 +1,5 @@
 import { uniqueProofUrls, mediaUrlKey } from '@/lib/challengeProofs';
+import { pagerUrlsWithHonorCard } from '@/lib/checkin/honorCard';
 import type { CheckinProofStats } from '@/lib/checkin/proofStats';
 import { pagerUrlsWithWorkoutCard } from '@/lib/health/postWorkoutCard';
 import { WORKOUT_CARD_HEIGHT, WORKOUT_CARD_WIDTH } from '@/lib/health/workoutProofCard';
@@ -181,12 +182,15 @@ export function mediaUrlsForPost(input: {
   isOwner?: boolean;
   stats?: CheckinProofStats | null;
 }): string[] {
-  return pagerUrlsWithWorkoutCard(
-    pagerUrlsForViewer({
-      urls: input.urls,
-      hidden: input.hidden,
-      isOwner: input.isOwner,
-    }),
+  return pagerUrlsWithHonorCard(
+    pagerUrlsWithWorkoutCard(
+      pagerUrlsForViewer({
+        urls: input.urls,
+        hidden: input.hidden,
+        isOwner: input.isOwner,
+      }),
+      input.stats,
+    ),
     input.stats,
   );
 }

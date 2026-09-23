@@ -26,7 +26,9 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 
 import { useMediaLightboxOptional, type LightboxItem, type WorkoutSlide } from '@/components/feed/MediaLightbox';
 import { AppText } from '@/components/ui/AppText';
+import { HonorProofCard, honorCardFit } from '@/components/challenge/HonorProofCard';
 import { WorkoutProofCard } from '@/components/challenge/WorkoutProofCard';
+import { isHonorCardSlide, type HonorSlide } from '@/lib/checkin/honorCard';
 import { isWorkoutCardSlide } from '@/lib/health/postWorkoutCard';
 import { lightboxOriginFromPath, type LightboxOrigin } from '@/lib/lightboxOrigin';
 import { workoutCardAccent, workoutCardFit } from '@/lib/health/workoutProofCard';
@@ -237,6 +239,7 @@ export function PostMediaCarousel({
   labels,
   captions,
   workout,
+  honor,
   pauseCycle = false,
   homeInline = false,
   liveInline = false,
@@ -251,6 +254,7 @@ export function PostMediaCarousel({
    * URL draws the card from the post's stored numbers instead of showing the flattened file.
    */
   workout?: (WorkoutSlide & { url: string }) | null;
+  honor?: HonorSlide | null;
   pauseCycle?: boolean;
   /** Home list only: muted autoplay, speaker, phone-width player with X. */
   homeInline?: boolean;
@@ -314,11 +318,17 @@ export function PostMediaCarousel({
       workout && isWorkoutCardSlide(uri) ? workout : null,
     [workout],
   );
+  const honorSlide = useCallback(
+    (uri: string): HonorSlide | null =>
+      honor && (isHonorCardSlide(uri) || uri.split('?')[0] === honor.url.split('?')[0]) ? honor : null,
+    [honor],
+  );
 
   const lightboxItems: LightboxItem[] = urls.map((uri, itemIndex) => ({
     uri,
     label: captions?.[itemIndex] || labels?.[itemIndex],
     workout: workoutSlide(uri),
+    honor: honorSlide(uri),
   }));
 
   const settleAt = useCallback(
@@ -480,6 +490,7 @@ export function PostMediaCarousel({
           lightboxOpen={Boolean(lightbox?.open)}
           caption={captions?.[0]}
           workout={workoutSlide(slides[0])}
+          honor={honorSlide(slides[0])}
           onOpen={lightbox ? () => openAt(0) : undefined}
           onPlayingChange={setVideoPlaying}
         />
@@ -512,6 +523,7 @@ export function PostMediaCarousel({
                     lightboxOpen={Boolean(lightbox?.open)}
                     caption={captions?.[itemIndex]}
                     workout={workoutSlide(uri)}
+                    honor={honorSlide(uri)}
                     pagerTouch
                     onOpen={
                       lightbox && (homeInline || liveInline || isStillPostMedia(uri))
@@ -559,6 +571,7 @@ function MediaSlide({
   lightboxOpen,
   caption,
   workout,
+  honor,
   pagerTouch,
   onOpen,
   onPlayingChange,
@@ -573,6 +586,7 @@ function MediaSlide({
   lightboxOpen?: boolean;
   caption?: string | null;
   workout?: WorkoutSlide | null;
+  honor?: HonorSlide | null;
   pagerTouch?: boolean;
   onOpen?: () => void;
   onPlayingChange?: (playing: boolean) => void;
@@ -593,14 +607,18 @@ function MediaSlide({
     // A card is fitted rather than cropped, so a little of the frame shows above and below it. That
     // band takes the card's own field colour, which reads as part of the card instead of as the grey
     // slab a letterboxed photo leaves behind.
-    backgroundColor: workout
-      ? workoutCardAccent(workout.activityType).fieldBottom
-      : kind === 'video'
-        ? THEME.surface2
-        : LETTERBOX,
+    backgroundColor: honor
+      ? '#F7F7F5'
+      : workout
+        ? workoutCardAccent(workout.activityType).fieldBottom
+        : kind === 'video'
+          ? THEME.surface2
+          : LETTERBOX,
     borderRadius: 14,
   };
-  const body = workout ? (
+  const body = honor && isHonorCardSlide(uri) ? (
+    <HonorCardSlide card={honor.card} width={width} height={height} />
+  ) : workout ? (
     <WorkoutCardSlide slide={workout} width={width} height={height} />
   ) : kind === 'video' ? (
       <PostVideo
@@ -707,6 +725,28 @@ function MediaSlide({
  * The workout card as a feed tile: full width of the post, portrait weight, and drawn from the post's
  * own numbers so the miles on it are the miles the row stores.
  */
+function HonorCardSlide({
+  card,
+  width,
+  height,
+}: {
+  card: HonorSlide['card'];
+  width: number;
+  height: number;
+}) {
+  const fit = honorCardFit(width, height);
+  if (fit.width <= 0) {
+    return null;
+  }
+  return (
+    <View
+      pointerEvents="none"
+      style={{ width, height, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F7F7F5' }}>
+      <HonorProofCard card={card} width={fit.width} height={fit.height} />
+    </View>
+  );
+}
+
 function WorkoutCardSlide({
   slide,
   width,

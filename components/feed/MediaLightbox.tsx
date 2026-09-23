@@ -27,7 +27,9 @@ import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/ui/AppText';
+import { HonorProofCard, honorCardFit } from '@/components/challenge/HonorProofCard';
 import { WorkoutProofCard } from '@/components/challenge/WorkoutProofCard';
+import { isHonorCardSlide, type HonorSlide } from '@/lib/checkin/honorCard';
 import { PlayerCloseButton } from '@/components/ui/PlayerCloseButton';
 import { useCheckinHealthSnapshot } from '@/hooks/useCheckinHealthSnapshot';
 import { pushChallengeHref } from '@/lib/challengeNav';
@@ -57,6 +59,7 @@ export type LightboxItem = {
    * never replaced by a live-drawn card.
    */
   workout?: WorkoutSlide | null;
+  honor?: HonorSlide | null;
 };
 
 export type WorkoutSlide = {
@@ -622,12 +625,15 @@ function LightboxPage({
   const playUri = videoPlaybackSrc(item.uri) || item.uri;
   const kind = mediaKind(item.uri);
   const workout = item.workout ?? null;
+  const honor = item.honor && isHonorCardSlide(item.uri) ? item.honor : null;
   // Live-rendered workout cards are already as sharp as they can be. A bitmap (selfie, proof
   // still, or a flattened card with no live model) pinch-zooms on every platform.
-  const zoomable = kind !== 'video' && !workout;
+  const zoomable = kind !== 'video' && !workout && !honor;
   const mediaStyle = { width: mediaWidth, height: mediaHeight };
 
-  const media = workout ? (
+  const media = honor ? (
+    <LightboxHonorCard slide={honor} width={mediaWidth} height={mediaHeight} />
+  ) : workout ? (
     <LightboxWorkoutCard slide={workout} width={mediaWidth} height={mediaHeight} />
   ) : kind === 'video' ? (
       <LightboxVideo uri={playUri} style={mediaStyle} />
@@ -964,6 +970,26 @@ function ZoomableStill({
  * The workout card at slide size: full width on a phone, and as tall as 4:5 allows under the close
  * chrome. Nothing is cropped, so every stat that is on the card is on the screen.
  */
+function LightboxHonorCard({
+  slide,
+  width,
+  height,
+}: {
+  slide: HonorSlide;
+  width: number;
+  height: number;
+}) {
+  const fit = honorCardFit(width, height);
+  if (fit.width <= 0) {
+    return null;
+  }
+  return (
+    <View style={{ width, height, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F7F7F5' }}>
+      <HonorProofCard card={slide.card} width={fit.width} height={fit.height} />
+    </View>
+  );
+}
+
 function LightboxWorkoutCard({
   slide,
   width,

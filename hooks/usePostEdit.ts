@@ -63,6 +63,7 @@ export function applyEditedPostToFeeds(
     hidden_media_urls: post.hidden_media_urls ?? row.hidden_media_urls ?? [],
     hidden_from_home: post.hidden_from_home ?? row.hidden_from_home ?? false,
     edited_at: post.edited_at !== undefined ? post.edited_at : row.edited_at,
+    checkin_stats: post.checkin_stats !== undefined ? post.checkin_stats : row.checkin_stats,
   }));
 }
 
