@@ -5,6 +5,31 @@
 
 const didInitialScroll = new Set<string>();
 const sentCheckinThisVisit = new Map<string, string>();
+/** Mid-thread offset from THIS session’s background only. Never a prior visit. */
+const midScrollByChallenge = new Map<string, number>();
+
+/** Viewport must be a real Live pane, not the height-0 Overview hide. */
+export const LIVE_VIEWPORT_READY_MIN = 80;
+
+/**
+ * One-shot land on the newest row. Patches, remounts, and date chips must not
+ * call this again after `alreadyLanded`.
+ */
+export function shouldLandLiveLatest(input: {
+  focused: boolean;
+  hasRows: boolean;
+  viewportReady: boolean;
+  alreadyLanded: boolean;
+  restoringMidScroll: boolean;
+}): boolean {
+  return (
+    Boolean(input.focused) &&
+    Boolean(input.hasRows) &&
+    Boolean(input.viewportReady) &&
+    !input.alreadyLanded &&
+    !input.restoringMidScroll
+  );
+}
 
 function challengeKey(challengeId?: string | null): string {
   return String(challengeId ?? '').trim();
@@ -42,7 +67,7 @@ export function markLiveInitialScroll(challengeId?: string | null): void {
   }
 }
 
-/** Clear only when leaving that challenge — not on a stats patch. */
+/** Clear when leaving Live (Overview / Home / another challenge) — not on a stats patch. */
 export function clearLiveInitialScroll(challengeId?: string | null): void {
   const id = challengeKey(challengeId);
   if (!id) {
@@ -50,6 +75,41 @@ export function clearLiveInitialScroll(challengeId?: string | null): void {
   }
   didInitialScroll.delete(id);
   sentCheckinThisVisit.delete(id);
+  midScrollByChallenge.delete(id);
+}
+
+export function saveLiveMidScroll(challengeId?: string | null, offsetY?: number): void {
+  const id = challengeKey(challengeId);
+  if (!id || !Number.isFinite(offsetY) || (offsetY ?? 0) <= 8) {
+    return;
+  }
+  midScrollByChallenge.set(id, offsetY as number);
+}
+
+export function peekLiveMidScroll(challengeId?: string | null): number | null {
+  const id = challengeKey(challengeId);
+  if (!id) {
+    return null;
+  }
+  const offset = midScrollByChallenge.get(id);
+  return Number.isFinite(offset) ? (offset as number) : null;
+}
+
+export function takeLiveMidScroll(challengeId?: string | null): number | null {
+  const id = challengeKey(challengeId);
+  if (!id) {
+    return null;
+  }
+  const offset = peekLiveMidScroll(id);
+  midScrollByChallenge.delete(id);
+  return offset;
+}
+
+export function clearLiveMidScroll(challengeId?: string | null): void {
+  const id = challengeKey(challengeId);
+  if (id) {
+    midScrollByChallenge.delete(id);
+  }
 }
 
 /** Remember the check-in we just Sent so Live can land on that row this visit. */
@@ -80,6 +140,7 @@ export function takeSentLiveCheckin(challengeId?: string | null): string | null 
 export function resetLiveLandingForTests(): void {
   didInitialScroll.clear();
   sentCheckinThisVisit.clear();
+  midScrollByChallenge.clear();
 }
 
 export type LiveLandingTarget = {

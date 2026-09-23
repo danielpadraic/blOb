@@ -429,11 +429,18 @@ export default function ChallengeDetailScreen() {
       return () => {
         setScreenFocused(false);
         applyLiveBackGesture(navigation, false);
-        // Leaving this challenge (Home, Check In). Overview / Board is not a leave.
+        // Leaving this challenge (Home, Check In). Next open lands latest.
         clearLiveInitialScroll(id);
       };
     }, [id, navigation]),
   );
+  useEffect(() => {
+    if (liveTabFocused) {
+      return;
+    }
+    // Overview / Board. Next Live tap lands latest — not a leftover Day 13 offset.
+    clearLiveInitialScroll(id);
+  }, [id, liveTabFocused]);
   useEffect(() => {
     applyLiveBackGesture(navigation, liveTabFocused && screenFocused);
   }, [liveTabFocused, navigation, screenFocused]);

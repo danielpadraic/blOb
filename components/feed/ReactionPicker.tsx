@@ -5,10 +5,11 @@ import {
   PICKER_REACTION_TYPES,
   REACTION_MARK_HIT,
   REACTION_MARK_PICKER,
+  reactionChipFill,
   reactionPickerLabel,
+  reactionPickerSheetStyle,
   type PickerReactionType,
 } from '@/lib/reactions';
-import { THEME } from '@/lib/theme';
 import type { ReactionType } from '@/lib/types';
 
 export const reactionNoSelectStyle =
@@ -102,7 +103,7 @@ export function ReactionPicker({ selected, align = 'start', anchored = false, on
             },
         reactionNoSelectStyle,
       ]}>
-      <View style={{ gap: 2 }}>
+      <View style={[reactionPickerSheetStyle(), { gap: 2 }]}>
         {PICKER_REACTION_TYPES.map((type: PickerReactionType) => {
           const on = active.has(type);
           return (
@@ -117,8 +118,8 @@ export function ReactionPicker({ selected, align = 'start', anchored = false, on
                 height: REACTION_MARK_HIT,
                 alignItems: 'center',
                 justifyContent: 'center',
-                backgroundColor: on ? THEME.accentSoft : 'transparent',
                 borderRadius: 999,
+                ...reactionChipFill(type, on, 'dark'),
               }}>
               <ReactionMark type={type} size={REACTION_MARK_PICKER} />
             </Pressable>

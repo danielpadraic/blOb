@@ -3,7 +3,6 @@ import { Platform, Pressable, Vibration, View } from 'react-native';
 
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
-import { ReactionMark } from '@/components/feed/ReactionMark';
 import {
   ReactionDismissScrim,
   ReactionPicker,
@@ -11,8 +10,9 @@ import {
   reactionNoSelectStyle,
 } from '@/components/feed/ReactionPicker';
 import {
-  REACTION_MARK_BUTTON,
   REACTION_MARK_HIT,
+  reactionChipFill,
+  reactionColor,
   userHasReactionType,
   userReactionTypes,
 } from '@/lib/reactions';
@@ -115,12 +115,16 @@ export function ReactionBar({
               alignItems: 'center',
               justifyContent: 'center',
               borderRadius: 999,
-              backgroundColor: liked ? THEME.accentSoft : 'transparent',
+              ...reactionChipFill('like', liked),
               transform: [{ scale: liked ? 1.06 : 1 }],
             },
             reactionNoSelectStyle,
           ]}>
-          <ReactionMark type="like" size={REACTION_MARK_BUTTON} />
+          <Glyph
+            name={liked ? GLYPH.strong : GLYPH.strongOutline}
+            color={reactionColor('like')}
+            size={20}
+          />
         </Pressable>
         {onReply ? (
           <Pressable

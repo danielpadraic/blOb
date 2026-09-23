@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  AppState,
   FlatList,
   Keyboard,
   Platform,
@@ -63,11 +64,18 @@ import {
   type LiveThreadRow,
 } from '@/lib/liveThread';
 import {
+  LIVE_VIEWPORT_READY_MIN,
+  clearLiveInitialScroll,
+  clearLiveMidScroll,
   hasLiveInitialScroll,
   liveLandingFocus,
   logLiveAutoScroll,
   markLiveInitialScroll,
+  peekLiveMidScroll,
   peekSentLiveCheckin,
+  saveLiveMidScroll,
+  shouldLandLiveLatest,
+  takeLiveMidScroll,
   takeSentLiveCheckin,
 } from '@/lib/liveLanding';
 import {
@@ -280,6 +288,8 @@ export function LiveThread({
   const atEndRef = useRef(false);
   const draggingRef = useRef(false);
   const firstPaintPendingRef = useRef(false);
+  const viewportHRef = useRef(0);
+  const restoringMidScrollRef = useRef(false);
   /** Last reported offset, used to tell a user's upward scroll from our own downward pin. */
   const lastOffsetRef = useRef(0);
   const emptyList = rows.length === 0;
@@ -479,6 +489,51 @@ export function LiveThread({
   }, []);
 
   useEffect(() => {
+    if (focused) {
+      return;
+    }
+    // Overview / Board / leave. Next Live open lands latest — not a prior offset.
+    clearLiveInitialScroll(landingChallengeId);
+    clearLiveMidScroll(landingChallengeId);
+    firstPaintStartedRef.current = false;
+    firstPaintPendingRef.current = false;
+    restoringMidScrollRef.current = false;
+  }, [focused, landingChallengeId]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (!focused) {
+        return;
+      }
+      if (next === 'background' || next === 'inactive') {
+        if (!atEndRef.current && lastOffsetRef.current > 8) {
+          saveLiveMidScroll(landingChallengeId, lastOffsetRef.current);
+        } else {
+          clearLiveMidScroll(landingChallengeId);
+        }
+        return;
+      }
+      if (next !== 'active') {
+        return;
+      }
+      const offset = peekLiveMidScroll(landingChallengeId);
+      if (offset == null) {
+        return;
+      }
+      restoringMidScrollRef.current = true;
+      firstPaintPendingRef.current = false;
+      markLiveInitialScroll(landingChallengeId);
+      requestAnimationFrame(() => {
+        listRef.current?.scrollToOffset({ offset, animated: false });
+        takeLiveMidScroll(landingChallengeId);
+        restoringMidScrollRef.current = false;
+        notifyFirstPaint();
+      });
+    });
+    return () => sub.remove();
+  }, [focused, landingChallengeId, notifyFirstPaint]);
+
+  useEffect(() => {
     if (!focused) {
       return;
     }
@@ -546,20 +601,43 @@ export function LiveThread({
     if (highlightKey && highlightedOnce.current === highlightKey) {
       return;
     }
-    if (landingChallengeId && hasLiveInitialScroll(landingChallengeId)) {
-      firstPaintPendingRef.current = false;
-      notifyFirstPaint();
+    const alreadyLanded = Boolean(landingChallengeId && hasLiveInitialScroll(landingChallengeId));
+    const canLand = shouldLandLiveLatest({
+      focused,
+      hasRows: !emptyList,
+      viewportReady: viewportHRef.current >= LIVE_VIEWPORT_READY_MIN,
+      alreadyLanded,
+      restoringMidScroll: restoringMidScrollRef.current,
+    });
+    if (!canLand) {
+      if (alreadyLanded || restoringMidScrollRef.current) {
+        firstPaintPendingRef.current = false;
+        notifyFirstPaint();
+      }
       return;
     }
     if (!firstPaintPendingRef.current) {
       return;
     }
     pinToLiveEdge(false, 'first-paint');
-    markLiveInitialScroll(landingChallengeId);
-    firstPaintPendingRef.current = false;
-    notifyFirstPaint();
-  }, [emptyList, highlightKey, landingChallengeId, notifyFirstPaint, pinToLiveEdge]);
+    // Mark only once we are actually at the newest end (or the user scrolls up).
+  }, [emptyList, focused, highlightKey, landingChallengeId, notifyFirstPaint, pinToLiveEdge]);
   finishFirstPaintPinRef.current = finishFirstPaintPin;
+
+  useEffect(() => {
+    if (!firstPaintPendingRef.current) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      if (!firstPaintPendingRef.current) {
+        return;
+      }
+      markLiveInitialScroll(landingChallengeId);
+      firstPaintPendingRef.current = false;
+      notifyFirstPaint();
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [focused, landingChallengeId, notifyFirstPaint, rows.length === 0]);
 
   const lastNewestIdRef = useRef<string | null>(null);
   useEffect(() => {
@@ -699,6 +777,7 @@ export function LiveThread({
       if (contentOffset.y < lastOffsetRef.current - 4) {
         firstPaintPendingRef.current = false;
         markLiveInitialScroll(landingChallengeId);
+        notifyFirstPaint();
       }
       lastOffsetRef.current = contentOffset.y;
       if (end !== atEndRef.current) {
@@ -706,8 +785,8 @@ export function LiveThread({
         setNotAtEnd(!end);
       }
       if (end) {
-        // Parked at the newest row. Do not retire the opening pin here — a half-measured list
-        // reports "at the end" while still sitting on Day 2.
+        // A half-measured list can report "at the end" while still sitting on Day 13.
+        // The one-shot flag locks after the land timeout or an upward scroll, not here.
         bottomAnchorRef.current = rows[rows.length - 1]?.id ?? null;
         if (!firstPaintPendingRef.current) {
           markLiveInitialScroll(landingChallengeId);
@@ -721,7 +800,7 @@ export function LiveThread({
         }
       }
     },
-    [landingChallengeId, newBelow, reads, rows],
+    [landingChallengeId, newBelow, notifyFirstPaint, reads, rows],
   );
 
   // New rows arriving while the reader is scrolled up become a count on the jump control, never a
@@ -1063,8 +1142,16 @@ export function LiveThread({
           }}
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
-          onLayout={finishFirstPaintPin}
-          onContentSizeChange={finishFirstPaintPin}
+          onLayout={(event) => {
+            viewportHRef.current = event.nativeEvent.layout.height;
+            finishFirstPaintPin();
+          }}
+          onContentSizeChange={() => {
+            if (landingChallengeId && hasLiveInitialScroll(landingChallengeId)) {
+              return;
+            }
+            finishFirstPaintPin();
+          }}
           onScrollToIndexFailed={() => {
             if (highlightKey && highlightedOnce.current === highlightKey) {
               return;

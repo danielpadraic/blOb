@@ -2,13 +2,18 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 
 import {
   clearLiveInitialScroll,
+  clearLiveMidScroll,
   hasLiveInitialScroll,
   liveLandingFocus,
   logLiveAutoScroll,
   markLiveInitialScroll,
+  peekLiveMidScroll,
   peekSentLiveCheckin,
   rememberSentLiveCheckin,
   resetLiveLandingForTests,
+  saveLiveMidScroll,
+  shouldLandLiveLatest,
+  takeLiveMidScroll,
   takeSentLiveCheckin,
 } from '@/lib/liveLanding';
 
@@ -56,6 +61,32 @@ describe('live landing', () => {
       postId: null,
       latest: true,
     });
+  });
+
+  it('lands latest only once, after a real viewport, never on a mid-scroll restore', () => {
+    const ready = {
+      focused: true,
+      hasRows: true,
+      viewportReady: true,
+      alreadyLanded: false,
+      restoringMidScroll: false,
+    };
+    expect(shouldLandLiveLatest(ready)).toBe(true);
+    expect(shouldLandLiveLatest({ ...ready, focused: false })).toBe(false);
+    expect(shouldLandLiveLatest({ ...ready, hasRows: false })).toBe(false);
+    expect(shouldLandLiveLatest({ ...ready, viewportReady: false })).toBe(false);
+    expect(shouldLandLiveLatest({ ...ready, alreadyLanded: true })).toBe(false);
+    expect(shouldLandLiveLatest({ ...ready, restoringMidScroll: true })).toBe(false);
+  });
+
+  it('keeps a mid-scroll offset for this session’s background only', () => {
+    saveLiveMidScroll('c1', 640);
+    expect(peekLiveMidScroll('c1')).toBe(640);
+    expect(takeLiveMidScroll('c1')).toBe(640);
+    expect(peekLiveMidScroll('c1')).toBeNull();
+    saveLiveMidScroll('c1', 12);
+    clearLiveMidScroll('c1');
+    expect(peekLiveMidScroll('c1')).toBeNull();
   });
 
   it('logs a non-drag scroll with reason, rowId, willScroll, and itemCount', () => {
