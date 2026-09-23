@@ -7,9 +7,8 @@ import {
   cornerReactionChips,
   LIVE_HANG_OVERLAP,
   REACTION_MARK_CORNER,
-  reactionChipCountColor,
-  reactionChipFill,
 } from '@/lib/reactions';
+import { THEME } from '@/lib/theme';
 import type { Reaction, ReactionType } from '@/lib/types';
 
 type ReactionStackProps = {
@@ -75,13 +74,13 @@ export function ReactionStack({
           style={{
             minHeight: 28,
             minWidth: REACTION_MARK_CORNER + (row.count > 1 ? 14 : 0),
-            paddingHorizontal: 4,
+            paddingHorizontal: 2,
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'center',
             gap: 1,
             borderRadius: 999,
-            ...reactionChipFill(row.type, row.mine),
+            backgroundColor: row.mine ? THEME.accentSoft : 'transparent',
           }}>
           <ReactionMark type={row.type} size={REACTION_MARK_CORNER} />
           {row.count > 1 ? (
@@ -90,7 +89,7 @@ export function ReactionStack({
               style={{
                 fontSize: 10,
                 fontWeight: '700',
-                color: reactionChipCountColor(row.type, row.mine),
+                color: THEME.textPrimary,
                 fontVariant: ['tabular-nums'],
               }}>
               {row.count}

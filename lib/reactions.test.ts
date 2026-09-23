@@ -15,21 +15,15 @@ import {
   markOptimisticReactionWrite,
   mergeReactionListsByKey,
   PICKER_REACTION_TYPES,
-  POST_REACTION_COLORS,
-  reactionChipCountColor,
-  reactionChipFill,
-  reactionColor,
   reactionFlightKey,
   reactionMarkFile,
   reactionPickerLabel,
-  reactionPickerSheetStyle,
   reactionSetKey,
   resetOptimisticReactionWritesForTests,
   toggleStackedReactionList,
   userHasReactionType,
   userReactionTypes,
 } from '@/lib/reactions';
-import { THEME } from '@/lib/theme';
 
 describe('shared reactions', () => {
   it('maps existing care rows to LOL and writes laugh', () => {
@@ -56,25 +50,6 @@ describe('shared reactions', () => {
 
   it('includes ROFL in the picker after like / love / laugh', () => {
     expect(PICKER_REACTION_TYPES).toEqual(['like', 'love', 'laugh', 'rofl', 'fire', 'sad']);
-  });
-
-  it('puts unselected marks on surface2 and selected marks on a colored ring', () => {
-    expect(reactionChipFill('like', false)).toEqual({
-      backgroundColor: THEME.surface2,
-      borderWidth: 0,
-      borderColor: 'transparent',
-    });
-    expect(reactionChipFill('like', true)).toEqual({
-      backgroundColor: THEME.accentSoft,
-      borderWidth: 2,
-      borderColor: POST_REACTION_COLORS.like,
-    });
-    expect(reactionChipFill('love', true).borderColor).toBe(POST_REACTION_COLORS.love);
-    expect(reactionChipFill('like', false, 'dark').backgroundColor).toBe(THEME.playerCloseDisc);
-    expect(reactionChipCountColor('like', false)).toBe(THEME.textPrimary);
-    expect(reactionChipCountColor('love', true)).toBe(POST_REACTION_COLORS.love);
-    expect(reactionColor('like')).toBe(THEME.accent);
-    expect(reactionPickerSheetStyle().backgroundColor).toBe(THEME.secondaryDark);
   });
 
   it('stacks types for one user and toggles only that type off', () => {

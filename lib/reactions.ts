@@ -20,62 +20,6 @@ export const POST_REACTION_COLORS: Record<string, string> = {
   sad: '#5B8DEF',
 };
 
-export type ReactionChipStyle = {
-  backgroundColor: string;
-  borderWidth: number;
-  borderColor: string;
-};
-
-function hexToRgba(hex: string, alpha: number): string {
-  const raw = hex.replace('#', '').trim();
-  if (raw.length !== 6) {
-    return hex;
-  }
-  const n = Number.parseInt(raw, 16);
-  if (!Number.isFinite(n)) {
-    return hex;
-  }
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
-}
-
-export function reactionColor(type: string | null | undefined): string {
-  return POST_REACTION_COLORS[displayReactionType(type)] ?? THEME.accent;
-}
-
-/** Unselected = surface2 chip. Selected = 2px reaction ring + tinted fill. */
-export function reactionChipFill(
-  type: string | null | undefined,
-  selected: boolean,
-  surface: 'light' | 'dark' = 'light',
-): ReactionChipStyle {
-  if (!selected) {
-    return {
-      backgroundColor: surface === 'dark' ? THEME.playerCloseDisc : THEME.surface2,
-      borderWidth: 0,
-      borderColor: 'transparent',
-    };
-  }
-  const color = reactionColor(type);
-  return {
-    backgroundColor: type === 'like' ? THEME.accentSoft : hexToRgba(color, 0.22),
-    borderWidth: 2,
-    borderColor: color,
-  };
-}
-
-export function reactionChipCountColor(type: string | null | undefined, selected: boolean): string {
-  return selected ? reactionColor(type) : THEME.textPrimary;
-}
-
-export function reactionPickerSheetStyle() {
-  return {
-    backgroundColor: THEME.secondaryDark,
-    borderRadius: THEME.radius,
-    paddingVertical: 6,
-    paddingHorizontal: 6,
-  };
-}
-
 const KNOWN = new Set<string>([
   'like',
   'love',
@@ -133,8 +77,7 @@ export const LIVE_REACTION_TRAY_GAP = 2;
 export const LIVE_REACTION_TRAY_WIDTH = REACTION_MARK_HIT;
 export const LIVE_REACTION_TRAY_HEIGHT =
   PICKER_REACTION_TYPES.length * REACTION_MARK_HIT +
-  (PICKER_REACTION_TYPES.length - 1) * LIVE_REACTION_TRAY_GAP +
-  12;
+  (PICKER_REACTION_TYPES.length - 1) * LIVE_REACTION_TRAY_GAP;
 
 export type LiveReactionTrayAnchor = {
   x: number;

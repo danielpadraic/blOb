@@ -3,10 +3,10 @@ import { Pressable, View } from 'react-native';
 
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { reactionNoSelectProps, reactionNoSelectStyle } from '@/components/feed/ReactionPicker';
+import { ReactionMark } from '@/components/feed/ReactionMark';
 import {
+  REACTION_MARK_BUTTON,
   REACTION_MARK_HIT,
-  reactionChipFill,
-  reactionColor,
   userHasReactionType,
 } from '@/lib/reactions';
 import { THEME } from '@/lib/theme';
@@ -82,16 +82,12 @@ export function LiveReactions({
                 alignItems: 'center',
                 justifyContent: 'center',
                 borderRadius: 999,
-                ...reactionChipFill('like', liked),
+                backgroundColor: liked ? THEME.accentSoft : 'transparent',
                 transform: [{ scale: liked ? 1.06 : 1 }],
               },
               reactionNoSelectStyle,
             ]}>
-            <Glyph
-              name={liked ? GLYPH.strong : GLYPH.strongOutline}
-              color={reactionColor('like')}
-              size={20}
-            />
+            <ReactionMark type="like" size={REACTION_MARK_BUTTON} />
           </Pressable>
         </View>
         {onEdit ? (
