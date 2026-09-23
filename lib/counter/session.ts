@@ -8,6 +8,7 @@ import {
   type CounterSummary,
   type CounterTemplate,
 } from '@/lib/counter/types';
+import { localDateStamp } from '@/utils/dates';
 
 export const COUNTER_TEMPLATES: readonly CounterTemplate[] = [
   { id: 'reps', label: 'Reps', metrics: [{ name: 'Reps', kind: 'count' }] },
@@ -41,6 +42,47 @@ export const COUNTER_TEMPLATES: readonly CounterTemplate[] = [
 
 export function defaultCounterTitle(now = new Date()): string {
   return format(now, 'MMM d');
+}
+
+export function defaultCounterDate(now = new Date()): string {
+  return localDateStamp(now);
+}
+
+export function parseCounterDate(value: string | null | undefined): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value ?? '').trim());
+  if (!match) {
+    return null;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+    return null;
+  }
+  return date;
+}
+
+export function clampCounterDate(value: string | null | undefined, now = new Date()): string {
+  return parseCounterDate(value) ? String(value).trim() : defaultCounterDate(now);
+}
+
+/** Card / sheet label. Local calendar day, never a timestamp. */
+export function formatCounterDate(value: string | null | undefined): string {
+  return format(parseCounterDate(value) ?? new Date(), 'EEE, MMM d');
+}
+
+export function pickLastLiveCounter<T extends { id: string; lastOpenedAt?: string | null; updatedAt: string }>(
+  rows: readonly T[],
+): T | null {
+  if (!rows.length) {
+    return null;
+  }
+  return [...rows].sort((a, b) => {
+    const left = a.lastOpenedAt || a.updatedAt;
+    const right = b.lastOpenedAt || b.updatedAt;
+    return right.localeCompare(left);
+  })[0] ?? null;
 }
 
 export function clampCounterName(raw: string): string {
@@ -174,6 +216,8 @@ export function blankLiveFrom(source: CounterDraft, now = new Date()): Omit<Coun
     status: 'live',
     parentId: null,
     cardUrl: null,
+    counterDate: defaultCounterDate(now),
+    lastOpenedAt: null,
     metrics: source.metrics.map((row, index) => makeMetric({ name: row.name, kind: row.kind, sort: index })),
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
@@ -188,6 +232,8 @@ export function toCounterSummary(draft: CounterDraft): CounterSummary {
     status: draft.status,
     parentId: draft.parentId,
     cardUrl: draft.cardUrl,
+    counterDate: draft.counterDate,
+    lastOpenedAt: draft.lastOpenedAt,
     line: formatCounterSummary(draft.metrics),
     updatedAt: draft.updatedAt,
     savedAt: draft.savedAt,

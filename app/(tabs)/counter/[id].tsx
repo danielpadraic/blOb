@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, Pressable, TextInput, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CounterCardRaster } from '@/components/counter/CounterCardRaster';
+import { CounterDateField } from '@/components/counter/CounterDateField';
 import { CounterLiveFooter, CounterSavedFooter } from '@/components/counter/CounterFooter';
 import { CounterShareSheet, type CounterShareChoice } from '@/components/counter/CounterShareSheet';
 import { MetricCard } from '@/components/counter/MetricCard';
@@ -24,6 +25,7 @@ import {
   useSaveCounter,
   useSetCounterCardUrl,
   useSnapshotCounter,
+  useTouchCounterOpened,
 } from '@/hooks/useCounter';
 import { useLoggableChallenges } from '@/hooks/useLoggableChallenge';
 import {
@@ -47,7 +49,7 @@ import {
 } from '@/lib/counter/session';
 import { sendCounterToRecipients, shareCounterCard } from '@/lib/counter/share';
 import { COUNTER_KINDS, COUNTER_METRIC_MAX, type CounterDraft, type CounterKind } from '@/lib/counter/types';
-import { COUNTER_HISTORY_HREF, COUNTER_START_HREF, counterHref } from '@/lib/routes';
+import { COUNTER_HISTORY_HREF, COUNTER_LIST_HREF, COUNTER_START_HREF, counterHref } from '@/lib/routes';
 import { tabBarLift, THEME } from '@/lib/theme';
 import { uploadPostAttachment } from '@/utils/upload';
 
@@ -69,6 +71,7 @@ function CounterSheetInner({ id }: { id: string }) {
   const create = useCreateCounter();
   const remove = useDeleteCounter();
   const setCardUrl = useSetCounterCardUrl();
+  const touchOpened = useTouchCounterOpened();
   const loggable = useLoggableChallenges();
   const startChat = useGetOrCreateConversation();
   const startGroup = useCreateGroupConversation();
@@ -99,6 +102,36 @@ function CounterSheetInner({ id }: { id: string }) {
   }, [loaded.data]);
 
   useEffect(() => {
+    if (!id || loaded.data?.status !== 'live') {
+      return;
+    }
+    void touchOpened.mutateAsync(id).catch(() => undefined);
+    // Open once per sheet. Do not re-run when the mutation identity changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, loaded.data?.status]);
+
+  const persistRef = useRef(persist);
+  persistRef.current = persist;
+
+  const writeDraft = useCallback(async (next: CounterDraft) => {
+    try {
+      await persistRef.current.mutateAsync(next);
+      setError(null);
+    } catch (caught) {
+      dirty.current = true;
+      setError(caught instanceof Error ? caught.message : 'Could not keep those numbers.');
+    }
+  }, []);
+
+  const flush = useCallback(() => {
+    const pending = draftRef.current;
+    if (pending && dirty.current && pending.status === 'live') {
+      dirty.current = false;
+      void writeDraft(pending);
+    }
+  }, [writeDraft]);
+
+  useEffect(() => {
     if (!draft || draft.status === 'saved' || !dirty.current) {
       return;
     }
@@ -108,31 +141,43 @@ function CounterSheetInner({ id }: { id: string }) {
         return;
       }
       dirty.current = false;
-      void persist.mutateAsync(next).catch((caught) => {
-        dirty.current = true;
-        setError(caught instanceof Error ? caught.message : 'Could not keep those numbers.');
-      });
+      void writeDraft(next);
     }, AUTOSAVE_MS);
     return () => clearTimeout(handle);
-  }, [draft, persist]);
+  }, [draft, writeDraft]);
+
+  useEffect(() => () => flush(), [flush]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next !== 'active') {
+        flush();
+      }
+    });
+    return () => sub.remove();
+  }, [flush]);
 
   const readOnly = draft?.status === 'saved';
   const challenges = (loggable.data ?? []).filter((row) => row.status !== 'ended');
 
-  function patch(next: CounterDraft) {
+  function patch(next: CounterDraft, immediate = false) {
     if (next.status === 'saved') {
       return;
     }
-    dirty.current = true;
-    setDraft({ ...next, cardUrl: null, updatedAt: new Date().toISOString() });
+    const written = { ...next, cardUrl: null, updatedAt: new Date().toISOString() };
+    dirty.current = !immediate;
+    setDraft(written);
+    if (immediate) {
+      void writeDraft(written);
+    }
   }
 
   function goBack() {
-    if (router.canGoBack()) {
-      router.back();
+    if (readOnly) {
+      router.replace(COUNTER_HISTORY_HREF);
       return;
     }
-    router.replace(readOnly ? COUNTER_HISTORY_HREF : COUNTER_START_HREF);
+    router.replace(COUNTER_LIST_HREF);
   }
 
   const backHeader = {
@@ -173,7 +218,7 @@ function CounterSheetInner({ id }: { id: string }) {
       return;
     }
     setConfirm(null);
-    patch(clearCounterValues(draft));
+    patch(clearCounterValues(draft), true);
   }
 
   async function onStartAgain() {
@@ -186,6 +231,7 @@ function CounterSheetInner({ id }: { id: string }) {
       const blank = blankLiveFrom(draft);
       const nextId = await create.mutateAsync({
         title: blank.title,
+        counterDate: blank.counterDate,
         metrics: blank.metrics.map((row) => ({ name: row.name, kind: row.kind })),
       });
       router.replace(counterHref(nextId));
@@ -393,15 +439,20 @@ function CounterSheetInner({ id }: { id: string }) {
             }}
           />
         </KeyboardField>
+        <CounterDateField
+          value={draft.counterDate}
+          readOnly={readOnly}
+          onChange={(counterDate) => patch({ ...draft, counterDate }, true)}
+        />
         <View style={{ marginTop: 14, gap: 12 }}>
           {draft.metrics.map((metric) => (
             <MetricCard
               key={metric.key}
               metric={metric}
               readOnly={readOnly}
-              onChange={(value) => patch(setCounterMetricValue(draft, metric.key, value))}
+              onChange={(value) => patch(setCounterMetricValue(draft, metric.key, value), true)}
               onRename={(name) => patch(renameCounterMetric(draft, metric.key, name))}
-              onRemove={() => patch(removeCounterMetric(draft, metric.key))}
+              onRemove={() => patch(removeCounterMetric(draft, metric.key), true)}
             />
           ))}
         </View>

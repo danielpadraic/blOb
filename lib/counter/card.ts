@@ -1,6 +1,4 @@
-import { format } from 'date-fns';
-
-import { formatCounterNumber, formatCounterSummary } from '@/lib/counter/session';
+import { formatCounterDate, formatCounterNumber, formatCounterSummary } from '@/lib/counter/session';
 import type { CounterDraft } from '@/lib/counter/types';
 
 export const COUNTER_CARD_WIDTH = 1080;
@@ -14,10 +12,9 @@ export type CounterCardModel = {
 };
 
 export function buildCounterCard(draft: CounterDraft): CounterCardModel {
-  const when = draft.savedAt ?? draft.updatedAt ?? draft.createdAt;
   return {
     title: draft.title,
-    dateLine: format(new Date(when), 'MMM d, yyyy · h:mm a'),
+    dateLine: formatCounterDate(draft.counterDate),
     rows: draft.metrics.map((row) => ({
       name: row.name,
       value: formatCounterNumber(row.kind, row.value),

@@ -21,6 +21,8 @@ export type CounterDraft = {
   status: CounterStatus;
   parentId: string | null;
   cardUrl: string | null;
+  counterDate: string;
+  lastOpenedAt: string | null;
   metrics: CounterMetric[];
   createdAt: string;
   updatedAt: string;
@@ -33,6 +35,8 @@ export type CounterSummary = {
   status: CounterStatus;
   parentId: string | null;
   cardUrl: string | null;
+  counterDate: string;
+  lastOpenedAt: string | null;
   line: string;
   updatedAt: string;
   savedAt: string | null;
@@ -53,6 +57,8 @@ export type CounterRow = {
   status: CounterStatus;
   parent_id: string | null;
   card_url: string | null;
+  counter_date: string;
+  last_opened_at: string | null;
   created_at: string;
   updated_at: string;
   saved_at: string | null;

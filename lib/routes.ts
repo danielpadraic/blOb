@@ -488,6 +488,7 @@ export const LIFT_TIMER_HREF = '/lift/timer' as Href;
 
 /** Counter: live sheets, history, and a locked snapshot. Owner-only. */
 export const COUNTER_START_HREF = '/counter' as Href;
+export const COUNTER_LIST_HREF = '/counter?list=1' as Href;
 export const COUNTER_HISTORY_HREF = '/counter/history' as Href;
 
 export function counterHref(id: string): Href {

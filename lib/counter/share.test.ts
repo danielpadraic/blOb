@@ -11,6 +11,8 @@ const draft: CounterDraft = {
   status: 'saved',
   parentId: 'live-1',
   cardUrl: null,
+  counterDate: '2026-09-22',
+  lastOpenedAt: null,
   metrics: [
     { id: '1', key: '1', name: 'Dials', kind: 'count', value: 10, sort: 0 },
     { id: '2', key: '2', name: 'Presentations', kind: 'count', value: 0, sort: 1 },
@@ -25,6 +27,7 @@ describe('counter card + routes', () => {
   it('prints money with a dollar sign on the share card', () => {
     const card = buildCounterCard(draft);
     expect(card.title).toBe('Sales day');
+    expect(card.dateLine).toBe('Tue, Sep 22');
     expect(card.rows.map((row) => row.value)).toEqual(['10', '0', '$16,000.00']);
     expect(counterCardFallbackText(card)).toContain('AP $16,000.00');
   });

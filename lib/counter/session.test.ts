@@ -3,15 +3,19 @@ import { describe, expect, it } from 'vitest';
 import {
   addCounterMetric,
   blankLiveFrom,
+  clampCounterDate,
   clampCounterValue,
   COUNTER_TEMPLATES,
   counterStep,
+  defaultCounterDate,
   defaultCounterTitle,
+  formatCounterDate,
   formatCounterNumber,
   formatCounterSummary,
   makeMetric,
   metricsFromTemplate,
   parseCounterInput,
+  pickLastLiveCounter,
   stepCounterValue,
 } from '@/lib/counter/session';
 import { COUNTER_METRIC_MAX, type CounterDraft } from '@/lib/counter/types';
@@ -23,6 +27,8 @@ function draft(metrics: CounterDraft['metrics']): CounterDraft {
     status: 'live',
     parentId: null,
     cardUrl: null,
+    counterDate: '2026-09-23',
+    lastOpenedAt: null,
     metrics,
     createdAt: '2026-09-23T12:00:00.000Z',
     updatedAt: '2026-09-23T12:00:00.000Z',
@@ -76,5 +82,18 @@ describe('counter session', () => {
     expect(fresh.metrics.map((row) => row.value)).toEqual([0, 0]);
     expect(fresh.metrics.map((row) => row.name)).toEqual(['Dials', 'AP']);
     expect(formatCounterSummary(fresh.metrics)).toContain('Dials 0');
+  });
+
+  it('prints the calendar day, not created_at, and keeps numbers when the date changes', () => {
+    expect(defaultCounterDate(new Date(2026, 8, 23))).toBe('2026-09-23');
+    expect(formatCounterDate('2026-09-22')).toBe('Tue, Sep 22');
+    expect(clampCounterDate('nope', new Date(2026, 8, 23))).toBe('2026-09-23');
+    const before = draft([makeMetric({ name: 'Dials', kind: 'count', value: 40 })]);
+    const moved = { ...before, counterDate: '2026-09-22' };
+    expect(moved.metrics[0]?.value).toBe(40);
+    expect(pickLastLiveCounter([
+      { id: 'old', lastOpenedAt: '2026-09-21T12:00:00.000Z', updatedAt: '2026-09-23T12:00:00.000Z' },
+      { id: 'last', lastOpenedAt: '2026-09-23T18:00:00.000Z', updatedAt: '2026-09-22T12:00:00.000Z' },
+    ])?.id).toBe('last');
   });
 });

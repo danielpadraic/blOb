@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { format } from 'date-fns';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/ui/AppText';
 import { Screen } from '@/components/ui/Screen';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useLiveCounters, useSavedCounters } from '@/hooks/useCounter';
+import { formatCounterDate } from '@/lib/counter/session';
 import type { CounterSummary } from '@/lib/counter/types';
 import { counterHref } from '@/lib/routes';
 import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
@@ -57,7 +57,6 @@ export default function CounterHistoryScreen() {
 }
 
 function HistoryCard({ row, onPress }: { row: CounterSummary; onPress: () => void }) {
-  const when = row.savedAt ?? row.updatedAt;
   return (
     <Pressable
       accessibilityRole="button"
@@ -73,7 +72,7 @@ function HistoryCard({ row, onPress }: { row: CounterSummary; onPress: () => voi
       }}>
       <AppText style={{ fontSize: 16, fontWeight: '800', color: THEME.textPrimary }}>{row.title}</AppText>
       <AppText style={{ marginTop: 2, fontSize: 12, color: THEME.textMuted }}>
-        {format(new Date(when), 'MMM d, yyyy · h:mm a')}
+        {formatCounterDate(row.counterDate)}
       </AppText>
       {row.line ? <AppText style={{ marginTop: 6, fontSize: 13, color: THEME.textPrimary }}>{row.line}</AppText> : null}
     </Pressable>

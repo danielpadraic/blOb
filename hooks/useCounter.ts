@@ -7,9 +7,11 @@ import {
   fetchCounter,
   fetchLiveCounters,
   fetchSavedCounters,
+  resolveLastLiveCounterId,
   saveCounterDraft,
   setCounterCardUrl,
   snapshotCounter,
+  touchCounterOpened,
 } from '@/lib/counter/api';
 import type { CounterDraft, CounterKind } from '@/lib/counter/types';
 
@@ -46,7 +48,7 @@ export function useCounter(id: string | null | undefined) {
 export function useCreateCounter() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (input: { title?: string; metrics: { name: string; kind: CounterKind }[] }) =>
+    mutationFn: (input: { title?: string; counterDate?: string; metrics: { name: string; kind: CounterKind }[] }) =>
       createLiveCounter(input),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: [COUNTER_KEY] });
@@ -80,6 +82,26 @@ export function useSetCounterCardUrl() {
     mutationFn: ({ id, cardUrl }: { id: string; cardUrl: string }) => setCounterCardUrl(id, cardUrl),
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: [COUNTER_KEY] });
+    },
+  });
+}
+
+export function useLastLiveCounterId() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: [COUNTER_KEY, 'last', user?.id],
+    enabled: Boolean(user?.id),
+    queryFn: () => resolveLastLiveCounterId(),
+  });
+}
+
+export function useTouchCounterOpened() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => touchCounterOpened(id),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: [COUNTER_KEY, 'live'] });
+      void client.invalidateQueries({ queryKey: [COUNTER_KEY, 'last'] });
     },
   });
 }
