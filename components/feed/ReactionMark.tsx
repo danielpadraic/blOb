@@ -61,7 +61,7 @@ class SafeReactionImage extends Component<ReactionMarkProps, SafeState> {
     }
     return (
       <Image
-        key={kind === 'like' ? `like-${LIKE_MARK_REV}` : kind}
+        key={`${kind}-${LIKE_MARK_REV}`}
         source={source}
         resizeMode="contain"
         fadeDuration={0}
@@ -79,7 +79,7 @@ class SafeReactionImage extends Component<ReactionMarkProps, SafeState> {
 }
 
 /**
- * Bob PNG for Home, Live, comments, and the Wave / Round rail.
+ * Reaction PNG for Home, Live, comments, and the Wave / Round rail.
  * `require()` only. Never resolveAssetSource. Never tint.
  */
 export function ReactionMark({ type, size }: ReactionMarkProps) {

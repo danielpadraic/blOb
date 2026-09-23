@@ -8,6 +8,7 @@ export const CLIP_REACTIONS = [
   { type: 'like', emoji: '👍', label: 'Like' },
   { type: 'love', emoji: '❤️', label: 'Love' },
   { type: 'laugh', emoji: '😂', label: 'Laugh' },
+  { type: 'rofl', emoji: '🤣', label: 'ROFL' },
   { type: 'fire', emoji: '🔥', label: 'Fire' },
   { type: 'sad', emoji: '😢', label: 'Sad' },
   { type: 'shock', emoji: '😮', label: 'Shock' },

@@ -134,8 +134,8 @@ export const LIVE_BUBBLE_INNER_GUTTER = LIVE_BUBBLE_PILL_INSET;
 export const LIVE_HANG_OVERLAP = LIVE_PILL_OVERLAP;
 /** @deprecated Live now uses LIVE_PILL_CLEARANCE. */
 export const LIVE_HANG_CLEARANCE = LIVE_PILL_CLEARANCE;
-/** Bust Metro / web cache when like.png is replaced in place. */
-export const LIKE_MARK_REV = 2;
+/** Bust Metro / web cache when reaction PNGs are replaced in place. */
+export const LIKE_MARK_REV = 3;
 
 const OPTIMISTIC_IGNORE_MS = 2000;
 const recentOptimisticKeys = new Map<string, number>();

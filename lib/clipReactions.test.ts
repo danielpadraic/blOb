@@ -20,6 +20,7 @@ describe('clip reactions', () => {
 
   it('keeps the eight picker types', () => {
     expect(asClipReactionType('laugh')).toBe('laugh');
+    expect(asClipReactionType('rofl')).toBe('rofl');
     expect(asClipReactionType('shock')).toBe('shock');
     expect(asClipReactionType('applause')).toBe('applause');
     expect(asClipReactionType('praise')).toBe('praise');
