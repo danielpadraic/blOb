@@ -415,8 +415,12 @@ $$;
 -- 6. Enrollment
 -- ---------------------------------------------------------------------------
 
-/** Both rooms, current windows, room_id default. Idempotent. */
-create or replace function public.official_coin_enroll(p_user_id uuid)
+/**
+ * Both rooms, current windows, room_id default. Idempotent.
+ * Internal: no caller check, so the backfill job and the profile trigger can
+ * enroll anyone. Revoked from clients; `official_coin_enroll` is the public door.
+ */
+create or replace function public.official_coin_enroll_one(p_user_id uuid)
 returns jsonb
 language plpgsql
 security definer
@@ -430,12 +434,6 @@ declare
 begin
   if p_user_id is null then
     return jsonb_build_object('ok', false, 'reason', 'NO_USER');
-  end if;
-  -- A signed-in caller may only enroll themselves. Server jobs run with no JWT.
-  if auth.uid() is not null
-     and p_user_id is distinct from auth.uid()
-     and not public.is_official_ops() then
-    raise exception 'FORBIDDEN' using errcode = '42501';
   end if;
   if not exists (select 1 from public.profiles where id = p_user_id) then
     return jsonb_build_object('ok', false, 'reason', 'NO_PROFILE');
@@ -478,6 +476,23 @@ begin
 end;
 $$;
 
+/** Public door. A signed-in caller may only enroll themselves. */
+create or replace function public.official_coin_enroll(p_user_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if auth.uid() is not null
+     and p_user_id is distinct from auth.uid()
+     and not public.is_official_ops() then
+    raise exception 'FORBIDDEN' using errcode = '42501';
+  end if;
+  return public.official_coin_enroll_one(p_user_id);
+end;
+$$;
+
 /** Server job. Every profiles row that has not opted out. Never admin_mass_join. */
 create or replace function public.official_coin_enroll_all()
 returns jsonb
@@ -497,7 +512,7 @@ begin
     order by created_at nulls first
   loop
     begin
-      v_res := public.official_coin_enroll(rec.id);
+      v_res := public.official_coin_enroll_one(rec.id);
       v_users := v_users + 1;
       v_added := v_added + coalesce((v_res->>'added')::int, 0);
     exception when others then
@@ -557,7 +572,7 @@ begin
      and old.username is not distinct from new.username then
     return new;
   end if;
-  perform public.official_coin_enroll(new.id);
+  perform public.official_coin_enroll_one(new.id);
   return new;
 exception when others then
   return new;
@@ -1274,6 +1289,7 @@ grant execute on function public.official_coin_allowed_days(uuid, uuid) to authe
 grant execute on function public.official_coin_checkin(uuid) to authenticated;
 grant execute on function public.official_coin_checked_in_today(uuid) to authenticated;
 grant execute on function public.official_coin_enroll(uuid) to authenticated;
+revoke execute on function public.official_coin_enroll_one(uuid) from public, anon, authenticated;
 grant execute on function public.official_coin_roll_windows() to authenticated;
 grant execute on function public.official_coin_leave() to authenticated;
 grant execute on function public.official_coin_rejoin() to authenticated;
