@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { normalizeChallenge } from '@/lib/challenges';
 import {
   isOfficialCoinChallenge,
   officialCoinAllowedDays,
@@ -203,6 +204,36 @@ describe('officialCoinGuarantee', () => {
     expect(officialCoinGuarantee(MONTHLY)).toBe(1000);
     expect(officialCoinGuarantee({ official_kind: 'coin_weekly' })).toBe(100);
     expect(officialCoinGuarantee({ id: 'x' })).toBe(0);
+  });
+});
+
+describe('normalizeChallenge', () => {
+  it('carries the Official Coin columns through, so the Board and Overview can branch', () => {
+    const row = normalizeChallenge({
+      id: 'weekly-id',
+      title: 'Official Weekly Coin',
+      status: 'live',
+      is_official: true,
+      official_kind: 'coin_weekly',
+      score_mode: 'count_days',
+      window_reset: 'weekly_chicago',
+      prize_guarantee_coins: 100,
+      starts_at: WEEKLY.starts_at,
+      ends_at: WEEKLY.ends_at,
+      days_required: 7,
+    });
+    expect(row.official_kind).toBe('coin_weekly');
+    expect(row.score_mode).toBe('count_days');
+    expect(row.window_reset).toBe('weekly_chicago');
+    expect(row.prize_guarantee_coins).toBe(100);
+    expect(isOfficialCoinChallenge(row)).toBe(true);
+    expect(officialCoinGuarantee(row)).toBe(100);
+  });
+
+  it('leaves every other challenge untouched', () => {
+    const row = normalizeChallenge({ id: 'x', title: '30-Day Consistency', status: 'live' });
+    expect(row.official_kind).toBeNull();
+    expect(isOfficialCoinChallenge(row)).toBe(false);
   });
 });
 

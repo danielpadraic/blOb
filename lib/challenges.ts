@@ -701,6 +701,11 @@ export function normalizeChallenge(row: ChallengeRow): Challenge {
     series_id: row.series_id ? String(row.series_id) : null,
     armed_at: row.armed_at ? String(row.armed_at) : null,
     day_windows: parseOfficialDayWindows(row.day_windows),
+    official_kind: row.official_kind ? String(row.official_kind) : null,
+    score_mode: row.score_mode ? String(row.score_mode) : null,
+    window_reset: row.window_reset ? String(row.window_reset) : null,
+    prize_guarantee_coins:
+      row.prize_guarantee_coins == null ? null : Number(row.prize_guarantee_coins),
     created_at: String(row.created_at ?? now),
     updated_at: String(row.updated_at ?? now),
   };
