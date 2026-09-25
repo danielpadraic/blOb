@@ -10,6 +10,11 @@ type LeaveChallengeSheetProps = {
   visible: boolean;
   loading?: boolean;
   error?: string | null;
+  /** Official Coin leaves two rooms at once, so it warns in its own words. */
+  title?: string;
+  body?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
   onClose: () => void;
   onConfirm: () => void;
 };
@@ -18,6 +23,10 @@ export function LeaveChallengeSheet({
   visible,
   loading,
   error,
+  title,
+  body,
+  confirmLabel,
+  cancelLabel,
   onClose,
   onConfirm,
 }: LeaveChallengeSheetProps) {
@@ -38,20 +47,27 @@ export function LeaveChallengeSheet({
           borderTopRightRadius: THEME.radiusLg,
         }}
         onPress={(event) => event.stopPropagation()}>
-        <AppText className="text-2xl font-bold text-charcoal">{copy('challenge.leave')}</AppText>
-        <AppText className="mt-2 text-muted">{copy('challenge.leaveConfirm')}</AppText>
+        <AppText className="text-2xl font-bold text-charcoal">
+          {title ?? copy('challenge.leave')}
+        </AppText>
+        <AppText className="mt-2 text-muted">{body ?? copy('challenge.leaveConfirm')}</AppText>
         <View className="mt-6 gap-3">
           {error ? (
             <AppText className="text-sm leading-5 text-coral-dark">{error}</AppText>
           ) : null}
           <Button
-            title={copy('challenge.leave')}
+            title={confirmLabel ?? copy('challenge.leave')}
             size="lg"
             variant="danger"
             loading={loading}
             onPress={onConfirm}
           />
-          <Button title={copy('challenge.leaveKeep')} variant="ghost" onPress={close} disabled={loading} />
+          <Button
+            title={cancelLabel ?? copy('challenge.leaveKeep')}
+            variant="ghost"
+            onPress={close}
+            disabled={loading}
+          />
         </View>
       </Pressable>
     </ChromeOverlay>

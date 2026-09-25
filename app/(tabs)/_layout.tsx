@@ -42,6 +42,7 @@ import { useWalletOptional } from '@/hooks/useWallet';
 import { isWalletReadyForHomeTour, wasHomeTourCompleted } from '@/lib/homeTour';
 import { clearLastOpenChallenge, goHome, pushCheckinPickerRow } from '@/lib/challengeNav';
 import {
+  challengeDetailHref,
   CIRCLES_CREATE_HREF,
   isWatchSurfacePath,
   COUNTER_START_HREF,
@@ -50,6 +51,8 @@ import {
   LOBBY_HREF,
   MULTI_CHECKIN_HREF,
 } from '@/lib/routes';
+import { useOfficialCoinStatus } from '@/hooks/useOfficialCoin';
+import { isOfficialCoinChallenge, OFFICIAL_COIN_ALREADY_TODAY } from '@/lib/officialCoin';
 import { isLiveCameraPath, stopAllLiveMedia, stopMediaUnlessCameraPath } from '@/lib/cameraSession';
 import { startFreshRoundCapture, startFreshWaveCapture } from '@/lib/waveCapture';
 import { shouldResetToHomeOnLaunch } from '@/lib/appResume';
@@ -158,6 +161,7 @@ function TabLayoutInner() {
   const [messagesOpen, setMessagesOpen] = useState(false);
   const tour = useTourOptional();
   const loggable = useLoggableChallenges();
+  const officialCoin = useOfficialCoinStatus();
   const pathRef = useRef(pathname);
   const launchPath = useRef(pathname);
   pathRef.current = pathname;
@@ -342,6 +346,19 @@ function TabLayoutInner() {
     }
     if (id === 'log') {
       const list = loggable.data ?? [];
+      // Today's Chicago slot is already filled on both Official rooms. Land the
+      // Weekly Overview instead of reopening the camera.
+      const coinDone =
+        officialCoin.status.checkedInToday && officialCoin.status.weekly?.challenge.id;
+      if (coinDone && (isOfficialCoinChallenge(challenge) || (!challenge?.id && list.length === 0))) {
+        go(
+          challengeDetailHref(String(coinDone), 'lobby', null, {
+            tab: 'overview',
+            notice: OFFICIAL_COIN_ALREADY_TODAY,
+          }),
+        );
+        return;
+      }
       if (!challenge?.id && list.length >= 2) {
         go(MULTI_CHECKIN_HREF);
         return;

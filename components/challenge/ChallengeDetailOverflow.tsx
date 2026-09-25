@@ -27,6 +27,8 @@ import {
 import { useMyProfile } from '@/hooks/useProfile';
 import { canCancelChallenge, countOtherJoiners } from '@/lib/challengeCancel';
 import { canParticipantLeave } from '@/lib/challengeLeave';
+import { useLeaveOfficialCoin } from '@/hooks/useOfficialCoin';
+import { isOfficialCoinChallenge, OFFICIAL_COIN_LEAVE_CONFIRM } from '@/lib/officialCoin';
 import { usesAdvancedCreateEdit } from '@/lib/challengeExperience';
 import { fetchChallengeModeratorIds } from '@/lib/challengeMods';
 import { canHouseEditChallenge, canHostQuickEdit, canHostWizardEdit } from '@/lib/challengeStart';
@@ -70,6 +72,7 @@ export function useChallengeDetailOverflow() {
   const queryClient = useQueryClient();
   const cancel = useCancelChallenge();
   const leave = useLeaveChallenge();
+  const leaveCoin = useLeaveOfficialCoin();
   const nudge = useNudgeChallengeStart();
   const resolveRoll = useResolveStartRoll();
 
@@ -121,8 +124,20 @@ export function useChallengeDetailOverflow() {
     rosterReady: roster.data != null,
   });
   const canLeave = canParticipantLeave({ challenge, joined });
+  // Official Coin is the one Official room a person can walk away from, and
+  // leaving drops the Weekly and the Monthly together.
+  const coinRoom = isOfficialCoinChallenge(challenge);
+  const canLeaveCoin = coinRoom && joined;
   const showOverflow =
-    canWizardEdit || canDetails || canTools || canCancel || canLeave || canMute || houseReady || canHostAdd;
+    canWizardEdit ||
+    canDetails ||
+    canTools ||
+    canCancel ||
+    canLeave ||
+    canLeaveCoin ||
+    canMute ||
+    houseReady ||
+    canHostAdd;
   const rollPending = Boolean(challenge?.start_roll_pending) && canHostEdit;
   const rollOpen = rollPending && !rollDismissed;
 
@@ -180,10 +195,22 @@ export function useChallengeDetailOverflow() {
   }
 
   function confirmLeave() {
-    if (!id || leave.isPending) {
+    if (!id || leave.isPending || leaveCoin.isPending) {
       return;
     }
     setError(null);
+    if (coinRoom) {
+      leaveCoin.mutate(undefined, {
+        onSuccess: () => {
+          setLeaveOpen(false);
+          router.replace('/challenges');
+        },
+        onError: (err) => {
+          setError(getLeaveChallengeMessage(err));
+        },
+      });
+      return;
+    }
     leave.mutate(id, {
       onSuccess: () => {
         setLeaveOpen(false);
@@ -273,10 +300,10 @@ export function useChallengeDetailOverflow() {
       },
     });
   }
-  if (canLeave) {
+  if (canLeave || canLeaveCoin) {
     actions.push({
       key: 'leave',
-      label: copy('challenge.leave'),
+      label: canLeaveCoin ? 'Leave Official' : copy('challenge.leave'),
       onPress: () => {
         setError(null);
         setLeaveOpen(true);
@@ -333,7 +360,13 @@ export function useChallengeDetailOverflow() {
       })();
     },
     challenge,
-    loading: cancel.isPending || leave.isPending || nudge.isPending || resolveRoll.isPending,
+    coinRoom,
+    loading:
+      cancel.isPending ||
+      leave.isPending ||
+      leaveCoin.isPending ||
+      nudge.isPending ||
+      resolveRoll.isPending,
     error,
     confirmCancel,
     confirmLeave,
@@ -423,6 +456,10 @@ export function ChallengeDetailOverflowHost({
           visible={overflow.leaveOpen}
           loading={overflow.loading}
           error={overflow.leaveOpen ? overflow.error : null}
+          title={overflow.coinRoom ? OFFICIAL_COIN_LEAVE_CONFIRM.title : undefined}
+          body={overflow.coinRoom ? OFFICIAL_COIN_LEAVE_CONFIRM.body : undefined}
+          confirmLabel={overflow.coinRoom ? OFFICIAL_COIN_LEAVE_CONFIRM.confirm : undefined}
+          cancelLabel={overflow.coinRoom ? OFFICIAL_COIN_LEAVE_CONFIRM.cancel : undefined}
           onClose={overflow.closeLeave}
           onConfirm={overflow.confirmLeave}
         />

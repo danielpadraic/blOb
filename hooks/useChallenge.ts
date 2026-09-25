@@ -84,6 +84,7 @@ import { durationIntegerForPublish, publishPayoutFields } from '@/lib/formatPayo
 import { hostRigorForPublish } from '@/lib/hostRigor';
 import { resolveJoinUntilAt } from '@/lib/joinWindow';
 import { useAuth } from '@/hooks/useAuth';
+import { tickOfficialCoinWindows } from '@/hooks/useOfficialCoin';
 import { fetchCurrentUserProfile } from '@/hooks/useProfile';
 import type { CreateChallengeValues } from '@/utils/validators';
 
@@ -103,6 +104,9 @@ async function prepareLobby(_userId?: string) {
     } catch (error) {
       logDev('[blob:lobby] official series tick skipped', error);
     }
+    // Rolls a finished Chicago window onto the same Official Coin rows and
+    // settles the one that just closed. There is no pg_cron on this project.
+    await tickOfficialCoinWindows();
   })();
   return lobbyBootstrap;
 }
@@ -345,7 +349,7 @@ export function useChallenge(id: string | undefined) {
 }
 
 const PARTICIPANT_COLUMNS =
-  'id, challenge_id, user_id, status, days_completed, points, joined_at, completed_at, eliminated_at, distance_meters_total, metric_totals, live_mute, scoring_lane, roster_role';
+  'id, challenge_id, user_id, status, days_completed, points, joined_at, completed_at, eliminated_at, distance_meters_total, metric_totals, live_mute, scoring_lane, roster_role, room_id, window_starts_at, window_ends_at';
 const PARTICIPANT_COLUMNS_NO_LANE =
   'id, challenge_id, user_id, status, days_completed, points, joined_at, completed_at, eliminated_at, distance_meters_total, metric_totals, live_mute';
 const PARTICIPANT_COLUMNS_NO_POINTS =
@@ -370,6 +374,9 @@ function asParticipant(row: ChallengeParticipant, extras?: Partial<ChallengePart
     live_mute: asLiveMute(row.live_mute ?? extras?.live_mute),
     scoring_lane: row.scoring_lane ?? extras?.scoring_lane ?? null,
     roster_role: row.roster_role ?? extras?.roster_role ?? 'participant',
+    room_id: row.room_id ?? extras?.room_id ?? 'default',
+    window_starts_at: row.window_starts_at ?? extras?.window_starts_at ?? null,
+    window_ends_at: row.window_ends_at ?? extras?.window_ends_at ?? null,
   };
 }
 

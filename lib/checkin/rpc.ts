@@ -376,3 +376,31 @@ export async function submitCheckinWithClient(
   }
   return null;
 }
+
+/**
+ * One Official Check-In fills today's Chicago slot on BOTH Official Coin rooms.
+ * The server mirrors the proof set into the sibling room and submits it there
+ * too, so one Send becomes two check-ins and two Live cards on one date.
+ * Falls back to the plain submit when the fan-out RPC is not deployed yet.
+ */
+export async function submitOfficialCoinCheckinWithClient(
+  client: CheckinRpcClient,
+  challengeId: string,
+): Promise<ChallengeCheckin | null> {
+  const { data, error } = (await client.rpc('official_coin_checkin', {
+    p_challenge_id: challengeId,
+  })) as { data: unknown; error: { message?: string; code?: string; details?: string } | null };
+  if (error) {
+    const text = String(error.message ?? '').toLowerCase();
+    if (text.includes('schema cache') || text.includes('does not exist')) {
+      return submitCheckinWithClient(client, challengeId, null);
+    }
+    throw new Error(mapCheckinRpcError(error, 'submit'));
+  }
+  const row = data as Record<string, unknown> | null;
+  const nested = row?.checkin;
+  if (nested && typeof nested === 'object') {
+    return parseChallengeCheckin(nested as Record<string, unknown>);
+  }
+  return null;
+}

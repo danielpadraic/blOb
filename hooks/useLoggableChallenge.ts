@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import type { Challenge, ChallengeParticipant } from '@/lib/types';
 import { checkinCtaTitle, type CheckinPhase } from '@/lib/challengeCheckin';
 import { checkinTaskLabel } from '@/lib/checkin';
+import { officialCoinPickerRank } from '@/lib/officialCoin';
 import { remainingProofLabelsOf } from '@/lib/multiCheckin';
 import { requiredChallengeProofs } from '@/lib/challenges';
 import { blockingProofsForCheckin } from '@/lib/taskCadence';
@@ -44,6 +45,10 @@ export type LoggableChallenge = Pick<
   | 'comparable_points_config'
   | 'target_count'
   | 'length_value'
+  | 'official_kind'
+  | 'score_mode'
+  | 'window_reset'
+  | 'prize_guarantee_coins'
 > & {
   checkinPhase?: CheckinPhase;
   ctaTitle?: string;
@@ -68,6 +73,7 @@ const PARTICIPANT_SELECT = 'challenge_id, status, joined_at, eliminated_at, days
 const PARTICIPANT_SELECT_LEGACY = 'challenge_id, status, joined_at, days_completed';
 
 const CHALLENGE_SELECTS = [
+  'id, title, task, tasks, proofs, proof_type, proof_requirements, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes, series_id, timezone, days_required, day_windows, format, challenge_type, cumulative_metric, cumulative_target, metrics, scoring_method, scoring_config, comparable_points_config, target_count, length_value, official_kind, score_mode, window_reset, prize_guarantee_coins',
   'id, title, task, tasks, proofs, proof_type, proof_requirements, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes, series_id, timezone, days_required, day_windows, format, challenge_type, cumulative_metric, cumulative_target, metrics, scoring_method, scoring_config, comparable_points_config, target_count, length_value',
   'id, title, task, tasks, proofs, proof_type, proof_requirements, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes, series_id, timezone, days_required, day_windows, format, challenge_type, cumulative_metric, cumulative_target, metrics, scoring_method, target_count, length_value',
   'id, title, task, tasks, proofs, proof_type, proof_requirements, is_official, status, starts_at, ends_at, is_unlimited, frequency, min_minutes, series_id, timezone, days_required, day_windows, format, challenge_type, cumulative_target, metrics',
@@ -187,6 +193,12 @@ export function useLoggableChallenges() {
       }
 
       return rows.sort((a, b) => {
+        // Official Check-In is the house room. It leads the picker, weekly first.
+        const aOfficial = officialCoinPickerRank(a);
+        const bOfficial = officialCoinPickerRank(b);
+        if (aOfficial !== bOfficial) {
+          return aOfficial - bOfficial;
+        }
         const aDue = a.ends_at ? new Date(a.ends_at).getTime() : Number.POSITIVE_INFINITY;
         const bDue = b.ends_at ? new Date(b.ends_at).getTime() : Number.POSITIVE_INFINITY;
         if (aDue !== bDue) {

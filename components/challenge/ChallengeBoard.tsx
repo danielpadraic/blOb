@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Image, Platform, Pressable, ScrollView, View } from 'react-native';
+import { useRouter } from 'expo-router';
 
 import { ChallengeLifecycleStatus } from '@/components/challenge/ChallengeLifecycleStatus';
 import { MissBudgetLines } from '@/components/challenge/MissBudgetLines';
@@ -61,6 +62,17 @@ import { challengeTargetCount } from '@/lib/challenges';
 import { copy } from '@/lib/copy';
 import { challengeShowsMissBudget, missesAllowedCap, missesAllowedCopy, missesUsedCopy } from '@/lib/missDuty';
 import { isOfficialChallenge } from '@/lib/official';
+import {
+  formatOfficialCoinAmount,
+  isOfficialCoinChallenge,
+  officialCoinAllowedDays,
+  officialCoinBoardHeaderLine,
+  officialCoinGuarantee,
+  officialCoinScoreLabel,
+  OFFICIAL_COIN_SPLIT_LINE,
+} from '@/lib/officialCoin';
+import { useOfficialCoinDays, type OfficialCoinDay } from '@/hooks/useOfficialCoin';
+import { challengeDetailHref } from '@/lib/routes';
 import { flexChildMin, THEME } from '@/lib/theme';
 import type { Challenge, ChallengeParticipantWithProfile, ChallengeSettlementView } from '@/lib/types';
 
@@ -95,9 +107,13 @@ export function ChallengeBoard({
   error,
   missesUsed = 0,
 }: ChallengeBoardProps) {
+  const router = useRouter();
   const [receiptOpen, setReceiptOpen] = useState(showReceipt);
   const [openIds, setOpenIds] = useState<Set<string>>(() => new Set());
   const compact = variant === 'compact';
+  // Official Coin counts days in the current Chicago window. No knockout chrome.
+  const officialCoin = isOfficialCoinChallenge(challenge);
+  const coinDays = useOfficialCoinDays(challenge, officialCoin);
   const quantityBoard = usesQuantityScoring(challenge);
   const racingRoster = useMemo(
     () => (roster ?? []).filter((row) => !isRosterObserver(row) && !isRosterRemoved(row)),
@@ -122,7 +138,8 @@ export function ChallengeBoard({
           username: row.profile?.username,
           avatar_url: row.profile?.avatar_url,
         })),
-        completedUserIds: quantityBoard ? [] : completedUserIds,
+        // Official Coin has no Caught Up bucket — everyone stays on one list.
+        completedUserIds: quantityBoard || officialCoin ? [] : completedUserIds,
         settlement: settlement
           ? {
               winner_count: settlement.settlement.winner_count,
@@ -140,6 +157,7 @@ export function ChallengeBoard({
       challenge.status,
       completedUserIds,
       joined,
+      officialCoin,
       quantityBoard,
       racingRoster,
       settlement,
@@ -164,6 +182,19 @@ export function ChallengeBoard({
     consistencyBoard &&
     (canAdjust || canHouseRemove || canFriendlyRemove || canEditScore || canProxy);
   const requiredDays = storedDurationDays(challenge) ?? challengeTargetCount(challenge);
+  /** Mid-window joiners can only fill the days that are left, so `of X` is per person. */
+  const coinAllowedByUser = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!officialCoin) {
+      return map;
+    }
+    const now = new Date();
+    for (const row of roster ?? []) {
+      map.set(row.user_id, officialCoinAllowedDays(challenge, row, now));
+    }
+    return map;
+  }, [challenge, officialCoin, roster]);
+  const coinAllowedFor = (userId: string) => coinAllowedByUser.get(userId) ?? requiredDays;
   const showMissLine = challengeShowsMissBudget(challenge);
   const missCap = missesAllowedCap(challenge);
   const progressByUser = useMemo(() => {
@@ -228,6 +259,8 @@ export function ChallengeBoard({
   const leadingScore = racing.reduce((max, row) => Math.max(max, Number(row.points) || 0), 0);
   const headerLine = hasLaneScoreboard
     ? ''
+    : officialCoin
+    ? officialCoinBoardHeaderLine(challenge)
     : boardStatusHeaderLine({
         format: headerFormat,
         racingCount: racing.length,
@@ -251,11 +284,21 @@ export function ChallengeBoard({
       if (quantityBoard) {
         return progressByUser.get(row.userId)?.label?.trim() || '42.1 / 128 mi';
       }
+      if (officialCoin) {
+        return officialCoinScoreLabel(Number(row.days) || 0, coinAllowedFor(row.userId));
+      }
       if (consistencyBoard) {
         return `${Number(row.days) || 0}/${requiredDays}`;
       }
       return formatBoardPoints(row.points);
     });
+    if (officialCoin) {
+      return boardColumnWidth([scoreHeader, ...samples], {
+        compact,
+        min: BOARD_PTS_COL,
+        max: 110,
+      });
+    }
     if (quantityBoard) {
       return boardColumnWidth([scoreHeader, ...samples], {
         compact,
@@ -265,8 +308,10 @@ export function ChallengeBoard({
     }
     return BOARD_PTS_COL;
   }, [
+    coinAllowedByUser,
     compact,
     consistencyBoard,
+    officialCoin,
     progressByUser,
     quantityBoard,
     requiredDays,
@@ -328,24 +373,29 @@ export function ChallengeBoard({
             : progress
               ? formatBoardNestedQty(progress.logged)
               : '0')
-        : consistencyBoard
-          ? `${Number(row.days) || 0}/${requiredDays}`
-          : formatBoardPoints(row.points);
-      const nested = nestedLines({
-        comparableColumns,
-        totals: participant?.metric_totals ?? null,
-        consistencyBoard,
-        quantityBoard,
-        days: Number(row.days) || 0,
-        requiredDays,
-        status: boardRowTag(row, view.settled, {
-          quantityDone: quantityBoard ? Boolean(progress?.done) : false,
-        }),
-        showMissLine,
-        missCap,
-        missesUsed,
-        progress: progress ?? null,
-      });
+        : officialCoin
+          ? officialCoinScoreLabel(Number(row.days) || 0, coinAllowedFor(row.userId))
+          : consistencyBoard
+            ? `${Number(row.days) || 0}/${requiredDays}`
+            : formatBoardPoints(row.points);
+      const coinRowDays = officialCoin ? coinDays.data?.get(row.userId) ?? [] : [];
+      const nested = officialCoin
+        ? []
+        : nestedLines({
+            comparableColumns,
+            totals: participant?.metric_totals ?? null,
+            consistencyBoard,
+            quantityBoard,
+            days: Number(row.days) || 0,
+            requiredDays,
+            status: boardRowTag(row, view.settled, {
+              quantityDone: quantityBoard ? Boolean(progress?.done) : false,
+            }),
+            showMissLine,
+            missCap,
+            missesUsed,
+            progress: progress ?? null,
+          });
       return (
         <BoardRankRow
           key={row.userId}
@@ -374,8 +424,14 @@ export function ChallengeBoard({
           score={score}
           scoreWidth={scoreWidth}
           expanded={openIds.has(row.userId)}
-          canExpand={hasNested && nested.length > 0}
+          canExpand={hasNested && (nested.length > 0 || coinRowDays.length > 0)}
           nested={nested}
+          dayLinks={coinRowDays}
+          onOpenDay={(entry) =>
+            router.push(
+              challengeDetailHref(challenge.id, 'lobby', entry.postId, { tab: 'feed' }),
+            )
+          }
           onToggle={() => toggleRow(row.userId)}
           showAdjust={showAdjustCol}
           participantStatus={participant?.status}
@@ -608,6 +664,22 @@ function ShareLine({
       </View>
     );
   }
+  if (isOfficialCoinChallenge(challenge)) {
+    // House guarantee. No entry fee, no per-head math, no settlement hedge.
+    return (
+      <View style={{ gap: 2 }}>
+        <View className="flex-row flex-wrap items-baseline" style={{ gap: 6 }}>
+          <AppText className="text-sm font-semibold leading-5 text-charcoal">Prize</AppText>
+          <AppText className="text-[22px] font-extrabold text-charcoal">
+            {`${formatOfficialCoinAmount(officialCoinGuarantee(challenge))} coins`}
+          </AppText>
+        </View>
+        <AppText className="text-[13px] leading-5" style={{ color: THEME.textMuted }}>
+          {OFFICIAL_COIN_SPLIT_LINE}
+        </AppText>
+      </View>
+    );
+  }
   return (
     <View className="flex-row flex-wrap items-center" style={{ gap: 6 }}>
       <FieldNoteLabel
@@ -716,6 +788,8 @@ function BoardRankRow({
   expanded,
   canExpand,
   nested,
+  dayLinks = [],
+  onOpenDay,
   onToggle,
   showAdjust,
   participantStatus,
@@ -736,6 +810,9 @@ function BoardRankRow({
   expanded: boolean;
   canExpand: boolean;
   nested: NestedLine[];
+  /** Official Coin: one chip per logged day, linking to that day's proof. */
+  dayLinks?: OfficialCoinDay[];
+  onOpenDay?: (day: OfficialCoinDay) => void;
   onToggle: () => void;
   showAdjust?: boolean;
   participantStatus?: string | null;
@@ -861,7 +938,40 @@ function BoardRankRow({
         ) : null}
       </Pressable>
 
-      {expanded && nested.length > 0 ? (
+      {expanded && dayLinks.length > 0 ? (
+        <View
+          className="flex-row flex-wrap"
+          style={{
+            gap: 6,
+            paddingBottom: 10,
+            paddingTop: 2,
+            paddingLeft: BOARD_RANK_COL + BOARD_GAP + BOARD_AVATAR + BOARD_NAME_GAP,
+            paddingRight: canExpand ? BOARD_CHEVRON_COL : 4,
+          }}>
+          {dayLinks.map((entry) => (
+            <Pressable
+              key={entry.checkinId}
+              accessibilityRole="button"
+              accessibilityLabel={`${label}, Day ${entry.day} proof`}
+              disabled={!entry.postId || !onOpenDay}
+              onPress={() => onOpenDay?.(entry)}
+              style={{
+                minHeight: 32,
+                justifyContent: 'center',
+                borderRadius: 999,
+                paddingHorizontal: 12,
+                backgroundColor: THEME.accentSoft,
+                opacity: entry.postId ? 1 : 0.55,
+              }}>
+              <AppText className="text-[12px] font-bold" style={{ color: THEME.accent }}>
+                {`Day ${entry.day}`}
+              </AppText>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+
+      {expanded && dayLinks.length === 0 && nested.length > 0 ? (
         <View
           className="flex-row"
           style={{

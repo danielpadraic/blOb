@@ -516,6 +516,12 @@ export interface Challenge {
   series_id?: string | null;
   armed_at?: string | null;
   day_windows?: Array<{ day: number; date: string; starts_at: string; ends_at: string }> | null;
+  /** Standing house Official Coin rooms. Never set on cash Officials or Pinnacle. */
+  official_kind?: 'coin_weekly' | 'coin_monthly' | string | null;
+  /** `count_days` for Official Coin. Knockout consistency leaves this null. */
+  score_mode?: string | null;
+  window_reset?: 'weekly_chicago' | 'monthly_chicago' | string | null;
+  prize_guarantee_coins?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -549,6 +555,11 @@ export interface ChallengeParticipant {
   roster_role?: 'participant' | 'observer' | string | null;
   place?: number | null;
   result?: string | null;
+  /** Shard key. `default` until 100-cap rooms ship. */
+  room_id?: string | null;
+  /** Official Coin: when this person became eligible in the current window. */
+  window_starts_at?: string | null;
+  window_ends_at?: string | null;
 }
 
 export interface ChallengeParticipantWithProfile extends ChallengeParticipant {
@@ -2136,6 +2147,30 @@ export type Database = {
       tick_official_series: {
         Args: Record<string, never>;
         Returns: { ok: boolean };
+      };
+      official_coin_roll_windows: {
+        Args: Record<string, never>;
+        Returns: { ok: boolean; rolled?: number; settled?: number };
+      };
+      official_coin_checkin: {
+        Args: { p_challenge_id: string };
+        Returns: Record<string, unknown>;
+      };
+      official_coin_enroll: {
+        Args: { p_user_id: string };
+        Returns: { ok: boolean; added?: number; rooms?: string[]; reason?: string };
+      };
+      official_coin_leave: {
+        Args: Record<string, never>;
+        Returns: { ok: boolean; left?: number };
+      };
+      official_coin_rejoin: {
+        Args: Record<string, never>;
+        Returns: { ok: boolean; added?: number };
+      };
+      official_coin_checked_in_today: {
+        Args: { p_user_id?: string | null };
+        Returns: boolean;
       };
       tick_user_challenge_starts: {
         Args: Record<string, never>;

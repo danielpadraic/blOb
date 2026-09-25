@@ -210,6 +210,7 @@ import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { useStableChallengeRouteId, scrollNodeTo } from '@/lib/challengeRoute';
 import { copy } from '@/lib/copy';
 import { isViewerOutOfPrize } from '@/lib/lobbyChallenge';
+import { isOfficialCoinChallenge } from '@/lib/officialCoin';
 import { getErrorMessage } from '@/utils/errors';
 
 const BODY_METRICS_JOIN_COPY =
@@ -1137,8 +1138,11 @@ export default function ChallengeDetailScreen() {
     isTeacher3DayChallenge(challenge) ||
     (buyInAmount > 0 && (isBucksChallenge(challenge) || Boolean(challenge.host_funded)));
   const hasCheckins = (submittedCheckins.data ?? 0) > 0 || loggedToday;
+  // Official Coin rooms are live the moment they exist: no start gate, no
+  // "N more people needed", no Dropped.
+  const officialCoinRoom = isOfficialCoinChallenge(challenge);
   const startNeeded =
-    challenge.status === 'live' || hasCheckins
+    officialCoinRoom || challenge.status === 'live' || hasCheckins
       ? null
       : userStartNeededLabel(challenge, competitorCount);
   const goalLabel =
@@ -1516,8 +1520,13 @@ export default function ChallengeDetailScreen() {
 
         {challenge.is_official && !isTeacher3DayChallenge(challenge) ? (
           <>
-            <ChallengeDetailsCard challenge={challenge} missesUsed={periodMisses.data ?? 0} />
-            {Boolean(receipt) || moneyPhase === 'ended' ? null : (
+            <ChallengeDetailsCard
+              challenge={challenge}
+              missesUsed={periodMisses.data ?? 0}
+              membership={participation}
+            />
+            {/* The cash ladder money board (contestants needed, 1.5x) has no place in a coin room. */}
+            {officialCoinRoom || Boolean(receipt) || moneyPhase === 'ended' ? null : (
               <View className="mt-4">
                 <OfficialMoneyBoard
                   challenge={challenge}

@@ -28,6 +28,7 @@ import {
   type CheckinPeriodChallenge,
 } from '@/lib/checkinPeriod';
 import { dateStampInZone } from '@/lib/officialDays';
+import { HOME_PULSE_KEY } from '@/lib/homePulse';
 import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
 import { getErrorMessage } from '@/utils/errors';
 import { reportAppError } from '@/lib/appErrors';
@@ -432,12 +433,17 @@ export function useSaveCheckinProof(challengeId: string | undefined) {
   });
 }
 
-export function useSubmitCheckin(challengeId: string | undefined, forUserId?: string | null) {
+export function useSubmitCheckin(
+  challengeId: string | undefined,
+  forUserId?: string | null,
+  opts?: { officialCoin?: boolean },
+) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const officialCoin = Boolean(opts?.officialCoin);
 
   return useMutation({
-    mutationFn: () => submitCheckin(challengeId!, forUserId),
+    mutationFn: () => submitCheckin(challengeId!, forUserId, { officialCoin }),
     onSuccess: (row) => {
       if (row?.id) {
         void cancelCheckoutReminder(row.id);
@@ -492,6 +498,14 @@ export function useSubmitCheckin(challengeId: string | undefined, forUserId?: st
         void queryClient.invalidateQueries({
           predicate: (query) => isHomeSocialFeedKey(query.queryKey),
         });
+      }
+      if (officialCoin) {
+        // One Send lands on both rooms. Refresh the sibling Board and Live too.
+        void queryClient.invalidateQueries({ queryKey: ['challenge-participants'] });
+        void queryClient.invalidateQueries({ queryKey: ['my-participation'] });
+        void queryClient.invalidateQueries({ queryKey: ['official-coin-days'] });
+        void queryClient.invalidateQueries({ queryKey: ['submitted-checkins'] });
+        void queryClient.invalidateQueries({ queryKey: [HOME_PULSE_KEY] });
       }
       void queryClient.invalidateQueries({ queryKey: ['workout-submission', challengeId] });
       void queryClient.invalidateQueries({ queryKey: ['challenge-completions', challengeId] });

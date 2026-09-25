@@ -2,6 +2,7 @@ import {
   saveCheckinProofWithClient,
   saveCheckinMetricValuesWithClient,
   submitCheckinWithClient,
+  submitOfficialCoinCheckinWithClient,
   parseChallengeCheckin,
 } from '@/lib/checkin/rpc';
 import type { SaveCheckinProofInput } from '@/lib/checkin/rpc';
@@ -89,10 +90,16 @@ export async function editHonorCheckinIncrement(input: {
   }
 }
 
-export async function submitCheckin(challengeId: string, forUserId?: string | null) {
+export async function submitCheckin(
+  challengeId: string,
+  forUserId?: string | null,
+  opts?: { officialCoin?: boolean },
+) {
   try {
     logCheckinPhase('submit', 'start');
-    const parsed = await submitCheckinWithClient(supabase as never, challengeId, forUserId);
+    const parsed = opts?.officialCoin
+      ? await submitOfficialCoinCheckinWithClient(supabase as never, challengeId)
+      : await submitCheckinWithClient(supabase as never, challengeId, forUserId);
     logCheckinPhase('submit', parsed?.id ? 'ok' : 'empty');
     requestPushAfterValue();
     return parsed;

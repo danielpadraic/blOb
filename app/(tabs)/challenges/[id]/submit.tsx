@@ -177,6 +177,7 @@ import {
   sumComparableMetricRows,
 } from '@/lib/comparablePoints';
 import { allowsMultiCheckin, checkinPeriodComplete } from '@/lib/loggable';
+import { isOfficialCoinChallenge } from '@/lib/officialCoin';
 import { hasChallengeStarted, isClosedForLogs, loggingOpensHelper } from '@/lib/settlement';
 import { supabase } from '@/lib/supabase';
 import type { MentionDoc } from '@/lib/mentions';
@@ -440,7 +441,9 @@ function SubmitWorkoutInner() {
   const checkinQuery = usePeriodCheckin(id, challengeQuery.data, isProxy ? proxyForId : undefined);
   const historyQuery = useCheckinHistory(id, Boolean(challengeQuery.data), isProxy ? proxyForId : undefined);
   const saveProof = useSaveCheckinProof(id);
-  const submitCheckin = useSubmitCheckin(id, isProxy ? proxyForId : undefined);
+  // One Official Check-In fans out to the Weekly and Monthly rooms server side.
+  const officialCoin = isOfficialCoinChallenge(challengeQuery.data);
+  const submitCheckin = useSubmitCheckin(id, isProxy ? proxyForId : undefined, { officialCoin });
   const queryClient = useQueryClient();
   const wavePublishedRef = useRef(false);
 
