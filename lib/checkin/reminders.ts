@@ -12,38 +12,14 @@ export const CHECKIN_REMINDER_TYPE = 'challenge_checkin_reminder' as const;
 /** Tokens: {challenge}. Gentle or Honest only. ≤100 after substitution. */
 export const CHECKIN_RISK_COPY: Record<CheckinRiskTone, Record<CheckinRiskOffset, readonly string[]>> = {
   gentle: {
-    8: [
-      'Check in for {challenge} — stay in it.',
-      '{challenge} is still open. Check in when you can.',
-      'Window’s open on {challenge}. One check-in keeps you in.',
-    ],
-    4: [
-      'Four hours on {challenge}. Check in and stay in it.',
-      '{challenge}: four hours left. Check in.',
-      'Four hours left on {challenge}. Check in.',
-    ],
-    2: [
-      'Two hours on {challenge}. Check in — stay in it.',
-      '{challenge}: two hours. Check in now.',
-      'Last two hours on {challenge}. Check in.',
-    ],
+    8: ['Time to check in to {challenge}.'],
+    4: ['4 hours left to check in to {challenge}.'],
+    2: ['2 hours left to check in to {challenge}.'],
   },
   honest: {
-    8: [
-      'Check in for {challenge} or you are on the clock.',
-      '{challenge} still needs a check-in. Do it today.',
-      'Don’t ghost {challenge}. Check in while you can.',
-    ],
-    4: [
-      'Four hours on {challenge}. Check in or lose your seat.',
-      '{challenge}: four hours. Check in.',
-      'Four hours left. Check in for {challenge}.',
-    ],
-    2: [
-      'Two hours on {challenge}. Check in or you’re out.',
-      '{challenge}: two hours. Check in now.',
-      'Last two on {challenge}. Check in. No later.',
-    ],
+    8: ['{challenge}: check in today.'],
+    4: ['{challenge}: 4 hours. Check in or miss the day.'],
+    2: ['{challenge}: 2 hours. Check in or miss the day.'],
   },
 };
 

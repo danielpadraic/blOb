@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { clearHomeTourCompleted, markHomeTourCompleted } from '@/lib/homeTour';
 import {
   CHALLENGE_LIVE_HOST_EMPTY_BODY,
   CHALLENGE_LIVE_STEPS,
@@ -18,6 +19,8 @@ import {
 
 afterEach(() => {
   resetContextualToursForTests();
+  clearHomeTourCompleted('user-1');
+  clearHomeTourCompleted('user-9');
 });
 
 describe('contextual first-seen flags', () => {
@@ -38,6 +41,21 @@ describe('contextual first-seen flags', () => {
     ).toBe(true);
     expect(profileHasContextualTour({ contextual_tours_seen: ['lift'] }, 'lift')).toBe(true);
     expect(parseContextualToursSeen(['challenge-live', 'nope'])).toEqual(new Set(['challenge-live']));
+  });
+
+  it('treats a Home dismiss as seen for Home and Live, not Lift', () => {
+    expect(
+      wasContextualTourSeen('user-1', 'home-live-pills', { tutorial_completed_at: '2026-09-26T00:00:00.000Z' }),
+    ).toBe(true);
+    expect(
+      wasContextualTourSeen('user-1', 'challenge-live', { tutorial_completed_at: '2026-09-26T00:00:00.000Z' }),
+    ).toBe(true);
+    expect(
+      wasContextualTourSeen('user-1', 'lift', { tutorial_completed_at: '2026-09-26T00:00:00.000Z' }),
+    ).toBe(false);
+    markHomeTourCompleted('user-9');
+    expect(wasContextualTourSeen('user-9', 'challenge-live')).toBe(true);
+    clearHomeTourCompleted('user-9');
   });
 
   it('clears only the Home Live pills flag on replay', () => {
@@ -72,7 +90,9 @@ describe('contextual first-seen flags', () => {
       .join('\n');
     expect(copy).not.toMatch(/Bucks/i);
     expect(copy).not.toMatch(/I believe/i);
-    expect(HOME_LIVE_PILLS_STEPS[0]?.title).toBe('Live');
-    expect(HOME_LIVE_PILLS_STEPS[1]?.title).toBe('Pulse');
+    expect(HOME_LIVE_PILLS_STEPS[0]?.title).toBe('Live rail');
+    expect(HOME_LIVE_PILLS_STEPS[0]?.body).toMatch(/See More/);
+    expect(CHALLENGE_LIVE_STEPS[0]?.body).toMatch(/thread/);
+    expect(copy).not.toMatch(/locker-room|Pulse is live/i);
   });
 });

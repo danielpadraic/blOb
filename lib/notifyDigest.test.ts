@@ -33,7 +33,7 @@ describe('winnerDigestLine', () => {
         friendNames: ['Alex'],
         viewerFinished: true,
       }),
-    ).toBe(`Nice work! You and Alex all won ${MILES}! Send a high-five!`);
+    ).toBe(`${MILES}: you and Alex finished.`);
   });
 
   it('lists two or three friends', () => {
@@ -43,14 +43,14 @@ describe('winnerDigestLine', () => {
         friendNames: ['Alex', 'Sam'],
         viewerFinished: true,
       }),
-    ).toBe(`Nice work! You, Alex, and Sam all won ${MILES}! Send a high-five!`);
+    ).toBe(`${MILES}: you, Alex, and 1 other finished.`);
     expect(
       winnerDigestLine({
         challengeTitle: 'Morning miles',
         friendNames: ['Alex', 'Sam', 'Jo'],
         viewerFinished: true,
       }),
-    ).toBe(`Nice work! You, Alex, Sam, and Jo all won ${MILES}! Send a high-five!`);
+    ).toBe(`${MILES}: you, Alex, and 2 others finished.`);
   });
 
   it('caps four or more at two names plus others', () => {
@@ -60,7 +60,7 @@ describe('winnerDigestLine', () => {
         friendNames: ['Alex', 'Sam', 'Jo', 'Pat'],
         viewerFinished: true,
       }),
-    ).toBe(`Nice work! You, Alex, Sam, and 2 others all won ${MILES}! Send a high-five!`);
+    ).toBe(`${MILES}: you, Alex, and 3 others finished.`);
   });
 
   it('uses a personal row when you finished alone', () => {
@@ -70,7 +70,7 @@ describe('winnerDigestLine', () => {
         friendNames: [],
         viewerFinished: true,
       }),
-    ).toBe(`Nice work! You finished ${MILES}.`);
+    ).toBe(`${MILES}: you finished.`);
   });
 
   it('never says you won when you did not finish', () => {
@@ -100,7 +100,7 @@ describe('checkinDigestLine', () => {
         name: 'Alex',
         pronoun: 'her',
       }),
-    ).toBe(`Alex Check-In ${MILES}. Congratulate her.`);
+    ).toBe(`Alex checked in to ${MILES}.`);
   });
 
   it('collapses two or more into one friends line', () => {
@@ -109,7 +109,7 @@ describe('checkinDigestLine', () => {
         challengeTitle: 'Morning miles',
         count: 2,
       }),
-    ).toBe(`2 friends checked in on ${MILES}.`);
+    ).toBe(`2 friends checked in to ${MILES}.`);
   });
 });
 
@@ -190,7 +190,7 @@ describe('collapseChallengeDigests', () => {
       }),
     ]);
     expect(rows).toHaveLength(1);
-    expect(rows[0].title).toBe(`2 friends checked in on ${MILES}.`);
+    expect(rows[0].title).toBe(`2 friends checked in to ${MILES}.`);
     expect(rows[0].data.count).toBe(2);
   });
 });

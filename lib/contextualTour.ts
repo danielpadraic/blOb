@@ -1,4 +1,5 @@
 import type { TourPlacement } from '@/lib/tour';
+import { wasHomeTourCompleted } from '@/lib/homeTour';
 import { queryClient } from '@/lib/queryClient';
 import { supabase } from '@/lib/supabase';
 import { authStorage } from '@/lib/utils/secureStore';
@@ -121,10 +122,16 @@ export async function hydrateContextualTours(userId: string | null | undefined):
 export function wasContextualTourSeen(
   userId: string | null | undefined,
   id: ContextualTourId,
-  profile?: { contextual_tours_seen?: unknown } | null,
+  profile?: { contextual_tours_seen?: unknown; tutorial_completed_at?: string | null } | null,
 ): boolean {
   if (!userId) {
     return false;
+  }
+  if (
+    (id === 'home-live-pills' || id === 'challenge-live') &&
+    wasHomeTourCompleted(userId, profile?.tutorial_completed_at)
+  ) {
+    return true;
   }
   if (profileHasContextualTour(profile, id)) {
     return true;
@@ -142,15 +149,27 @@ export function markContextualTourSeen(userId: string | null | undefined, id: Co
   void persistProfileSeen(userId, seen);
 }
 
+function clearContextualId(userId: string, id: ContextualTourId) {
+  const seen = new Set(readLocal(userId));
+  seen.delete(id);
+  writeLocal(userId, seen);
+  void persistProfileSeen(userId, seen);
+}
+
 /** Replay first-run may show Home Live pills again if a pill is on screen. */
 export function clearHomeLivePillsTour(userId: string | null | undefined) {
   if (!userId) {
     return;
   }
-  const seen = new Set(readLocal(userId));
-  seen.delete('home-live-pills');
-  writeLocal(userId, seen);
-  void persistProfileSeen(userId, seen);
+  clearContextualId(userId, 'home-live-pills');
+}
+
+/** Settings replay clears the Live room tour with the Home tour. No new row. */
+export function clearChallengeLiveTour(userId: string | null | undefined) {
+  if (!userId) {
+    return;
+  }
+  clearContextualId(userId, 'challenge-live');
 }
 
 export function resetContextualToursForTests() {
@@ -178,15 +197,8 @@ export const HOME_LIVE_PILLS_STEPS: ContextualTourStep[] = [
     id: 'home-live',
     target: 'tour-live-pills',
     placement: 'below',
-    title: 'Live',
-    body: 'This is the locker-room thread for a challenge you are in. Check-ins land here. Open it to talk.',
-  },
-  {
-    id: 'home-pulse',
-    target: 'tour-live-pills',
-    placement: 'below',
-    title: 'Pulse',
-    body: 'Pulse is live activity from challenges you are in. It is not the thread.',
+    title: 'Live rail',
+    body: 'Official Weekly and Monthly Fitness sit here first. Quiet rooms are behind See More.',
   },
 ];
 
@@ -196,12 +208,12 @@ export const CHALLENGE_LIVE_STEPS: ContextualTourStep[] = [
     target: 'tour-challenge-live',
     placement: 'above',
     title: 'Live',
-    body: 'Your bubbles sit on the right. Everyone else is on the left. This room stays until the challenge ends — even if someone drops.',
+    body: 'Live is the thread. Check-ins and chat for this room stay here.',
   },
 ];
 
 export const CHALLENGE_LIVE_HOST_EMPTY_BODY =
-  'Quiet in this challenge. You can post — you do not have to join your own room.';
+  'This room is quiet. Check-ins and chat will show here.';
 
 export const LIFT_HISTORY_STEPS: ContextualTourStep[] = [
   {

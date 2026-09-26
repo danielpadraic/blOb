@@ -9,24 +9,19 @@ import {
 } from '@/lib/challengeNotifyName';
 
 describe('challenge notify names', () => {
-  it('quotes the title so it cannot read as a verdict', () => {
+  it('uses the bare title', () => {
     expect(quotedChallengeTitle('30-Day Consistency')).toBe('\u201c30-Day Consistency\u201d');
-    expect(namedChallengePhrase('30-Day Consistency')).toBe(
-      'Your Challenge: \u201c30-Day Consistency\u201d',
-    );
-    expect(namedChallengePhrase('Official Weekly', 'the')).toBe(
-      'The Challenge: \u201cOfficial Weekly\u201d',
-    );
+    expect(namedChallengePhrase('30-Day Consistency')).toBe('30-Day Consistency');
+    expect(namedChallengePhrase('Official Weekly', 'the')).toBe('Official Weekly');
     expect(notificationChallengeKind('friend_challenge')).toBe('the');
     expect(notificationChallengeKind('live_checkin')).toBe('your');
   });
 
-  it('truncates a long title inside the quotes', () => {
+  it('truncates a long title', () => {
     const phrase = namedChallengePhrase('A'.repeat(80), 'your', 40);
-    expect(phrase.startsWith('Your Challenge: \u201c')).toBe(true);
-    expect(phrase.endsWith('\u201d')).toBe(true);
     expect(phrase).toContain('…');
     expect(phrase.length).toBeLessThanOrEqual(40);
+    expect(phrase).not.toContain('Your Challenge:');
   });
 
   it('rewrites start-moved to one sentence plus the date', () => {
@@ -36,10 +31,82 @@ describe('challenge notify names', () => {
       body: 'Not enough people yet. Start moved to Sep 10.',
       challengeTitle: '6 Workouts in a Week',
     });
-    expect(copy.title).toBe(
-      'Your Challenge: \u201c6 Workouts in a Week\u201d — not enough people yet.',
-    );
+    expect(copy.title).toBe('6 Workouts in a Week: not enough people yet.');
     expect(copy.body).toBe('Start moved to Sep 10.');
+  });
+
+  it('replaces stored sermons with one named line', () => {
+    expect(
+      formatNotificationCopy({
+        type: 'bob_encouragement',
+        title: 'Monthly Fitness Challenge does not save you a seat. You check in or you don’t.',
+        body: null,
+        tone: 'honest',
+      }).title,
+    ).toBe('Monthly Fitness Challenge: check in today.');
+    expect(
+      formatNotificationCopy({
+        type: 'bob_encouragement',
+        title: 'People in fourth would like your skip on Weekly Fitness Challenge. Do not donate.',
+        body: null,
+        tone: 'gentle',
+      }).title,
+    ).toBe('Time to check in to Weekly Fitness Challenge.');
+    expect(
+      formatNotificationCopy({
+        type: 'bob_encouragement',
+        title: 'If you skip Prayer Challenge now I will still like you. I will also say you skipped.',
+        body: null,
+        tone: 'honest',
+      }).title,
+    ).toBe('Prayer Challenge: check in today.');
+    expect(
+      formatNotificationCopy({
+        type: 'bob_encouragement',
+        title: 'Podium photos are for after the last check-in on Monthly Fitness Challenge. Not before.',
+        body: null,
+        tone: 'gentle',
+        offsetHours: 2,
+      }).title,
+    ).toBe('2 hours left to check in to Monthly Fitness Challenge.');
+  });
+
+  it('names the person for check-ins, reactions, and friend requests', () => {
+    expect(
+      formatNotificationCopy({
+        type: 'challenge_checkin',
+        title: 'Alex Check-In',
+        body: null,
+        challengeTitle: 'Weekly Fitness Challenge',
+        actorName: 'Alex',
+      }).title,
+    ).toBe('Alex checked in to Weekly Fitness Challenge.');
+    expect(
+      formatNotificationCopy({
+        type: 'friend_request',
+        title: 'New request',
+        body: null,
+        actorName: 'Sam',
+        tone: 'gentle',
+      }).title,
+    ).toBe('Sam sent you a friend request.');
+    expect(
+      formatNotificationCopy({
+        type: 'friend_accepted',
+        title: 'Accepted',
+        body: null,
+        actorName: 'Sam',
+        tone: 'honest',
+      }).title,
+    ).toBe('Sam accepted your friend request.');
+    expect(
+      formatNotificationCopy({
+        type: 'post_reaction',
+        title: 'Sam and 3 others reacted to your post',
+        body: null,
+        actorName: 'Sam',
+      }).title,
+    ).toBe('Sam and 3 others reacted to your post');
   });
 
   it('strips Chicago and window jargon from alerts', () => {

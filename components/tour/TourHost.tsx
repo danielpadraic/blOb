@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { CoachMarkOverlay, expandHole } from '@/components/tour/CoachMarkOverlay';
 import { TourDismissLink } from '@/components/tour/TourDismissLink';
 import { useTour } from '@/components/tour/TourContext';
@@ -120,7 +119,6 @@ export function TourHost({ onFinished }: TourHostProps) {
     }
     const next = nextHomeTourIndex(index, 1, hasRect);
     if (next >= TOUR_STEPS.length) {
-      void finish();
       return;
     }
     if (next >= 0) {
@@ -159,13 +157,6 @@ export function TourHost({ onFinished }: TourHostProps) {
       total={TOUR_STEPS.length}
       title={step.title}
       body={homeTourBody(step, hasRect)}
-      titleAccessory={
-        step.id === 'coins' ? (
-          <CurrencyMark currency="coins" size={16} />
-        ) : step.id === 'money' ? (
-          <CurrencyMark currency="bucks" size={16} accessibilityLabel="$" />
-        ) : null
-      }
       nextLabel={index === TOUR_STEPS.length - 1 ? 'Done' : 'Next'}
       backDisabled={index === 0}
       onBack={() => {
@@ -179,7 +170,6 @@ export function TourHost({ onFinished }: TourHostProps) {
         }
         const next = nextHomeTourIndex(index, 1, hasRect);
         if (next >= TOUR_STEPS.length) {
-          void finish();
           return;
         }
         setIndex(next);

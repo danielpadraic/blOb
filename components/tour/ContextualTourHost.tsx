@@ -5,12 +5,12 @@ import { CoachMarkOverlay, expandHole } from '@/components/tour/CoachMarkOverlay
 import { TourDismissLink } from '@/components/tour/TourDismissLink';
 import { useTour } from '@/components/tour/TourContext';
 import { markContextualTourSeen } from '@/lib/contextualTour';
+import { completeTutorial } from '@/lib/legal';
 
 export function ContextualTourHost() {
   const tour = useTour();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const [index, setIndex] = useState(0);
-  const [waited, setWaited] = useState(false);
   const session = tour.contextual;
   const steps = session?.steps ?? [];
   const step = steps[index] ?? null;
@@ -21,17 +21,7 @@ export function ContextualTourHost() {
 
   useEffect(() => {
     setIndex(0);
-    setWaited(false);
   }, [session?.id, session?.userId]);
-
-  useEffect(() => {
-    if (!session || !step) {
-      return;
-    }
-    setWaited(false);
-    const handle = setTimeout(() => setWaited(true), 2200);
-    return () => clearTimeout(handle);
-  }, [index, session, step]);
 
   useEffect(() => {
     if (!session || !step) {
@@ -69,16 +59,10 @@ export function ContextualTourHost() {
     setIndex(0);
   }, [session, setTargetId, tour]);
 
-  useEffect(() => {
-    if (!session || !step || !waited || rawRect) {
-      return;
-    }
-    if (index >= steps.length - 1) {
-      finish();
-      return;
-    }
-    setIndex((current) => current + 1);
-  }, [finish, index, rawRect, session, step, steps.length, waited]);
+  const dismissAll = useCallback(() => {
+    finish();
+    void completeTutorial().catch(() => undefined);
+  }, [finish]);
 
   if (!session || !step || tour.active || tour.createActive) {
     return null;
@@ -104,7 +88,7 @@ export function ContextualTourHost() {
         }
         setIndex((current) => current + 1);
       }}
-      footer={<TourDismissLink onPress={finish} />}
+      footer={<TourDismissLink onPress={dismissAll} />}
     />
   );
 }

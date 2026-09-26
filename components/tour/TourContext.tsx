@@ -111,6 +111,8 @@ export function TourProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const scrollHomeToTop = useCallback(() => {
+    // Featured Challenge and the Home tab call this. It only scrolls.
+    // It must not clear tutorial_completed_at or the local dismiss.
     const node = homeScroll.current;
     if (node == null) {
       return;

@@ -1,4 +1,7 @@
+import { authStorage } from '@/lib/utils/secureStore';
+
 /** Same value as `SEED_CREDITS` / the lobby grant. Kept here so tests stay RN-free. */
+
 export const HOME_TOUR_COIN_SEED = 100;
 
 const STORAGE_PREFIX = 'blob:home-tour-dismissed:';
@@ -33,17 +36,41 @@ function writeLocalDismissed(userId: string, dismissed: boolean) {
   } else {
     completedIds.delete(userId);
   }
+  const key = storageKey(userId);
   try {
-    if (typeof localStorage === 'undefined') {
-      return;
+    if (typeof localStorage !== 'undefined') {
+      if (dismissed) {
+        localStorage.setItem(key, '1');
+      } else {
+        localStorage.removeItem(key);
+      }
     }
-    if (dismissed) {
-      localStorage.setItem(storageKey(userId), '1');
-      return;
-    }
-    localStorage.removeItem(storageKey(userId));
   } catch {
     // Session flag still blocks a second open this visit.
+  }
+  try {
+    if (dismissed) {
+      void authStorage.setItem(key, '1').catch(() => undefined);
+      return;
+    }
+    void authStorage.removeItem(key).catch(() => undefined);
+  } catch {
+    // Memory already recorded this session.
+  }
+}
+
+/** Cold start on iOS has no localStorage. SecureStore is the local completed flag. */
+export async function hydrateHomeTour(userId: string | null | undefined): Promise<void> {
+  if (!userId) {
+    return;
+  }
+  try {
+    const raw = await authStorage.getItem(storageKey(userId));
+    if (raw === '1') {
+      completedIds.add(userId);
+    }
+  } catch {
+    // Profile timestamp still counts once it arrives.
   }
 }
 

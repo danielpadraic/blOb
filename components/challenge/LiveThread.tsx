@@ -285,6 +285,7 @@ export function LiveThread({
    * fighting the user in the first place.
    */
   const atEndRef = useRef(false);
+  const userLeftEndRef = useRef(false);
   const draggingRef = useRef(false);
   const firstPaintPendingRef = useRef(false);
   const viewportHRef = useRef(0);
@@ -438,6 +439,7 @@ export function LiveThread({
   const jumpToLiveEdge = useCallback(() => {
     logLive('jump-to-newest', true);
     atEndRef.current = true;
+    userLeftEndRef.current = false;
     firstPaintPendingRef.current = false;
     setNotAtEnd(false);
     setNewBelow(0);
@@ -446,6 +448,15 @@ export function LiveThread({
       listRef.current?.scrollToEnd({ animated: true });
     });
   }, [logLive]);
+
+  const prevKeyboardRef = useRef(0);
+  useEffect(() => {
+    const prev = prevKeyboardRef.current;
+    prevKeyboardRef.current = keyboardHeight;
+    if (keyboardHeight > prev && atEndRef.current && !userLeftEndRef.current) {
+      pinToLiveEdge(false, 'composer-open');
+    }
+  }, [keyboardHeight, pinToLiveEdge]);
 
   useEffect(() => {
     if (!highlightCommentId) {
@@ -760,11 +771,16 @@ export function LiveThread({
         firstPaintPendingRef.current = false;
         markLiveInitialScroll(landingChallengeId);
         notifyFirstPaint();
+        userLeftEndRef.current = true;
+        setNotAtEnd(true);
       }
       lastOffsetRef.current = contentOffset.y;
       if (end !== atEndRef.current) {
         atEndRef.current = end;
-        setNotAtEnd(!end);
+      }
+      if (end && userLeftEndRef.current) {
+        userLeftEndRef.current = false;
+        setNotAtEnd(false);
       }
       if (end) {
         // A half-measured list can report "at the end" while still sitting on Day 13.
@@ -1101,9 +1117,6 @@ export function LiveThread({
           extraData={currentUserId ?? ''}
           keyExtractor={(item) => liveRowKey(item)}
           renderItem={renderItem}
-          maintainVisibleContentPosition={
-            Platform.OS === 'web' ? undefined : { minIndexForVisible: 0 }
-          }
           keyboardShouldPersistTaps="always"
           keyboardDismissMode="none"
           nestedScrollEnabled
@@ -1129,6 +1142,9 @@ export function LiveThread({
             finishFirstPaintPin();
           }}
           onContentSizeChange={() => {
+            if (userLeftEndRef.current) {
+              return;
+            }
             if (landingChallengeId && hasLiveInitialScroll(landingChallengeId)) {
               return;
             }
@@ -1234,14 +1250,7 @@ export function LiveThread({
       {canCompose ? (
         <View
           onLayout={(event) => {
-            const next = event.nativeEvent.layout.height;
-            if (next === composerHRef.current) {
-              return;
-            }
-            composerHRef.current = next;
-            if (atEndRef.current) {
-              pinToLiveEdge(false, 'composer-open');
-            }
+            composerHRef.current = event.nativeEvent.layout.height;
           }}
           style={{
             borderTopWidth: 1,

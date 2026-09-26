@@ -1,4 +1,4 @@
-import { namedChallengePhrase, type ChallengeNameKind } from '@/lib/challengeNotifyName';
+import type { ChallengeNameKind } from '@/lib/challengeNotifyName';
 import { asCopyTone, interpolateCopy } from '@/lib/copy';
 
 import { BOB_CATALOG } from '@/copy/bobCatalog.generated';
@@ -22,11 +22,11 @@ export const BOB_ENCOURAGEMENT_CATEGORIES = [
 
 export type BobEncouragementCategory = (typeof BOB_ENCOURAGEMENT_CATEGORIES)[number];
 
-export const BOB_LINE_MAX = 140;
+export const BOB_LINE_MAX = 100;
 
 type ToneLines = Record<BobEncouragementTone, readonly string[]>;
 
-/** 2026-09-09 catalog. Gentle (20) | Honest (10). Neutral maps to Gentle. */
+/** Gentle | Honest. Neutral maps to Gentle. One line each. */
 export const BOB_ENCOURAGEMENTS = BOB_CATALOG as Record<BobEncouragementCategory, ToneLines>;
 
 export type PickBobLineInput = {
@@ -89,10 +89,10 @@ export function interpolateBobLine(
   const leftover = afterN.replace(/\{challenge\}/g, '');
   const slots = Math.max((afterN.match(/\{challenge\}/g) ?? []).length, 1);
   const budget = BOB_LINE_MAX - leftover.length;
-  const maxEach = Math.max(24, Math.floor(budget / slots));
-  const phrase = namedChallengePhrase(rawTitle, vars?.nameKind ?? 'your', maxEach);
+  const maxEach = Math.max(8, Math.floor(budget / slots));
+  const phrase = clipChallengeTitle(rawTitle, maxEach);
   const text = afterN.replace(/\{challenge\}/g, phrase).replace(/\s+/g, ' ').trim();
-  if (!phrase || text.length > BOB_LINE_MAX) {
+  if (!phrase || text.length > BOB_LINE_MAX || /\bi believe\b/i.test(text)) {
     return '';
   }
   return text;

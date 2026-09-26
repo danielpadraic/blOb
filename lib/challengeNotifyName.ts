@@ -1,3 +1,5 @@
+import { rewriteUserAlert } from '@/lib/alertCopy';
+
 export type ChallengeNameKind = 'your' | 'the';
 
 const NAMED_PREFIX = /(?:Your|The) Challenge:\s*["“]/;
@@ -20,16 +22,13 @@ export function quotedChallengeTitle(title: string, maxInside = 48): string {
   return `${LQ}${clipInside(title, maxInside)}${RQ}`;
 }
 
+/** Bare challenge title. Alerts name the room, then the action. */
 export function namedChallengePhrase(
   title: string,
-  kind: ChallengeNameKind = 'your',
+  _kind: ChallengeNameKind = 'your',
   maxPhrase = 80,
 ): string {
-  const prefix = kind === 'the' ? 'The Challenge: ' : 'Your Challenge: ';
-  const minLen = prefix.length + 3;
-  const cap = Math.max(minLen, maxPhrase);
-  const inside = Math.max(1, cap - prefix.length - 2);
-  return `${prefix}${quotedChallengeTitle(title, inside)}`;
+  return clipInside(title, maxPhrase);
 }
 
 export function notificationChallengeKind(type?: string | null): ChallengeNameKind {
@@ -93,7 +92,15 @@ export function formatNotificationCopy(input: {
   title?: string | null;
   body?: string | null;
   challengeTitle?: string | null;
+  actorName?: string | null;
+  tone?: string | null;
+  offsetHours?: number | null;
+  category?: string | null;
 }): { title: string; body: string | null } {
+  const rewritten = rewriteUserAlert(input);
+  if (rewritten) {
+    return { title: clipPushLine(rewritten, 100), body: null };
+  }
   const kind = notificationChallengeKind(input.type);
   const bare = String(input.challengeTitle ?? '').trim();
   let title = stripAlertJargon(String(input.title ?? ''));
@@ -109,7 +116,7 @@ export function formatNotificationCopy(input: {
     if (startMoved) {
       const when = `${title} ${body ?? ''}`.match(/Start moved to ([^.]+)/i)?.[1]?.trim();
       return {
-        title: `${phrase} — not enough people yet.`,
+        title: clipPushLine(`${phrase}: not enough people yet.`, 100),
         body: when ? `Start moved to ${when}.` : 'Start moved.',
       };
     }
@@ -123,7 +130,7 @@ export function formatNotificationCopy(input: {
   }
 
   return {
-    title: clipPushLine(title),
-    body: body == null ? null : clipPushLine(body),
+    title: clipPushLine(title, 100),
+    body: body == null ? null : clipPushLine(body, 100),
   };
 }

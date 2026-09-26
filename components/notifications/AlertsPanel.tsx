@@ -368,6 +368,10 @@ function NotificationRow({
     title: rawTitle,
     body: item.body,
     challengeTitle: item.data?.challenge_title ?? null,
+    actorName: item.actor?.display_name || item.actor?.username || null,
+    tone,
+    offsetHours: typeof item.data?.offset_hours === 'number' ? item.data.offset_hours : null,
+    category: item.data?.category ?? null,
   });
   return (
     <Pressable

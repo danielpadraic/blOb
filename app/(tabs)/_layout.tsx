@@ -39,7 +39,7 @@ import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useTickUserGrants } from '@/hooks/useUserGrants';
 import { useWalletOptional } from '@/hooks/useWallet';
-import { isWalletReadyForHomeTour, wasHomeTourCompleted } from '@/lib/homeTour';
+import { hydrateHomeTour, isWalletReadyForHomeTour, wasHomeTourCompleted } from '@/lib/homeTour';
 import { clearLastOpenChallenge, goHome, pushCheckinPickerRow } from '@/lib/challengeNav';
 import {
   challengeDetailHref,
@@ -90,6 +90,7 @@ function FirstRunTourLauncher() {
   const pathname = usePathname();
   const started = useRef(false);
   const [walletWaitExpired, setWalletWaitExpired] = useState(false);
+  const [tourHydrated, setTourHydrated] = useState(false);
   const start = tour.start;
   const active = tour.active;
   const onOnboarding = pathname.startsWith('/onboarding');
@@ -99,6 +100,22 @@ function FirstRunTourLauncher() {
   useEffect(() => {
     started.current = false;
     setWalletWaitExpired(false);
+    setTourHydrated(false);
+  }, [profile?.id]);
+
+  useEffect(() => {
+    if (!profile?.id) {
+      return;
+    }
+    let alive = true;
+    void hydrateHomeTour(profile.id).finally(() => {
+      if (alive) {
+        setTourHydrated(true);
+      }
+    });
+    return () => {
+      alive = false;
+    };
   }, [profile?.id]);
 
   useEffect(() => {
@@ -115,6 +132,7 @@ function FirstRunTourLauncher() {
       active ||
       tour.createActive ||
       !profile ||
+      !tourHydrated ||
       alreadyDone ||
       !isFetched ||
       (!walletReady && !walletWaitExpired)
@@ -139,6 +157,7 @@ function FirstRunTourLauncher() {
     router,
     start,
     tour.createActive,
+    tourHydrated,
     walletReady,
     walletWaitExpired,
   ]);

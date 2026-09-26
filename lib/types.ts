@@ -1032,6 +1032,7 @@ export type NotificationData = {
   winner_ids?: string[];
   challenge_title?: string;
   period_key?: string;
+  offset_hours?: number;
 };
 
 export interface AppNotification {

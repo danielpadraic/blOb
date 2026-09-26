@@ -352,7 +352,7 @@ describe('copy', () => {
       title: 'Official Weekly',
       objectPronoun: 'them',
     });
-    expect(line).toBe(`Sam Settled ${namedChallengePhrase('Official Weekly')}. Congratulate them.`);
+    expect(line).toBe(`Sam settled ${namedChallengePhrase('Official Weekly')}.`);
     expect(payoutReceivedCopy('$10.00', 'Official Weekly')).toBe(
       `You received $10.00 from ${namedChallengePhrase('Official Weekly')}.`,
     );

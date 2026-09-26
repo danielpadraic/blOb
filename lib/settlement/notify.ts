@@ -7,12 +7,11 @@ export type SettlementNotifyInput = {
   objectPronoun?: string | null;
 };
 
-/** Same shape as check-in: `{Name} Settled @{title}. Congratulate {her/him/them}.` */
+/** `{Name} settled {title}.` */
 export function settledCongratulateCopy(input: SettlementNotifyInput): string {
   const name = input.displayName.trim() || 'Someone';
   const title = namedChallengePhrase(input.title.trim() || 'this challenge');
-  const pronoun = input.objectPronoun?.trim() || 'them';
-  return clipPushLine(`${name} Settled ${title}. Congratulate ${pronoun}.`);
+  return clipPushLine(`${name} settled ${title}.`);
 }
 
 export function forfeitNotifyCopy(title: string): string {

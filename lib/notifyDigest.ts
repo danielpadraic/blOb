@@ -18,18 +18,15 @@ export function winnerDigestLine(input: {
 
   if (input.viewerFinished) {
     if (n === 0) {
-      return clipPushLine(`Nice work! You finished ${title}.`);
+      return clipPushLine(`${title}: you finished.`);
     }
     if (n === 1) {
-      return clipPushLine(`Nice work! You and ${names[0]} all won ${title}! Send a high-five!`);
+      return clipPushLine(`${title}: you and ${names[0]} finished.`);
     }
-    if (n === 2) {
-      return clipPushLine(`Nice work! You, ${names[0]}, and ${names[1]} all won ${title}! Send a high-five!`);
-    }
-    if (n === 3) {
-      return clipPushLine(`Nice work! You, ${names[0]}, ${names[1]}, and ${names[2]} all won ${title}! Send a high-five!`);
-    }
-    return clipPushLine(`Nice work! You, ${names[0]}, ${names[1]}, and ${n - 2} others all won ${title}! Send a high-five!`);
+    const others = n - 1;
+    return clipPushLine(
+      `${title}: you, ${names[0]}, and ${others} ${others === 1 ? 'other' : 'others'} finished.`,
+    );
   }
 
   if (n === 0) {
@@ -56,10 +53,9 @@ export function checkinDigestLine(input: {
   const title = namedChallengePhrase(input.challengeTitle.trim() || 'this challenge');
   if (input.count <= 1) {
     const name = input.name?.trim() || 'Someone';
-    const pronoun = input.pronoun?.trim() || 'them';
-    return clipPushLine(`${name} Check-In ${title}. Congratulate ${pronoun}.`);
+    return clipPushLine(`${name} checked in to ${title}.`);
   }
-  return clipPushLine(`${input.count} friends checked in on ${title}.`);
+  return clipPushLine(`${input.count} friends checked in to ${title}.`);
 }
 
 export function highFiveDraft(challengeTitle?: string | null): string {

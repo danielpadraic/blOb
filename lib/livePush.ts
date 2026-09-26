@@ -174,6 +174,7 @@ const REMINDER_PUSH_TYPES = new Set([
   'challenge_checkin_reminder',
   'health_begin',
   'health_checkout',
+  'bob_encouragement',
 ]);
 
 /** Check-in reminders stay Overview. Live chat never reuses that helper. */

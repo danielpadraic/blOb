@@ -8,6 +8,7 @@ import {
   type ContextualTourId,
   type ContextualTourStep,
 } from '@/lib/contextualTour';
+import { hydrateHomeTour } from '@/lib/homeTour';
 
 /** Surfaces request a first-seen coach. One overlay in the tab tour layer plays it. */
 export function useContextualTour(
@@ -30,7 +31,7 @@ export function useContextualTour(
       return;
     }
     let alive = true;
-    void hydrateContextualTours(userId).then(() => {
+    void Promise.all([hydrateContextualTours(userId), hydrateHomeTour(userId)]).then(() => {
       if (alive) {
         setHydrated(true);
       }
