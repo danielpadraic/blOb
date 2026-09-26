@@ -17,6 +17,7 @@ import { liveCheckinLabel } from '@/lib/liveThread';
 import { formatRelative } from '@/utils/format';
 import { isEndedLobbyStatus } from '@/lib/lobbyChallenge';
 import { officialCoinKind, type OfficialCoinKind } from '@/lib/officialCoin';
+import { challengeProgressLine } from '@/lib/challengeProgress';
 import { namedChallengeHref } from '@/lib/routes';
 import { fetchPublicProfilesByIds, personDisplayName } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
@@ -72,8 +73,8 @@ export type PulsePill = {
   faceOverflow?: number;
   /** Check-ins since this viewer last opened the room's Live thread. */
   newCheckins?: number;
-  /** Consistency rooms only: the viewer's own days. */
-  progress?: { done: number; target: number } | null;
+  /** Viewer's own progress. The footer line comes from challengeProgressLine. */
+  progress?: PulseProgressStats | null;
   /** One real line of activity, or '' when the room is simply live. */
   activityLine?: string;
 };
@@ -100,6 +101,28 @@ export type PulseChallengeLike = {
   cover_image_url?: string | null;
   category?: string | null;
   privacy_mode?: string | null;
+  challenge_type?: string | null;
+  format?: string | null;
+  scoring_method?: string | null;
+  scoring_config?: unknown;
+  comparable_points_config?: unknown;
+  cumulative_target?: number | string | null;
+  cumulative_metric?: string | null;
+  metrics?: unknown;
+  tasks?: unknown;
+  extra_tasks?: unknown;
+  target_count?: number | null;
+  frequency?: string | null;
+  series_id?: string | null;
+  challenge_lane?: string | null;
+};
+
+export type PulseProgressStats = {
+  done: number;
+  target: number;
+  distanceMeters?: number;
+  points?: number;
+  metricTotals?: Record<string, number> | null;
 };
 
 function pulseStatus(status: string | null | undefined): string {
@@ -298,19 +321,34 @@ export function countNewCheckins(
 
 /** The one real line under a peer card. Empty means the card just says Live now. */
 export function pulseActivityLine(input: {
+  challenge?: PulseChallengeLike | null;
   latestCheckin?: PulseLobbyPost | null;
   latestPost?: PulseLobbyPost | null;
   authorName?: string;
-  progress?: { done: number; target: number } | null;
+  progress?: PulseProgressStats | null;
   relative?: (at: string) => string;
 }): string {
   const name = String(input.authorName ?? '').trim();
   const at = String(input.latestCheckin?.created_at ?? '').trim();
-  if (name && at && input.relative) {
-    return `${name} checked in ${input.relative(at)}`;
+  const latestActivity = name && at && input.relative ? `${name} checked in ${input.relative(at)}` : '';
+  if (input.challenge) {
+    return challengeProgressLine(
+      input.challenge,
+      {
+        daysCompleted: input.progress?.done ?? 0,
+        distanceMetersCompleted: input.progress?.distanceMeters ?? 0,
+        pointsCompleted: input.progress?.points ?? 0,
+        metricTotals: input.progress?.metricTotals,
+        latestActivity,
+      },
+      'rail',
+    );
+  }
+  if (latestActivity) {
+    return latestActivity;
   }
   if (input.progress && input.progress.target > 0) {
-    return `${input.progress.done}/${input.progress.target} days`;
+    return `${input.progress.done} / ${input.progress.target} days`;
   }
   return '';
 }
@@ -325,8 +363,8 @@ export function buildPulsePills(input: {
   memberCounts?: Record<string, number>;
   /** challenge_id -> the viewer's Live read cursor. */
   lastReadAt?: Record<string, string | null>;
-  /** challenge_id -> the viewer's consistency progress. */
-  progress?: Record<string, { done: number; target: number }>;
+  /** challenge_id -> the viewer's logged progress. */
+  progress?: Record<string, PulseProgressStats>;
   relative?: (at: string) => string;
   now?: number;
 }): PulsePill[] {
@@ -401,6 +439,7 @@ export function buildPulsePills(input: {
       activityLine: isCallout
         ? calloutLine
         : pulseActivityLine({
+            challenge: row,
             latestCheckin,
             latestPost: latest,
             authorName: profiles.has(latestCheckinAuthor) ? latestCheckinName : '',
@@ -580,13 +619,13 @@ async function fetchPulseMemberCounts(ids: string[]): Promise<Record<string, num
   return counts;
 }
 
-/** The viewer's own day count, for the "15/30 days" line on consistency rooms. */
+/** The viewer's logged days, miles, and points. A missing row still prints 0 on the card. */
 async function fetchPulseProgress(
   userId: string,
   ids: string[],
   challenges: PulseChallengeLike[],
-): Promise<Record<string, { done: number; target: number }>> {
-  const out: Record<string, { done: number; target: number }> = {};
+): Promise<Record<string, PulseProgressStats>> {
+  const out: Record<string, PulseProgressStats> = {};
   if (ids.length === 0) {
     return out;
   }
@@ -602,7 +641,7 @@ async function fetchPulseProgress(
   try {
     const { data, error } = await supabase
       .from('challenge_participants')
-      .select('challenge_id, days_completed')
+      .select('challenge_id, days_completed, distance_meters_total, metric_totals, points')
       .eq('user_id', userId)
       .in('challenge_id', ids);
     if (error) {
@@ -611,13 +650,23 @@ async function fetchPulseProgress(
     for (const row of (data ?? []) as {
       challenge_id?: string | null;
       days_completed?: number | null;
+      distance_meters_total?: number | null;
+      metric_totals?: Record<string, number> | null;
+      points?: number | null;
     }[]) {
       const id = String(row.challenge_id ?? '');
-      const target = targets.get(id) ?? 0;
-      if (!id || target <= 0) {
+      if (!id) {
         continue;
       }
-      out[id] = { done: Math.max(Math.trunc(Number(row.days_completed) || 0), 0), target };
+      const totals =
+        row.metric_totals && typeof row.metric_totals === 'object' ? row.metric_totals : null;
+      out[id] = {
+        done: Math.max(Math.trunc(Number(row.days_completed) || 0), 0),
+        target: targets.get(id) ?? 0,
+        distanceMeters: Math.max(Number(row.distance_meters_total) || 0, 0),
+        points: Math.max(Number(row.points) || 0, 0),
+        metricTotals: totals,
+      };
     }
   } catch {
     return out;

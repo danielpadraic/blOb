@@ -35,6 +35,7 @@ import {
   type StartPreset,
 } from '@/lib/challengeSchedule';
 import { storedDurationDays } from '@/lib/challengeGoal';
+import { editFormatFromChallenge } from '@/lib/challengeProgress';
 import { hostRigorOf } from '@/lib/hostRigor';
 import { inferJoinUntilPreset } from '@/lib/joinWindow';
 import { extraTasksFromStored } from '@/lib/challengeCreatePublish';
@@ -756,15 +757,7 @@ export function valuesFromChallenge(challenge: Challenge): CreateChallengeValues
       : null,
     scoring_config: comparable,
     guarantee_enabled: Math.max(Number(challenge.host_budget) || 0, 0) > 0,
-    format:
-      challenge.format === 'lms' ||
-      challenge.format === 'points' ||
-      challenge.format === 'cumulative' ||
-      challenge.format === 'consistency'
-        ? challenge.format
-        : challenge.challenge_type === 'cumulative'
-          ? 'cumulative'
-          : DEFAULT_CREATE_VALUES.format,
+    format: editFormatFromChallenge(challenge) ?? DEFAULT_CREATE_VALUES.format,
     cumulative_metric:
       challenge.cumulative_metric === 'count' || challenge.cumulative_metric === 'distance_m'
         ? challenge.cumulative_metric

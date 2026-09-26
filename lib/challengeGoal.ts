@@ -4,14 +4,8 @@ import {
   usesPointsBoard,
   usesTotalCountCheckins,
 } from '@/lib/challengeExperience';
-import { athleteDistanceUnit, type DistanceUnit } from '@/lib/distance';
-import { challengeCumulativeProgress } from '@/lib/cumulative';
-import {
-  cumulativeMetricsProgressLabel,
-  filledCumulativeMetrics,
-  metricTotalsWithDistanceFallback,
-  resolveCumulativeMetrics,
-} from '@/lib/cumulativeMetrics';
+import { challengeProgressLine, type ProgressExtras } from '@/lib/challengeProgress';
+import type { DistanceUnit } from '@/lib/distance';
 import type { Challenge } from '@/lib/types';
 
 type GoalChallenge = Pick<
@@ -62,11 +56,6 @@ export function pointsGoalTarget(challenge: {
   }
   if (fromTasks > 0) {
     return fromTasks;
-  }
-  const title = String(challenge.title ?? '');
-  const labeled = title.match(/(\d+(?:\.\d+)?)\s*(?:pts|points?)\b/i);
-  if (labeled) {
-    return Math.max(Math.floor(Number(labeled[1]) || 0), 0);
   }
   return 0;
 }
@@ -149,64 +138,14 @@ export function challengeGoalLabel(
     metricTotals?: Record<string, number> | null;
   },
 ): string {
-  if (usesQuantityScoring(challenge)) {
-    const metrics = resolveCumulativeMetrics(challenge);
-    const filled = filledCumulativeMetrics(metrics);
-    if (filled.length > 0) {
-      return cumulativeMetricsProgressLabel(
-        filled,
-        metricTotalsWithDistanceFallback(
-          filled,
-          extras?.metricTotals,
-          extras?.distanceMetersCompleted ?? 0,
-        ),
-      );
-    }
-    const label = challengeCumulativeProgress(
-      challenge,
-      extras?.distanceMetersCompleted ?? 0,
-      extras?.unit ?? athleteDistanceUnit(),
-    );
-    if (label && !/\/\s*0(?:\.0+)?\s*(?:mi|km)\b/i.test(label)) {
-      return label;
-    }
-    return label && Number(challenge.cumulative_target) > 0 ? label : 'Distance';
-  }
-  if (usesPointsBoard(challenge)) {
-    if (challenge.challenge_type === 'points' && challenge.scoring_method !== 'comparable_points') {
-      const target = pointsGoalTarget(challenge);
-      const done = Math.max(Number(extras?.pointsCompleted) || 0, 0);
-      if (target > 0) {
-        return `${done} / ${target} points`;
-      }
-      return 'Score Points';
-    }
-    return 'Score Points';
-  }
-  if (usesTotalCountCheckins(challenge)) {
-    const target = Math.max(Math.floor(Number(challenge.target_count) || 1), 1);
-    const done = Math.max(Number(extras?.daysCompleted) || 0, 0);
-    return `${done} of ${target} Check-Ins`;
-  }
-  if (challenge.is_unlimited) {
-    const logs = Math.max(Number(extras?.daysCompleted) || 0, 0);
-    return `${logs} check-in${logs === 1 ? '' : 's'}`;
-  }
-  if (isFitnessOfficialChallenge(challenge)) {
-    const days = challengeDurationDays(challenge);
-    return `${days}-Day Consistency`;
-  }
-  if (challenge.is_official) {
-    const days = challengeDurationDays(challenge);
-    return `${days}-day challenge`;
-  }
-  // Overview ring uses saved duration_days (30 stays 30) — never an ends_at window.
-  const target = challengeRingDays(challenge);
-  const done = Math.max(Number(extras?.daysCompleted) || 0, 0);
-  if (target == null) {
-    return `${done} day${done === 1 ? '' : 's'}`;
-  }
-  return `${done} of ${target} days`;
+  const lineExtras: ProgressExtras = {
+    daysCompleted: extras?.daysCompleted,
+    distanceMetersCompleted: extras?.distanceMetersCompleted,
+    pointsCompleted: extras?.pointsCompleted,
+    metricTotals: extras?.metricTotals,
+    unit: extras?.unit,
+  };
+  return challengeProgressLine(challenge, lineExtras, 'overview');
 }
 
 export function challengeGoalSubtitle(challenge: GoalChallenge): string | null {

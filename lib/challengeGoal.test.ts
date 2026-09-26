@@ -19,7 +19,7 @@ describe('stored duration', () => {
     };
     expect(storedDurationDays(row)).toBe(30);
     expect(challengeDurationDays(row)).toBe(30);
-    expect(challengeGoalLabel(row, { daysCompleted: 0 })).toBe('0 of 30 days');
+    expect(challengeGoalLabel(row, { daysCompleted: 0 })).toBe('0 / 30 days');
   });
 
   it('keeps duration_days=30 even when ends_at is a 6-day window', () => {
@@ -57,7 +57,7 @@ describe('stored duration', () => {
         },
         { pointsCompleted: 20 },
       ),
-    ).toBe('20 / 10 points');
+    ).toBe('20 / 10 pts');
   });
 
   it('prints personal points as logged / target', () => {
@@ -66,13 +66,13 @@ describe('stored duration', () => {
         { challenge_type: 'points', target_count: 50, title: 'First to 50' },
         { pointsCompleted: 0 },
       ),
-    ).toBe('0 / 50 points');
+    ).toBe('0 / 50 pts');
     expect(
       challengeGoalLabel(
         { challenge_type: 'points', target_count: 50, title: 'First to 50' },
         { pointsCompleted: 12 },
       ),
-    ).toBe('12 / 50 points');
+    ).toBe('12 / 50 pts');
   });
 
   it('prints the saved distance target, never 0 / 0', () => {
@@ -108,7 +108,7 @@ describe('stored duration', () => {
         },
         { distanceMetersCompleted: 0, unit: 'mi' },
       ),
-    ).toBe('0 / 128 mi');
+    ).toBe('Distance');
     expect(
       challengeGoalLabel(
         { challenge_type: 'cumulative', format: 'cumulative' },

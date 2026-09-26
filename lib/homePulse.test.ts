@@ -337,7 +337,7 @@ describe('pulseActivityLine', () => {
   });
 
   it('falls back to real consistency progress', () => {
-    expect(pulseActivityLine({ progress: { done: 15, target: 30 } })).toBe('15/30 days');
+    expect(pulseActivityLine({ progress: { done: 15, target: 30 } })).toBe('15 / 30 days');
   });
 
   it('says nothing rather than "No chatter yet" so the card can say Live now', () => {
@@ -398,7 +398,7 @@ describe('buildPulsePills card data', () => {
       isOfficial: false,
       coverUrl: 'https://cdn.example.com/run.jpg',
       privacyMode: 'private',
-      activityLine: 'Daniel checked in 4m ago',
+      activityLine: '15 / 30 days',
     });
     expect(thirty?.faceOverflow).toBe(10);
     expect(pulsePrivacyLabel(thirty?.privacyMode)).toBe('Private');
@@ -412,7 +412,44 @@ describe('buildPulsePills card data', () => {
       posts: [],
       progress: { thirty: { done: 15, target: 30 } },
     });
-    expect(pills[0].activityLine).toBe('15/30 days');
+    expect(pills[0].activityLine).toBe('15 / 30 days');
+  });
+
+  it('prints 0 / 50 km the day a distance room is created', () => {
+    const pills = buildPulsePills({
+      challenges: [
+        {
+          id: 'km',
+          status: 'live',
+          title: 'Autumn ride',
+          joined: true,
+          format: 'cumulative',
+          challenge_type: 'cumulative',
+          duration_days: 14,
+          metrics: [{ id: 'm1', target: 50, name: 'km', unit: 'km' }],
+        },
+      ],
+      posts: [],
+    });
+    expect(pills[0]?.activityLine).toBe('0 / 50 km');
+  });
+
+  it('prints days for a consistency room whose title mentions km', () => {
+    const pills = buildPulsePills({
+      challenges: [
+        {
+          id: 'days',
+          status: 'live',
+          title: '50 km club',
+          joined: true,
+          format: 'consistency',
+          challenge_type: 'consistency',
+          duration_days: 30,
+        },
+      ],
+      posts: [],
+    });
+    expect(pills[0]?.activityLine).toBe('0 / 30 days');
   });
 
   it('leaves the activity line empty on a silent room', () => {

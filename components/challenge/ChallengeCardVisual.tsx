@@ -18,6 +18,7 @@ import { AppText } from '@/components/ui/AppText';
 import { ProgressRing } from '@/components/ui/ProgressRing';
 import { parseChallengeProofs } from '@/lib/challengeProofs';
 import { challengeGoalLabel, challengeGoalSubtitle, challengeRingDays } from '@/lib/challengeGoal';
+import { challengeProgressLine } from '@/lib/challengeProgress';
 import { joinedProgressCopy } from '@/lib/challengeRuleCopy';
 import { challengeCardTags } from '@/lib/challengeTags';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
@@ -150,14 +151,10 @@ export function ChallengeCardVisual({
     !usesPointsBoard(challenge) &&
     !usesTotalCountCheckins(challenge) &&
     !usesQuantityScoring(challenge);
-  const goal =
-    official ||
-    duration <= 0 ||
-    usesPointsBoard(challenge) ||
-    usesTotalCountCheckins(challenge) ||
-    usesQuantityScoring(challenge)
-      ? challengeGoalLabel(challenge, { daysCompleted: days, distanceMetersCompleted: myMeters ?? 0 })
-      : `${duration}-Day Consistency`;
+  const goal = challengeGoalLabel(challenge, {
+    daysCompleted: days,
+    distanceMetersCompleted: myMeters ?? 0,
+  });
   const goalSub = official ? challengeGoalSubtitle(challenge) : null;
   const showGoal = Boolean(goal) && !showRing;
   const officialLive = isOfficialSeriesChallenge(challenge) && challenge.status === 'live';
@@ -234,7 +231,11 @@ export function ChallengeCardVisual({
                 labelClassName="text-[18px] font-extrabold text-charcoal"
               />
               <AppText className="mt-0.5 text-[11px] font-semibold text-charcoal">
-                {days} of {duration} days
+                {challengeProgressLine(
+                  challenge,
+                  { daysCompleted: days, distanceMetersCompleted: myMeters ?? 0 },
+                  'lobby',
+                )}
               </AppText>
             </View>
           ) : official && !officialLive && !compact ? (

@@ -48,7 +48,7 @@ describe('Cumulative scoring', () => {
           challenge_type: 'cumulative',
           format: 'cumulative',
           cumulative_target: milesToMeters(128),
-          title: 'Run 128 Miles by January 1',
+          cumulative_metric: 'distance_m',
         },
         { distanceMetersCompleted: 0, unit: 'mi' },
       ),
@@ -64,7 +64,7 @@ describe('Cumulative scoring', () => {
         },
         { daysCompleted: 0 },
       ),
-    ).toBe('0 of 7 days');
+    ).toBe('0 / 7 days');
   });
 
   it('treats 40 + 60 miles as eligible at 100 / 100', () => {

@@ -1,10 +1,7 @@
-import { usesComparablePointsScoring, usesQuantityScoring, usesTotalCountCheckins } from '@/lib/challengeExperience';
+import { usesComparablePointsScoring } from '@/lib/challengeExperience';
 import { signupProofLines } from '@/lib/challengeProofs';
-import { boardQuantityProgress } from '@/lib/board/quantity';
-import { athleteDistanceUnit } from '@/lib/distance';
-import { challengeCumulativeProgress, cumulativeEligible, cumulativeTargetMeters } from '@/lib/cumulative';
 import { resolveChallengeProofs } from '@/lib/challengeProofs';
-import { challengeDurationDays } from '@/lib/challengeGoal';
+import { challengeProgressLine, challengeProgressRatio } from '@/lib/challengeProgress';
 import {
   asRulePeriod,
   parseRulesStructured,
@@ -612,61 +609,23 @@ export function challengeRuleCopy(challenge: RuleChallenge): ChallengeRuleCopy {
   };
 }
 
-function compactCadence(count: number, period: ChallengeFrequency): string {
-  if (period === 'once') return `${count} once`;
-  if (period === 'weekly') return `${count}/week`;
-  if (period === 'monthly') return `${count}/month`;
-  return `${count}/day`;
-}
-
 export function joinedProgressCopy(
   challenge: RuleChallenge,
   daysCompleted = 0,
-  extras?: { distanceMetersCompleted?: number; metricTotals?: Record<string, number> | null },
+  extras?: {
+    distanceMetersCompleted?: number;
+    metricTotals?: Record<string, number> | null;
+    pointsCompleted?: number;
+  },
 ): JoinedProgressCopy {
-  if (usesQuantityScoring(challenge)) {
-    const progress = boardQuantityProgress(challenge, {
-      distanceMeters: extras?.distanceMetersCompleted,
-      metricTotals: extras?.metricTotals,
-    });
-    if (progress) {
-      return {
-        label: progress.label,
-        ratio: progress.target > 0 ? Math.min(progress.logged / progress.target, 1) : 0,
-      };
-    }
-    const done = Math.max(Number(extras?.distanceMetersCompleted) || 0, 0);
-    const target = cumulativeTargetMeters(challenge);
-    return {
-      label: challengeCumulativeProgress(challenge, done, athleteDistanceUnit()) ?? 'Distance',
-      ratio: target > 0 && cumulativeEligible(done, target) ? 1 : target > 0 ? Math.min(done / target, 1) : 0,
-    };
-  }
-  const logged = Math.max(0, Math.floor(Number(daysCompleted) || 0));
-  if (usesTotalCountCheckins(challenge)) {
-    const target = Math.max(Number(challenge.target_count) || 1, 1);
-    return { label: `${logged}/${target} check-ins`, ratio: logged / target };
-  }
-  if (challenge.challenge_type === 'points' && !challenge.is_unlimited) {
-    const target = Math.max(Number(challenge.target_count) || 1, 1);
-    return { label: `${target} points to win`, ratio: 0 };
-  }
-
-  const copy = challengeRuleCopy(challenge);
-  const count = Math.max(copy.count, 1);
-
-  if (copy.period === 'weekly' || copy.period === 'monthly') {
-    return {
-      label: `${compactCadence(count, copy.period)} · ${logged} checked in`,
-      ratio: 0,
-    };
-  }
-
-  if (copy.period === 'once' || copy.period === 'custom') {
-    const target = Math.max(Number(challenge.target_count) || count, 1);
-    return { label: `${logged}/${target} check-ins`, ratio: logged / target };
-  }
-
-  const total = challengeDurationDays(challenge);
-  return { label: `${logged}/${total} check-ins`, ratio: logged / total };
+  const progressExtras = {
+    daysCompleted,
+    distanceMetersCompleted: extras?.distanceMetersCompleted,
+    metricTotals: extras?.metricTotals,
+    pointsCompleted: extras?.pointsCompleted,
+  };
+  return {
+    label: challengeProgressLine(challenge, progressExtras, 'lobby'),
+    ratio: challengeProgressRatio(challenge, progressExtras),
+  };
 }

@@ -228,7 +228,7 @@ describe('points goal', () => {
     expect(challengeGoalLabel({ scoring_method: 'comparable_points', challenge_type: 'points' })).toBe(
       'Score Points',
     );
-    expect(challengeGoalLabel({ challenge_type: 'points', target_count: 12 })).toBe('0 / 12 points');
+    expect(challengeGoalLabel({ challenge_type: 'points', target_count: 12 })).toBe('0 / 12 pts');
   });
 
   it('labels total-count fitness as N of T Check-Ins', () => {

@@ -7,7 +7,7 @@ import { ChallengeTagRow } from '@/components/challenge/ChallengeTag';
 import { LobbyEntryPrizeRow } from '@/components/challenge/LobbyEntryPrizeRow';
 import { StakeAmount } from '@/components/currency/CurrencyMark';
 import { AppText } from '@/components/ui/AppText';
-import { isLiveCompetitorStatus, isPointsChallenge } from '@/lib/challenges';
+import { isLiveCompetitorStatus } from '@/lib/challenges';
 import { joinedProgressCopy } from '@/lib/challengeRuleCopy';
 import { challengeCardTags } from '@/lib/challengeTags';
 import {
@@ -66,7 +66,6 @@ export function ChallengePosterCard({
   const dropped = competing && !isLiveCompetitorStatus(participantStatus);
   const progressCopy = competing ? joinedProgressCopy(challenge, days) : null;
   const remaining = remainingFromChallenge(challenge);
-  const points = isPointsChallenge(challenge);
   const timeLabel =
     officialJoinable && challenge.status === 'arming'
       ? armingCountdownLabel(challenge.armed_at, new Date(nowMs)) ?? ''
@@ -139,9 +138,9 @@ export function ChallengePosterCard({
                 {timeLabel}
               </AppText>
             )}
-            {competing ? (
+            {competing && progressCopy?.label ? (
               <AppText className="text-[11px] font-semibold text-charcoal" numberOfLines={1}>
-                {points ? progressCopy?.label ?? `${days} tasks` : `${days} check-in${days === 1 ? '' : 's'}`}
+                {progressCopy.label}
               </AppText>
             ) : null}
           </View>

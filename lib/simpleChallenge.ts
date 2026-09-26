@@ -13,15 +13,17 @@ import { COMPARABLE_POINTS_METHOD, emptyComparablePointsConfig } from '@/lib/com
 import { milesToMeters, type DistanceUnit } from '@/lib/distance';
 import {
   CUMULATIVE_METRIC_CAP,
+  applyMetricUnit,
   defaultCumulativeMetrics,
   filledCumulativeMetrics,
+  isDistanceMetricName,
   metricsFromLegacyTarget,
   parseCumulativeMetrics,
-  resolveCumulativeMetrics,
   serializeCumulativeMetrics,
   winWindowOf,
   type CumulativeMetric,
 } from '@/lib/cumulativeMetrics';
+import { isStoredQuantityChallenge } from '@/lib/challengeProgress';
 import { locationPlaceIsSet } from '@/lib/locationProof';
 import {
   BEFORE_AFTER_HR_PRESET,
@@ -147,6 +149,53 @@ export function isLeftoverSimplePointsDraft(draft: {
 
 export function simpleHowYouWin(draft: { scoring?: string | null } | null | undefined): SimpleHowYouWin {
   return draft?.scoring === 'cumulative' ? 'cumulative' : 'consistency';
+}
+
+/** Keep a saved mi/km on the goal. Fill a blank distance unit from the draft chip. */
+function stampDistanceUnit(metrics: CumulativeMetric[], unit: DistanceUnit | null | undefined): CumulativeMetric[] {
+  if (unit !== 'km' && unit !== 'mi') {
+    return metrics;
+  }
+  return metrics.map((metric) => {
+    if (metric.unit === 'mi' || metric.unit === 'km') {
+      return metric;
+    }
+    if (metric.name.trim() && !isDistanceMetricName(metric.name)) {
+      return metric;
+    }
+    const named = metric.name.trim() ? metric : { ...metric, name: unit === 'km' ? 'km' : 'miles' };
+    return applyMetricUnit(named, unit);
+  });
+}
+
+function distanceUnitFromMetrics(metrics: CumulativeMetric[]): DistanceUnit {
+  const unit = metrics.find((row) => row.unit === 'km' || row.unit === 'mi')?.unit;
+  return unit === 'km' ? 'km' : 'mi';
+}
+
+function metricsForSimpleEdit(challenge: {
+  metrics?: unknown;
+  scoring_config?: unknown;
+  cumulative_target?: number | string | null;
+  cumulative_metric?: string | null;
+  challenge_type?: string | null;
+  format?: string | null;
+}): CumulativeMetric[] {
+  const column = parseCumulativeMetrics(challenge.metrics);
+  if (column.some((row) => row.target > 0)) {
+    return column;
+  }
+  const fromConfig = parseCumulativeMetrics(challenge.scoring_config);
+  if (fromConfig.some((row) => row.target > 0)) {
+    return fromConfig;
+  }
+  if (challenge.challenge_type === 'cumulative' || challenge.format === 'cumulative') {
+    return metricsFromLegacyTarget({
+      cumulative_target: challenge.cumulative_target,
+      cumulative_metric: challenge.cumulative_metric,
+    });
+  }
+  return column;
 }
 
 export const SIMPLE_CUMULATIVE_WINDOWS: { value: 'challenge' | 'week'; label: string }[] = [
@@ -635,14 +684,17 @@ export function simpleDraftToCreateValues(draft: SimpleChallengeDraft): CreateCh
   const metrics =
     howYouWin === 'cumulative'
       ? serializeCumulativeMetrics(
-          filledCumulativeMetrics(draft.metrics).length
-            ? draft.metrics!
-            : Number(draft.cumulative_target_meters) > 0
-              ? metricsFromLegacyTarget({
-                  cumulative_target: draft.cumulative_target_meters,
-                  cumulative_metric: 'distance_m',
-                })
-              : defaultCumulativeMetrics(),
+          stampDistanceUnit(
+            filledCumulativeMetrics(draft.metrics).length
+              ? draft.metrics!
+              : Number(draft.cumulative_target_meters) > 0
+                ? metricsFromLegacyTarget({
+                    cumulative_target: draft.cumulative_target_meters,
+                    cumulative_metric: 'distance_m',
+                  })
+                : defaultCumulativeMetrics(),
+            draft.distance_unit,
+          ),
         )
       : [];
   const primary = filledCumulativeMetrics(metrics)[0];
@@ -807,30 +859,18 @@ export function simpleDraftFromChallenge(challenge: Challenge): SimpleChallengeD
       privacy_mode === 'private_corporate' ? false : challenge.discoverability === 'friends_of_friends',
     min_participants: Math.max(Number(challenge.min_participants) || 2, 2),
     cover_image_url: challenge.cover_image_url?.trim() || '',
-    scoring:
-      challenge.challenge_type === 'cumulative' || challenge.format === 'cumulative'
-        ? 'cumulative'
-        : 'consistency',
+    scoring: isStoredQuantityChallenge(challenge) ? 'cumulative' : 'consistency',
     points_to_win: 1,
     cumulative_target_meters: Math.max(Number(challenge.cumulative_target) || milesToMeters(100), 1),
     cumulative_window:
       challenge.cumulative_window === 'week' || challenge.cumulative_window === 'day'
         ? challenge.cumulative_window
         : winWindowOf((challenge as { win_window?: unknown }).win_window),
-    metrics: resolveCumulativeMetrics({
-      metrics: (challenge as { metrics?: unknown }).metrics,
-      scoring_config: challenge.scoring_config,
-      cumulative_target: challenge.cumulative_target,
-      cumulative_metric: challenge.cumulative_metric,
-      title: challenge.title,
-      task: challenge.task,
-      challenge_type: challenge.challenge_type,
-      format: challenge.format,
-    }),
+    metrics: metricsForSimpleEdit(challenge),
     win_window: winWindowOf(
       (challenge as { win_window?: unknown }).win_window ?? challenge.cumulative_window,
     ),
-    distance_unit: 'mi' as DistanceUnit,
+    distance_unit: distanceUnitFromMetrics(metricsForSimpleEdit(challenge)),
     allowed_misses: clampAllowedMisses(Number(challenge.misses_allowed) || 0, {
       duration_preset,
       duration_days: days,
@@ -936,25 +976,16 @@ export function createValuesToSimpleDraft(values: CreateChallengeValues): Simple
     friends_of_friends: values.discoverability === 'friends_of_friends',
     min_participants: Math.max(Number(values.min_participants) || 2, 2),
     cover_image_url: values.cover_image_url?.trim() || '',
-    scoring: values.challenge_type === 'cumulative' || values.format === 'cumulative' ? 'cumulative' : 'consistency',
+    scoring: isStoredQuantityChallenge(values) ? 'cumulative' : 'consistency',
     points_to_win: 1,
     cumulative_target_meters: Math.max(Number(values.cumulative_target) || milesToMeters(100), 1),
     cumulative_window:
       values.cumulative_window === 'week' || values.cumulative_window === 'day'
         ? values.cumulative_window
         : winWindowOf(values.win_window),
-    metrics: resolveCumulativeMetrics({
-      metrics: values.metrics,
-      scoring_config: values.scoring_config,
-      cumulative_target: values.cumulative_target,
-      cumulative_metric: values.cumulative_metric,
-      title: values.title,
-      task: values.task,
-      challenge_type: values.challenge_type,
-      format: values.format,
-    }),
+    metrics: metricsForSimpleEdit(values),
     win_window: winWindowOf(values.win_window ?? values.cumulative_window),
-    distance_unit: 'mi',
+    distance_unit: distanceUnitFromMetrics(metricsForSimpleEdit(values)),
     allowed_misses: clampAllowedMisses(Number(values.misses_allowed) || 0, { duration_preset, duration_days: days }),
     join_until_preset: asJoinUntilPreset(values.join_until_preset),
     join_until_at: values.join_until_at || '',

@@ -8,6 +8,7 @@ import { parseComparablePointsConfig } from '@/lib/comparablePoints';
 import { asPrivacyMode, canChangePrivacyMode } from '@/lib/privacyMode';
 import { asLiveMute } from '@/lib/livePush';
 import { challengeScheduleTimezone, durationDaysFromValues, ensureSchedule, publishEndMode } from '@/lib/challengeSchedule';
+import { goalFieldsForSave } from '@/lib/challengeProgress';
 import {
   fetchChallengeShareState,
   fetchActiveChallenges,
@@ -1230,7 +1231,9 @@ export function useUpdateUserChallenge() {
       const privacyMode = asPrivacyMode(values.privacy_mode, values.visibility, values.challenge_lane);
       const existing = await supabase
         .from('challenges')
-        .select('privacy_mode, visibility, challenge_lane, created_by')
+        .select(
+          'privacy_mode, visibility, challenge_lane, created_by, format, challenge_type, cumulative_metric, cumulative_target, cumulative_window, win_window, metrics',
+        )
         .eq('id', challengeId)
         .maybeSingle();
       const oldPrivacy = asPrivacyMode(
@@ -1259,6 +1262,7 @@ export function useUpdateUserChallenge() {
       if (!privacyGate.ok) {
         throw new Error(privacyGate.message);
       }
+      const keptGoal = goalFieldsForSave(values, existing.data);
       const challenge = await updateUserChallenge(challengeId, {
         title: values.title.trim(),
         description: values.description?.trim() ? values.description.trim() : null,
@@ -1307,18 +1311,11 @@ export function useUpdateUserChallenge() {
         top_places_value: payout.prize_structure === 'top_places' ? Number(payout.top_places_value) : null,
         top_places_distribution:
           payout.prize_structure === 'top_places' ? payout.top_places_distribution : null,
-        cumulative_metric: values.challenge_type === 'cumulative' ? values.cumulative_metric ?? 'count' : null,
-        cumulative_target:
-          values.challenge_type === 'cumulative' ? Math.max(Number(values.cumulative_target) || 0, 0) : null,
-        cumulative_window:
-          values.challenge_type === 'cumulative'
-            ? values.win_window ?? values.cumulative_window ?? 'challenge'
-            : null,
-        win_window:
-          values.challenge_type === 'cumulative'
-            ? values.win_window ?? values.cumulative_window ?? 'challenge'
-            : null,
-        metrics: values.challenge_type === 'cumulative' ? values.metrics ?? [] : [],
+        cumulative_metric: keptGoal.cumulative_metric,
+        cumulative_target: keptGoal.cumulative_target,
+        cumulative_window: keptGoal.cumulative_window,
+        win_window: keptGoal.win_window,
+        metrics: keptGoal.metrics,
         distance_meters_required: Math.max(Number(values.distance_meters_required) || 0, 0) || null,
       });
       await persistChallengePlaces(challengeId, namedProofs);

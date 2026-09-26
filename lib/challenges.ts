@@ -2047,7 +2047,9 @@ export async function updateUserChallenge(
         cumulative_metric:
           typeof payload.cumulative_metric === 'string' ? payload.cumulative_metric : undefined,
         cumulative_target:
-          typeof payload.cumulative_target === 'number' ? payload.cumulative_target : undefined,
+          typeof payload.cumulative_target === 'number' || payload.cumulative_target === null
+            ? payload.cumulative_target
+            : undefined,
       } satisfies Partial<Challenge>)
       .eq('id', challengeId);
   }
