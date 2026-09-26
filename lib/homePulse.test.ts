@@ -123,6 +123,15 @@ describe('sortPulsePills', () => {
     ]);
     expect(sorted.map((row) => row.id)).toEqual(['new', 'old', 'quiet']);
   });
+
+  it('holds the house rooms at the front, weekly then monthly, even with no chatter', () => {
+    const sorted = sortPulsePills([
+      { id: 'loud', lastAt: '2026-09-25T18:00:00.000Z' },
+      { id: 'monthly', lastAt: null, officialCoinKind: 'coin_monthly' as const },
+      { id: 'weekly', lastAt: null, officialCoinKind: 'coin_weekly' as const },
+    ]);
+    expect(sorted.map((row) => row.id)).toEqual(['weekly', 'monthly', 'loud']);
+  });
 });
 
 describe('buildPulsePills', () => {

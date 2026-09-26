@@ -292,6 +292,32 @@ export const OFFICIAL_COIN_LEAVE_CONFIRM = {
   cancel: 'Stay',
 } as const;
 
+/** Slot 0 of the Home Live rail once someone has left. One tap, both rooms back. */
+export const OFFICIAL_COIN_REJOIN_PILL = {
+  title: 'Rejoin Official',
+  subline: 'Weekly + Monthly · remaining days',
+  error: 'Couldn’t rejoin. Try again.',
+} as const;
+
+/**
+ * Whether slot 0 shows Rejoin. True when they opted out, or when they are not
+ * on both standing rooms. False the moment both memberships are back.
+ */
+export function canRejoinOfficialCoin(input: {
+  roomsExist?: boolean;
+  optedOut?: boolean;
+  weeklyJoined?: boolean;
+  monthlyJoined?: boolean;
+}): boolean {
+  if (!input.roomsExist) {
+    return false;
+  }
+  if (input.optedOut) {
+    return true;
+  }
+  return !(input.weeklyJoined && input.monthlyJoined);
+}
+
 /** Sort the Check In picker: Official Check-In first, weekly ahead of monthly. */
 export function officialCoinPickerRank(challenge?: OfficialCoinChallenge | null): number {
   const kind = officialCoinKind(challenge);

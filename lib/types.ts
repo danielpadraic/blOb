@@ -359,6 +359,8 @@ export interface Profile {
   contextual_tours_seen?: string[] | null;
   create_tour_opt_out_at?: string | null;
   official_pitch_dismissed_challenge_id?: string | null;
+  /** Set when they leave Official Coin. Backfill never forces them back. */
+  official_coin_opted_out_at?: string | null;
   date_of_birth?: string | null;
   interests_prompted_at?: string | null;
   interests_dismissed_home_at?: string | null;

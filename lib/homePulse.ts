@@ -14,6 +14,7 @@ import { isCheckinPost } from '@/lib/checkinPost';
 import { copy } from '@/lib/copy';
 import { liveCheckinLabel } from '@/lib/liveThread';
 import { isEndedLobbyStatus } from '@/lib/lobbyChallenge';
+import { officialCoinKind, type OfficialCoinKind } from '@/lib/officialCoin';
 import { namedChallengeHref } from '@/lib/routes';
 import { fetchPublicProfilesByIds, personDisplayName } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
@@ -57,6 +58,8 @@ export type PulsePill = {
   lastAt: string | null;
   isCallout?: boolean;
   watching?: boolean;
+  /** Standing house rooms lead the rail, weekly then monthly. */
+  officialCoinKind?: OfficialCoinKind | null;
 };
 
 export type PulseChallengeLike = {
@@ -76,6 +79,7 @@ export type PulseChallengeLike = {
   joined?: boolean | null;
   hosting?: boolean | null;
   created_by?: string | null;
+  official_kind?: string | null;
 };
 
 function pulseStatus(status: string | null | undefined): string {
@@ -135,14 +139,32 @@ export function pulseChallengeHref(id: string) {
   return namedChallengeHref(String(id).trim(), { tab: 'live' });
 }
 
-export function sortPulsePills<T extends { lastAt: string | null }>(pills: T[]): T[] {
+export function sortPulsePills<
+  T extends { lastAt: string | null; officialCoinKind?: OfficialCoinKind | null },
+>(pills: T[]): T[] {
   return [...pills].sort((a, b) => {
+    // The house rooms are home base — they hold the front of the rail whether
+    // or not anyone has posted in them today.
+    const house = officialCoinPillRank(a.officialCoinKind) - officialCoinPillRank(b.officialCoinKind);
+    if (house !== 0) {
+      return house;
+    }
     const left = a.lastAt ? Date.parse(a.lastAt) : 0;
     const right = b.lastAt ? Date.parse(b.lastAt) : 0;
     const aTime = Number.isFinite(left) ? left : 0;
     const bTime = Number.isFinite(right) ? right : 0;
     return bTime - aTime;
   });
+}
+
+function officialCoinPillRank(kind?: OfficialCoinKind | null): number {
+  if (kind === 'coin_weekly') {
+    return 0;
+  }
+  if (kind === 'coin_monthly') {
+    return 1;
+  }
+  return 2;
 }
 
 type PulseProfile = Pick<PublicProfile, 'id' | 'display_name' | 'username' | 'avatar_url'>;
@@ -229,6 +251,7 @@ export function buildPulsePills(input: {
       lastAt: latestCheckin?.created_at ?? (isCallout ? latest?.created_at ?? null : null),
       isCallout,
       watching: Boolean(row.watching),
+      officialCoinKind: officialCoinKind(row),
     };
   });
   return sortPulsePills(pills).slice(0, PULSE_CAP);

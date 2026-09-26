@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useFocusEffect, usePathname, useRouter } from 'expo-router';
 
@@ -9,11 +9,18 @@ import { AppText } from '@/components/ui/AppText';
 import { useAfterFirstPaint } from '@/hooks/useAfterFirstPaint';
 import { useAuth } from '@/hooks/useAuth';
 import { useHomePulse } from '@/hooks/useHomePulse';
+import { useOfficialCoinStatus, useRejoinOfficialCoin } from '@/hooks/useOfficialCoin';
 import { useMyProfile } from '@/hooks/useProfile';
 import { HOME_LIVE_PILLS_STEPS } from '@/lib/contextualTour';
 import { wasHomeTourCompleted } from '@/lib/homeTour';
 import { copy } from '@/lib/copy';
-import { pulseChallengeHref, type PulseFace, type PulsePill } from '@/lib/homePulse';
+import { OFFICIAL_COIN_REJOIN_PILL } from '@/lib/officialCoin';
+import {
+  pulseChallengeHref,
+  sortPulsePills,
+  type PulseFace,
+  type PulsePill,
+} from '@/lib/homePulse';
 import { pushChallengeHref } from '@/lib/challengeNav';
 import { THEME, flexChildMin, themeShadow } from '@/lib/theme';
 
@@ -81,6 +88,51 @@ function PulseChip({ pill }: { pill: PulsePill }) {
   );
 }
 
+/**
+ * Slot 0 after someone leaves Official Coin. Same height and radius as a live
+ * pill so the rail does not jump, teal so it reads as house.
+ */
+function RejoinOfficialChip({
+  busy,
+  error,
+  onPress,
+}: {
+  busy: boolean;
+  error: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ busy }}
+      accessibilityLabel={`${OFFICIAL_COIN_REJOIN_PILL.title}. ${OFFICIAL_COIN_REJOIN_PILL.subline}`}
+      disabled={busy}
+      onPress={onPress}
+      style={{
+        width: PILL_WIDTH,
+        minHeight: 44,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: THEME.radius,
+        backgroundColor: THEME.accentSoft,
+        borderWidth: 1,
+        borderColor: THEME.accent,
+        opacity: busy ? 0.6 : 1,
+        ...themeShadow('card'),
+      }}>
+      <AppText
+        numberOfLines={1}
+        className="text-[13px] font-extrabold"
+        style={{ color: THEME.accent }}>
+        {OFFICIAL_COIN_REJOIN_PILL.title}
+      </AppText>
+      <AppText numberOfLines={1} className="mt-1 text-[12px]" style={{ color: THEME.textMuted }}>
+        {error ? OFFICIAL_COIN_REJOIN_PILL.error : OFFICIAL_COIN_REJOIN_PILL.subline}
+      </AppText>
+    </Pressable>
+  );
+}
+
 /** Home Pulse. Fetches itself so a refresh does not remount the Home composer. */
 export function PulseRail() {
   const { user } = useAuth();
@@ -88,6 +140,12 @@ export function PulseRail() {
   const railReady = useAfterFirstPaint();
   const pulse = useHomePulse({ enabled: railReady });
   const refetchPulse = pulse.refetch;
+  const coin = useOfficialCoinStatus();
+  const rejoin = useRejoinOfficialCoin();
+  // Optimistic: the Rejoin pill leaves and the two house pills land before the
+  // rail refetch comes back.
+  const [rejoined, setRejoined] = useState(false);
+  const [rejoinFailed, setRejoinFailed] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -97,10 +155,50 @@ export function PulseRail() {
     }, [railReady, refetchPulse]),
   );
 
-  const pills = pulse.data ?? [];
-  const showRail = pulse.isFetched && !pulse.isError && pills.length > 0;
+  const showRejoin = coin.status.canRejoin && !rejoined;
+
+  useEffect(() => {
+    if (coin.status.canRejoin) {
+      setRejoined(false);
+    }
+  }, [coin.status.canRejoin]);
+
+  const pills = useMemo(() => {
+    const live = pulse.data ?? [];
+    if (!rejoined) {
+      return live;
+    }
+    const seen = new Set(live.map((pill) => pill.id));
+    const optimistic: PulsePill[] = coin.status.rooms
+      .filter((room) => room.challenge.id && !seen.has(String(room.challenge.id)))
+      .map((room) => ({
+        id: String(room.challenge.id),
+        title: String(room.challenge.title ?? ''),
+        snippet: copy('pulse.noChatter'),
+        faces: [],
+        lastAt: null,
+        officialCoinKind: room.kind,
+      }));
+    return sortPulsePills([...optimistic, ...live]);
+  }, [coin.status.rooms, pulse.data, rejoined]);
+
+  const showRail = showRejoin || (pulse.isFetched && !pulse.isError && pills.length > 0);
   const homeTourDone = wasHomeTourCompleted(profile?.id, profile?.tutorial_completed_at);
   useContextualTour('home-live-pills', HOME_LIVE_PILLS_STEPS, showRail && homeTourDone, user?.id);
+
+  function onRejoin() {
+    if (rejoin.isPending) {
+      return;
+    }
+    setRejoinFailed(false);
+    setRejoined(true);
+    rejoin.mutate(undefined, {
+      onError: () => {
+        setRejoined(false);
+        setRejoinFailed(true);
+      },
+    });
+  }
 
   if (!showRail) {
     return null;
@@ -115,6 +213,13 @@ export function PulseRail() {
         directionalLockEnabled
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingVertical: 2 }}>
+        {showRejoin ? (
+          <RejoinOfficialChip
+            busy={rejoin.isPending}
+            error={rejoinFailed}
+            onPress={onRejoin}
+          />
+        ) : null}
         {pills.map((pill) => (
           <PulseChip key={pill.id} pill={pill} />
         ))}

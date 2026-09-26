@@ -1,62 +1,88 @@
 import { Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
+import { useQuery } from '@tanstack/react-query';
 import { usePathname, useRouter } from 'expo-router';
 
-import { useTeacherBeginOptional } from '@/components/teacher/TeacherBeginHost';
 import { TourAnchor } from '@/components/tour/TourAnchor';
 import { AppText } from '@/components/ui/AppText';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
-import { useTeacher3DayState } from '@/hooks/useTeacher3Day';
-import { pushCheckinSubmit } from '@/lib/challengeNav';
+import { pushChallengeHref } from '@/lib/challengeNav';
 import { officialDobStatus } from '@/lib/officialDob';
 import {
-  TEACHER_PRIZE_CHIP,
-  emptyTeacher3DayState,
-  teacherBannerCta,
-  teacherBannerHelper,
-  teacherBannerTitle,
-} from '@/lib/teacher3day';
+  CASH_OFFICIAL_BANNER,
+  cashOfficialBannerHelper,
+  cashOfficialGate,
+} from '@/lib/officialCash';
+import { OFFICIAL_ACTIVE_STATUSES } from '@/lib/officialSeries';
+import { challengeDetailHref, LOBBY_HREF } from '@/lib/routes';
+import { supabase } from '@/lib/supabase';
 import { THEME } from '@/lib/theme';
 
 const BLOB_WORDMARK = require('@/assets/mascot/blob-logo.png');
 const BAR = '#123832';
 
+/** The live cash Official ladder row, if the house has one open. */
+function useCashOfficialTarget(enabled: boolean) {
+  return useQuery({
+    queryKey: ['cash-official-banner'],
+    enabled,
+    staleTime: 60_000,
+    retry: false,
+    queryFn: async (): Promise<string | null> => {
+      const { data, error } = await supabase
+        .from('challenges')
+        .select('id, starts_at')
+        .eq('is_official', true)
+        .eq('currency', 'bucks')
+        .not('series_id', 'is', null)
+        .in('status', [...OFFICIAL_ACTIVE_STATUSES])
+        .order('starts_at', { ascending: true })
+        .limit(1);
+      if (error) {
+        return null;
+      }
+      return data?.[0]?.id ? String(data[0].id) : null;
+    },
+  });
+}
+
+/**
+ * Home hero. Advertises the house cash ladder — weekly $1, monthly $10.
+ * View only: this banner never starts a charge. Official Coin stays the free
+ * home base on the Live rail below.
+ */
 export function FeaturedOfficialStrip() {
   const router = useRouter();
   const pathname = usePathname();
   const { user } = useAuth();
   const { profile } = useMyProfile();
-  const teacher = useTeacher3DayState();
-  const beginHost = useTeacherBeginOptional();
-  const state = teacher.data ?? emptyTeacher3DayState();
-  const underage = officialDobStatus(profile?.date_of_birth) === 'underage';
-  const title = teacherBannerTitle(state);
-  const cta = teacherBannerCta(state);
-  const helper = teacherBannerHelper(state, underage);
-  const done = state.phase === 'done';
-  const disabled = underage || (done && true);
+  const target = useCashOfficialTarget(Boolean(user));
+
+  const gate = cashOfficialGate({
+    dobStatus: officialDobStatus(profile?.date_of_birth),
+    declaredRegion: profile?.declared_region,
+  });
+  const helper = cashOfficialBannerHelper(gate);
 
   if (!user) {
     return null;
   }
 
-  function onCta() {
-    if (underage) {
+  function onView() {
+    const id = target.data;
+    if (id) {
+      pushChallengeHref(
+        router,
+        String(challengeDetailHref(id, 'lobby', null, { tab: 'overview' })),
+        'home-official',
+        id,
+        pathname,
+      );
       return;
     }
-    if (state.phase === 'live' && state.challengeId) {
-      pushCheckinSubmit(router, state.challengeId, 'home-official', undefined, pathname);
-      return;
-    }
-    if (state.phase === 'missed') {
-      beginHost?.openRestart();
-      return;
-    }
-    if (state.phase === 'done') {
-      return;
-    }
-    beginHost?.openBegin();
+    // No open cash row today. The Official lobby is the standing pitch.
+    router.push(LOBBY_HREF);
   }
 
   return (
@@ -103,7 +129,7 @@ export function FeaturedOfficialStrip() {
             className="text-[16px] font-extrabold"
             numberOfLines={1}
             style={{ color: '#FFFFFF' }}>
-            {title}
+            {CASH_OFFICIAL_BANNER.title}
           </AppText>
           {helper ? (
             <AppText
@@ -112,34 +138,25 @@ export function FeaturedOfficialStrip() {
               style={{ color: 'rgba(231, 247, 243, 0.72)' }}>
               {helper}
             </AppText>
-          ) : done ? (
-            <AppText
-              className="mt-0.5 text-[12px] font-semibold"
-              numberOfLines={1}
-              style={{ color: THEME.accentBright }}>
-              {TEACHER_PRIZE_CHIP}
-            </AppText>
           ) : null}
         </View>
         </View>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={cta}
-          disabled={disabled || (state.phase === 'live' && !state.challengeId)}
-          onPress={onCta}
+          accessibilityLabel={CASH_OFFICIAL_BANNER.cta}
+          onPress={onView}
           style={{
             minHeight: 36,
             paddingHorizontal: 14,
             borderRadius: 999,
-            backgroundColor: done || underage ? 'rgba(231, 247, 243, 0.18)' : THEME.accent,
+            backgroundColor: THEME.accent,
             alignItems: 'center',
             justifyContent: 'center',
-            opacity: disabled && !done ? 0.38 : 1,
           }}>
           <AppText
             className="text-[13px] font-extrabold"
-            style={{ color: done || underage ? '#F7FFFC' : THEME.accentForeground }}>
-            {cta}
+            style={{ color: THEME.accentForeground }}>
+            {CASH_OFFICIAL_BANNER.cta}
           </AppText>
         </Pressable>
       </View>

@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { chicagoDateStamp } from '@/lib/chicagoToday';
 import { normalizePeriodKey } from '@/lib/checkinPeriod';
 import {
+  canRejoinOfficialCoin,
   isOfficialCoinChallenge,
   officialCoinAllowedDays,
   officialCoinKind,
@@ -40,6 +41,10 @@ export type OfficialCoinStatus = {
   monthly: OfficialCoinRoom | null;
   /** In at least one room. */
   joined: boolean;
+  /** They left Official Coin, so backfill leaves them alone. */
+  optedOut: boolean;
+  /** Home Live rail should offer Rejoin in slot 0. */
+  canRejoin: boolean;
   /** Today's Chicago slot is already filled on an Official Coin room. */
   checkedInToday: boolean;
   todayKey: string;
@@ -50,6 +55,8 @@ const EMPTY_STATUS: OfficialCoinStatus = {
   weekly: null,
   monthly: null,
   joined: false,
+  optedOut: false,
+  canRejoin: false,
   checkedInToday: false,
   todayKey: '',
 };
@@ -99,7 +106,7 @@ export function useOfficialCoinStatus() {
         return { ...EMPTY_STATUS, todayKey };
       }
 
-      const [members, checkins] = await Promise.all([
+      const [members, checkins, me] = await Promise.all([
         supabase
           .from('challenge_participants')
           .select('challenge_id, status, eliminated_at, room_id, window_starts_at, window_ends_at')
@@ -110,10 +117,19 @@ export function useOfficialCoinStatus() {
           .select('challenge_id, period_key, status, submitted_at')
           .eq('user_id', user!.id)
           .in('challenge_id', ids),
+        supabase
+          .from('profiles')
+          .select('official_coin_opted_out_at')
+          .eq('id', user!.id)
+          .maybeSingle(),
       ]);
       if (members.error) {
         throw new Error(getErrorMessage(members.error));
       }
+      const optedOut = Boolean(
+        (me.data as { official_coin_opted_out_at?: string | null } | null)
+          ?.official_coin_opted_out_at,
+      );
 
       const membership = new Map<string, OfficialCoinMembership>();
       for (const row of (members.data ?? []) as (OfficialCoinMembership & {
@@ -183,6 +199,13 @@ export function useOfficialCoinStatus() {
         weekly,
         monthly,
         joined: built.some((room) => room.joined),
+        optedOut,
+        canRejoin: canRejoinOfficialCoin({
+          roomsExist: built.length > 0,
+          optedOut,
+          weeklyJoined: weekly?.joined,
+          monthlyJoined: monthly?.joined,
+        }),
         checkedInToday,
         todayKey,
       };

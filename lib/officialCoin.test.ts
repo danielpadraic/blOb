@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { normalizeChallenge } from '@/lib/challenges';
 import {
+  canRejoinOfficialCoin,
   isOfficialCoinChallenge,
+  OFFICIAL_COIN_LEAVE_CONFIRM,
+  OFFICIAL_COIN_REJOIN_PILL,
   officialCoinAllowedDays,
   officialCoinBoardHeaderLine,
   officialCoinDaysLeft,
@@ -204,6 +207,50 @@ describe('officialCoinGuarantee', () => {
     expect(officialCoinGuarantee(MONTHLY)).toBe(1000);
     expect(officialCoinGuarantee({ official_kind: 'coin_weekly' })).toBe(100);
     expect(officialCoinGuarantee({ id: 'x' })).toBe(0);
+  });
+});
+
+describe('canRejoinOfficialCoin', () => {
+  const both = { roomsExist: true, weeklyJoined: true, monthlyJoined: true };
+
+  it('stays hidden while they are on both rooms', () => {
+    expect(canRejoinOfficialCoin(both)).toBe(false);
+  });
+
+  it('shows after Leave Official', () => {
+    expect(canRejoinOfficialCoin({ roomsExist: true, optedOut: true })).toBe(true);
+  });
+
+  it('shows when only one room stuck', () => {
+    expect(
+      canRejoinOfficialCoin({ roomsExist: true, weeklyJoined: true, monthlyJoined: false }),
+    ).toBe(true);
+    expect(
+      canRejoinOfficialCoin({ roomsExist: true, weeklyJoined: false, monthlyJoined: true }),
+    ).toBe(true);
+  });
+
+  it('hides itself the moment both memberships are back, even if opted_out lingers', () => {
+    expect(canRejoinOfficialCoin({ ...both, optedOut: false })).toBe(false);
+  });
+
+  it('never renders before the rooms load, so the rail cannot show a dead chip', () => {
+    expect(canRejoinOfficialCoin({ roomsExist: false, optedOut: true })).toBe(false);
+    expect(canRejoinOfficialCoin({})).toBe(false);
+  });
+});
+
+describe('OFFICIAL_COIN_REJOIN_PILL', () => {
+  it('uses the locked slot-0 copy', () => {
+    expect(OFFICIAL_COIN_REJOIN_PILL.title).toBe('Rejoin Official');
+    expect(OFFICIAL_COIN_REJOIN_PILL.subline).toBe('Weekly + Monthly · remaining days');
+    expect(OFFICIAL_COIN_REJOIN_PILL.error).toBe('Couldn’t rejoin. Try again.');
+  });
+
+  it('leaves the Leave confirm exactly as shipped', () => {
+    expect(OFFICIAL_COIN_LEAVE_CONFIRM.body).toBe(
+      'You’ll leave the Weekly and Monthly Official rooms. Home Live from those rooms goes away.',
+    );
   });
 });
 
