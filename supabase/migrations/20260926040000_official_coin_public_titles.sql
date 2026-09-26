@@ -19,8 +19,21 @@ set title = 'Monthly Fitness Challenge',
 where official_kind = 'coin_monthly'
   and title is distinct from 'Monthly Fitness Challenge';
 
+-- The Overview says it once now, in the About block under the hero card.
+-- Clear the stored blurb so the old "The house room. Log a workout..." line
+-- cannot surface from the description section, and keep `rules` in step with
+-- what the app prints.
+update public.challenges
+set description = null,
+    rules = 'Official blOb Challenge: Earn coins by Checking In consistently each day. '
+         || 'The more consistent you are, the higher the prize. '
+         || 'Check-In Proof: a Pre-Workout Selfie, a Post-Workout Selfie, '
+         || 'Proof of 30-Minutes of Elevated Heart Rate.',
+    updated_at = now()
+where official_kind in ('coin_weekly', 'coin_monthly');
+
 -- Receipts already written keep pointing at the right room through challenge_id.
-select official_kind, title, id
+select official_kind, title, description, id
 from public.challenges
 where official_kind is not null
 order by official_kind;

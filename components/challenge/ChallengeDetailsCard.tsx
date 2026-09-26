@@ -1,3 +1,5 @@
+import { View } from 'react-native';
+
 import { MissBudgetLines } from '@/components/challenge/MissBudgetLines';
 import { AppText } from '@/components/ui/AppText';
 import { Card } from '@/components/ui/Card';
@@ -6,9 +8,7 @@ import { challengeShowsMissBudget } from '@/lib/missDuty';
 import {
   isOfficialCoinChallenge,
   officialCoinMidWindowLine,
-  officialCoinPrizeLine,
-  officialCoinRulesParagraph,
-  OFFICIAL_COIN_SPLIT_LINE,
+  OFFICIAL_COIN_ABOUT,
   type OfficialCoinMembership,
 } from '@/lib/officialCoin';
 import { THEME } from '@/lib/theme';
@@ -30,15 +30,31 @@ export function ChallengeDetailsCard({
     const midWindow = officialCoinMidWindowLine(challenge, membership);
     return (
       <Card className="mt-4 gap-3" style={{ overflow: 'visible' }}>
-        <AppText className="text-[11px] font-semibold uppercase tracking-widest" style={line}>
-          Rules
-        </AppText>
-        <AppText className="text-[14px] leading-6" style={line}>
-          {officialCoinRulesParagraph(challenge)}
-        </AppText>
-        <AppText className="text-[14px] leading-6" style={line}>
-          {`${officialCoinPrizeLine(challenge)} ${OFFICIAL_COIN_SPLIT_LINE}`}
-        </AppText>
+        <View>
+          <AppText className="text-[15px] font-extrabold leading-6" style={line}>
+            {OFFICIAL_COIN_ABOUT.title}
+          </AppText>
+          <AppText className="mt-1 text-[14px] leading-6" style={line}>
+            {OFFICIAL_COIN_ABOUT.body}
+          </AppText>
+        </View>
+        <View>
+          <AppText className="text-[15px] font-extrabold leading-6" style={line}>
+            {OFFICIAL_COIN_ABOUT.proofTitle}
+          </AppText>
+          <View className="mt-1 gap-1">
+            {OFFICIAL_COIN_ABOUT.proofs.map((proof) => (
+              <View key={proof} className="flex-row" style={{ gap: 8 }}>
+                <AppText className="text-[14px] leading-6" style={line}>
+                  •
+                </AppText>
+                <AppText className="min-w-0 flex-1 text-[14px] leading-6" style={line}>
+                  {proof}
+                </AppText>
+              </View>
+            ))}
+          </View>
+        </View>
         {midWindow ? (
           <AppText className="text-[13px] leading-5" style={{ color: THEME.textMuted }}>
             {midWindow}

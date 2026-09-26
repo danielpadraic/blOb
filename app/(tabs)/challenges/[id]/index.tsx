@@ -1452,7 +1452,8 @@ export default function ChallengeDetailScreen() {
             <PeriodCheckinDue challenge={challenge} submitted={false} nowMs={nowMs} />
           </View>
         ) : null}
-        {challenge.description?.trim() ? (
+        {/* Official Coin says it once, in the block under the card. */}
+        {!officialCoinRoom && challenge.description?.trim() ? (
           <AppText className="mt-3 text-[15px] leading-6" style={{ color: THEME.textPrimary }}>
             {challenge.description.trim()}
           </AppText>
@@ -1473,7 +1474,8 @@ export default function ChallengeDetailScreen() {
           </View>
         ) : null}
 
-        {showOperatorChrome ? (
+        {/* Open / Live / Settling / Settled is QA chrome. Not on a house room. */}
+        {showOperatorChrome && !officialCoinRoom ? (
         <View className="mt-4">
           <ChallengeLifecycleStatus status={challenge.status} />
         </View>

@@ -519,7 +519,9 @@ export function ChallengeBoard({
         </FieldNoteLabel>
         <View className="flex-row items-center" style={{ gap: 8 }}>
           {compact ? null : <BoardBulkAdjustButton />}
-          {isOfficialChallenge(challenge) ? <ChallengeLifecycleStatus compact status={challenge.status} /> : null}
+          {isOfficialChallenge(challenge) && !officialCoin ? (
+            <ChallengeLifecycleStatus compact status={challenge.status} />
+          ) : null}
           {detailsControl}
         </View>
       </View>

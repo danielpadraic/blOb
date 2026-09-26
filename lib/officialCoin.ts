@@ -259,26 +259,26 @@ export function officialCoinBoardHeaderLine(
   return `${prize} · ${left} ${left === 1 ? 'day' : 'days'} left ${unit}`;
 }
 
-/** Overview RULES. Plain paragraph, exactly as locked. */
-export function officialCoinRulesParagraph(challenge?: OfficialCoinChallenge | null): string {
-  const kind = officialCoinKind(challenge);
-  if (!kind) {
-    return '';
-  }
-  const prize = formatOfficialCoinAmount(officialCoinGuarantee(challenge));
-  if (kind === 'coin_weekly') {
-    return (
-      `Log a workout each Chicago day this week. When Sunday ends, ${prize} coins ` +
-      'split by days logged. Joining mid-week means you can only log the days left. ' +
-      'Misses do not drop you.'
-    );
-  }
-  return (
-    `Log a workout each Chicago day this month. When the month ends, ${prize} coins ` +
-    'split by days logged. Joining mid-month means you can only log the days left. ' +
-    'Misses do not drop you.'
-  );
-}
+/** The one line in the middle of the Overview hero. */
+export const OFFICIAL_COIN_HERO_LINE =
+  'Complete 30-Minutes of exercise each day of the challenge.';
+
+/**
+ * The block under the Overview card. Same for both rooms — the prize number
+ * lives in the Board header and the hero, not in this paragraph.
+ */
+export const OFFICIAL_COIN_ABOUT = {
+  title: 'Official blOb Challenge:',
+  body:
+    'Earn coins by Checking In consistently each day. ' +
+    'The more consistent you are, the higher the prize.',
+  proofTitle: 'Check-In Proof:',
+  proofs: [
+    'a Pre-Workout Selfie',
+    'a Post-Workout Selfie',
+    'Proof of 30-Minutes of Elevated Heart Rate',
+  ],
+} as const;
 
 /** Shown when the roster row started mid-window. */
 export function officialCoinMidWindowLine(
@@ -299,15 +299,79 @@ export function officialCoinMidWindowLine(
   return `You joined mid-${unit}, so ${allowed} of ${full} days are still open to you.`;
 }
 
-export function officialCoinPrizeLine(challenge?: OfficialCoinChallenge | null): string {
-  const kind = officialCoinKind(challenge);
-  if (!kind) {
+export const OFFICIAL_COIN_SPLIT_LINE = 'Split by days logged when the window ends.';
+
+const MONTH_ABBR = [
+  'Jan.', 'Feb.', 'Mar.', 'Apr.', 'May.', 'Jun.',
+  'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.',
+] as const;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The last Chicago day people can still log. `ends_at` is exclusive — it is the
+ * next window's midnight — so the readable end date is the day before it.
+ */
+export function officialCoinLastDayKey(challenge?: OfficialCoinChallenge | null): string {
+  const endsAt = challenge?.ends_at ? new Date(challenge.ends_at) : null;
+  if (!endsAt || Number.isNaN(endsAt.getTime())) {
     return '';
   }
-  return `${formatOfficialCoinAmount(officialCoinGuarantee(challenge))} coins, guaranteed by blOb.`;
+  return officialCoinDateStamp(new Date(endsAt.getTime() - 1));
 }
 
-export const OFFICIAL_COIN_SPLIT_LINE = 'Split by days logged when the window ends.';
+/** `Sep. 30, 2026`. No clock, ever. */
+export function officialCoinEndDateLabel(challenge?: OfficialCoinChallenge | null): string {
+  const key = officialCoinLastDayKey(challenge);
+  if (!key) {
+    return '';
+  }
+  const [year, month, day] = key.split('-').map(Number);
+  const abbr = MONTH_ABBR[Math.min(Math.max(month, 1), 12) - 1];
+  return `${abbr} ${day}, ${year}`;
+}
+
+function pad2(value: number): string {
+  return String(Math.max(Math.trunc(value), 0)).padStart(2, '0');
+}
+
+export type OfficialCoinClock = { line: string; urgent: boolean };
+
+/**
+ * Top-right of the Overview hero.
+ * More than a day out -> `Ends Sep. 30, 2026`.
+ * Inside the last day -> a ticking `Ends in HH:MM:SS`.
+ * Past the window   -> `Ended Sep. 30, 2026`.
+ */
+export function officialCoinEndClock(
+  challenge?: OfficialCoinChallenge | null,
+  now: Date | number = new Date(),
+): OfficialCoinClock | null {
+  if (!isOfficialCoinChallenge(challenge)) {
+    return null;
+  }
+  const label = officialCoinEndDateLabel(challenge);
+  const endsAt = challenge?.ends_at ? new Date(challenge.ends_at).getTime() : NaN;
+  if (!label || !Number.isFinite(endsAt)) {
+    return null;
+  }
+  const nowMs = now instanceof Date ? now.getTime() : Number(now);
+  const left = endsAt - nowMs;
+  if (left <= 0) {
+    return { line: `Ended ${label}`, urgent: false };
+  }
+  if (left > DAY_MS) {
+    return { line: `Ends ${label}`, urgent: false };
+  }
+  const total = Math.floor(left / 1000);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  return {
+    line: `Ends in ${pad2(hours)}:${pad2(minutes)}:${pad2(seconds)}`,
+    urgent: true,
+  };
+}
 
 /** Leave Official drops both rooms. Warn first. */
 export const OFFICIAL_COIN_LEAVE_CONFIRM = {

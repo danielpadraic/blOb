@@ -16,11 +16,14 @@ import {
   officialCoinDaysLeft,
   officialCoinGuarantee,
   officialCoinKind,
+  officialCoinEndClock,
+  officialCoinEndDateLabel,
   officialCoinMidWindowLine,
   officialCoinPickerRank,
   officialCoinRoomIds,
-  officialCoinRulesParagraph,
   officialCoinScoreLabel,
+  OFFICIAL_COIN_ABOUT,
+  OFFICIAL_COIN_HERO_LINE,
   officialCoinWindowBounds,
   officialCoinWindowDays,
 } from '@/lib/officialCoin';
@@ -175,25 +178,88 @@ describe('officialCoinBoardHeaderLine', () => {
   });
 });
 
-describe('officialCoinRulesParagraph', () => {
-  it('uses the locked weekly wording', () => {
-    expect(officialCoinRulesParagraph(WEEKLY)).toBe(
-      'Log a workout each Chicago day this week. When Sunday ends, 100 coins split by days logged. ' +
-        'Joining mid-week means you can only log the days left. Misses do not drop you.',
+describe('Overview copy', () => {
+  it('uses the locked Official blOb Challenge block', () => {
+    expect(OFFICIAL_COIN_ABOUT.title).toBe('Official blOb Challenge:');
+    expect(OFFICIAL_COIN_ABOUT.body).toBe(
+      'Earn coins by Checking In consistently each day. ' +
+        'The more consistent you are, the higher the prize.',
+    );
+    expect(OFFICIAL_COIN_ABOUT.proofTitle).toBe('Check-In Proof:');
+    expect([...OFFICIAL_COIN_ABOUT.proofs]).toEqual([
+      'a Pre-Workout Selfie',
+      'a Post-Workout Selfie',
+      'Proof of 30-Minutes of Elevated Heart Rate',
+    ]);
+  });
+
+  it('puts one 30-minute line in the hero', () => {
+    expect(OFFICIAL_COIN_HERO_LINE).toBe(
+      'Complete 30-Minutes of exercise each day of the challenge.',
     );
   });
 
-  it('uses the locked monthly wording', () => {
-    expect(officialCoinRulesParagraph(MONTHLY)).toBe(
-      'Log a workout each Chicago day this month. When the month ends, 1,000 coins split by days logged. ' +
-        'Joining mid-month means you can only log the days left. Misses do not drop you.',
-    );
+  it('drops the old house-room paragraph and never says CST', () => {
+    const shown = [
+      OFFICIAL_COIN_HERO_LINE,
+      OFFICIAL_COIN_ABOUT.title,
+      OFFICIAL_COIN_ABOUT.body,
+      OFFICIAL_COIN_ABOUT.proofTitle,
+      ...OFFICIAL_COIN_ABOUT.proofs,
+    ].join(' ');
+    expect(shown).not.toContain('The house room');
+    expect(shown).not.toContain('Log a workout each Chicago day');
+    expect(shown).not.toContain('CST');
+  });
+});
+
+describe('officialCoinEndClock', () => {
+  it('prints the last Chicago day, not the exclusive end instant', () => {
+    // Monthly ends_at is Oct 1 00:00 Chicago, so the readable end is Sep 30.
+    expect(officialCoinEndDateLabel(MONTHLY)).toBe('Sep. 30, 2026');
+    // Weekly ends_at is Mon Sep 28 00:00 Chicago, so the readable end is Sun Sep 27.
+    expect(officialCoinEndDateLabel(WEEKLY)).toBe('Sep. 27, 2026');
   });
 
-  it('never says CST or names a settlement amount later', () => {
-    const both = officialCoinRulesParagraph(WEEKLY) + officialCoinRulesParagraph(MONTHLY);
-    expect(both).not.toContain('CST');
-    expect(both).not.toContain('determined at settlement');
+  it('shows the date with no clock while more than a day is left', () => {
+    expect(officialCoinEndClock(MONTHLY, FRIDAY)).toEqual({
+      line: 'Ends Sep. 30, 2026',
+      urgent: false,
+    });
+    const weekly = officialCoinEndClock(WEEKLY, FRIDAY);
+    expect(weekly?.line).toBe('Ends Sep. 27, 2026');
+    expect(weekly?.line).not.toContain('PM');
+    expect(weekly?.line).not.toContain(':');
+  });
+
+  it('switches to a ticking countdown inside the last 24 hours', () => {
+    // 02:30:15 before the weekly window closes.
+    const closeAt = new Date('2026-09-28T05:00:00.000Z').getTime();
+    const clock = officialCoinEndClock(WEEKLY, new Date(closeAt - (2 * 3600 + 30 * 60 + 15) * 1000));
+    expect(clock).toEqual({ line: 'Ends in 02:30:15', urgent: true });
+  });
+
+  it('pads every field to two digits and counts down by the second', () => {
+    const closeAt = new Date('2026-09-28T05:00:00.000Z').getTime();
+    const at = (msLeft: number) => officialCoinEndClock(WEEKLY, new Date(closeAt - msLeft))?.line;
+    expect(at(150_000)).toBe('Ends in 00:02:30');
+    expect(at(149_000)).toBe('Ends in 00:02:29');
+    expect(at(9_000)).toBe('Ends in 00:00:09');
+    expect(at(1_000)).toBe('Ends in 00:00:01');
+    // Just inside the 24h boundary still counts, not a date.
+    expect(at(24 * 60 * 60 * 1000 - 1000)).toBe('Ends in 23:59:59');
+  });
+
+  it('reads Ended once the window closes', () => {
+    const closeAt = new Date('2026-09-28T05:00:00.000Z').getTime();
+    expect(officialCoinEndClock(WEEKLY, new Date(closeAt))).toEqual({
+      line: 'Ended Sep. 27, 2026',
+      urgent: false,
+    });
+  });
+
+  it('is null for anything that is not a house room', () => {
+    expect(officialCoinEndClock({ id: 'x', ends_at: WEEKLY.ends_at }, FRIDAY)).toBeNull();
   });
 });
 
@@ -246,8 +312,8 @@ describe('public titles', () => {
       OFFICIAL_COIN_REJOIN_PILL.subline,
       OFFICIAL_COIN_LEAVE_CONFIRM.title,
       OFFICIAL_COIN_LEAVE_CONFIRM.body,
-      officialCoinRulesParagraph(WEEKLY),
-      officialCoinRulesParagraph(MONTHLY),
+      OFFICIAL_COIN_HERO_LINE,
+      OFFICIAL_COIN_ABOUT.body,
       officialCoinBoardHeaderLine(WEEKLY, FRIDAY),
       officialCoinBoardHeaderLine(MONTHLY, FRIDAY),
     ].join(' | ');

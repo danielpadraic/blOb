@@ -23,6 +23,11 @@ import { challengeCardTags } from '@/lib/challengeTags';
 import { isOfficialJoinable } from '@/lib/officialSeries';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import {
+  isOfficialCoinChallenge,
+  officialCoinEndClock,
+  OFFICIAL_COIN_HERO_LINE,
+} from '@/lib/officialCoin';
+import {
   calloutCardChrome,
   calloutPartySubtitle,
   calloutPersonName,
@@ -58,6 +63,9 @@ type ChallengeHeroCardProps = {
   onInvite?: () => void;
   children?: ReactNode;
 };
+
+/** Same Bob the Official lobby cards use. No new art. */
+const BOB_WATERMARK = require('@/assets/login/blob-login.png');
 
 const OFFICIAL_HERO = ['#1B5A50', '#123832', '#0E2421'] as const;
 const USER_HERO = ['#FFFFFF', '#F7F7F5'] as const;
@@ -106,6 +114,9 @@ export function ChallengeHeroCard({
     ? 'text-[16px] font-extrabold text-white'
     : 'text-[16px] font-extrabold text-charcoal';
   const hostName = host?.display_name?.trim() || host?.username || '';
+  const coinRoom = isOfficialCoinChallenge(challenge);
+  // Chicago calendar end date, then a live countdown inside the last day.
+  const coinClock = coinRoom ? officialCoinEndClock(challenge, nowMs) : null;
 
   const summary = (
     <View className="gap-3">
@@ -124,7 +135,21 @@ export function ChallengeHeroCard({
           </AppText>
         </View>
         <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
-          <ChallengeCardClock challenge={challenge} nowMs={nowMs} overlay light={official} />
+          {coinClock ? (
+            <AppText
+              style={{
+                color: coinClock.urgent ? THEME.accentBright : 'rgba(255,255,255,0.86)',
+                fontSize: 10,
+                lineHeight: 13,
+                textAlign: 'right',
+                fontVariant: coinClock.urgent ? ['tabular-nums'] : undefined,
+              }}
+              numberOfLines={1}>
+              {coinClock.line}
+            </AppText>
+          ) : (
+            <ChallengeCardClock challenge={challenge} nowMs={nowMs} overlay light={official} />
+          )}
           <ChallengeHeroOverflowButton light={official} />
         </View>
       </View>
@@ -176,6 +201,11 @@ export function ChallengeHeroCard({
             </AppText>
           </AppText>
         </ProfileLink>
+      ) : null}
+      {coinRoom ? (
+        <AppText className="text-[14px] leading-5" style={{ color: 'rgba(255,255,255,0.88)' }}>
+          {OFFICIAL_COIN_HERO_LINE}
+        </AppText>
       ) : null}
       <ProofRequirementIcons challenge={challenge} tint={official ? 'light' : 'dark'} />
       {cancelled ? (
@@ -315,6 +345,33 @@ export function ChallengeHeroCard({
           cachePolicy="memory-disk"
           accessibilityLabel={`${challenge.title} cover`}
         />
+      ) : null}
+      {coinRoom && !challenge.cover_image_url ? (
+        /* House watermark. Right edge only, low opacity, behind the type. */
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            right: -18,
+            top: 0,
+            bottom: 0,
+            width: '44%',
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: 0.14,
+          }}>
+          <Image
+            source={BOB_WATERMARK}
+            style={{ width: '100%', height: '82%', backgroundColor: 'transparent' }}
+            contentFit="contain"
+            contentPosition="center"
+            cachePolicy="memory-disk"
+            recyclingKey="bob-official-coin-hero"
+            accessibilityLabel=""
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          />
+        </View>
       ) : null}
       <View className="gap-3 p-4">
         {onOpen ? (
