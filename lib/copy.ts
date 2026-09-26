@@ -839,8 +839,13 @@ const STRINGS = {
   'mute.undone': 'Unmuted.',
   'mute.failed': 'Couldn’t update that',
   'health.permissionDenied': 'Health access is off. Add a photo instead.',
+  'health.howToIos': 'Settings → Apps → Health → Data Access & Devices → blOb',
+  'health.permissionDeniedIos':
+    'Health access is off. Turn it on in Settings → Apps → Health → Data Access & Devices → blOb. Or add a photo.',
   'health.empty':
     'No Watch workout in this window yet. Finish the workout on your Watch, wait a minute, or add a photo.',
+  'health.emptyIos':
+    'No Watch workout in this window yet. Finish the workout on your Watch, wait a minute, or add a photo. If Health is off: Settings → Apps → Health → Data Access & Devices → blOb.',
   'health.useWorkout': 'Use this workout',
   'health.addPhoto': 'Add photo',
   'health.disconnect': 'We won’t read new workouts. Proofs you already checked in stay.',

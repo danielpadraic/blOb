@@ -47,7 +47,8 @@ const OFFICIAL_BOB = {
   legalAge: OFFICIAL_DETAILS_LINES[7],
   proofCamera: 'A phone camera is required for this challenge.',
   proofHeart:
-    'Heart-rate proof is required (Watch, Fitness, or a screenshot). If Apple Health was denied, turn it on in iPhone Settings → Health → blOb.',
+    'Heart-rate proof is required (Watch, Fitness, or a screenshot). If Apple Health was denied, turn it on in Settings → Apps → Health → Data Access & Devices → blOb.',
+  proofHeartAndroid: 'Heart-rate proof is required (Watch, Fitness, or a screenshot).',
   detailsHardware: OFFICIAL_DETAILS_LINES[3],
   detailsFlag: OFFICIAL_DETAILS_LINES[4],
   detailsOut: OFFICIAL_DETAILS_LINES[5],

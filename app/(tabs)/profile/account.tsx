@@ -17,6 +17,7 @@ import { useHealthConnection } from '@/hooks/useHealthConnection';
 import { useMyProfile, useUpdateProfile, useUsernameAvailability } from '@/hooks/useProfile';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { copy } from '@/lib/copy';
+import { healthPermissionDeniedMessage } from '@/lib/health/howTo';
 import { replayTutorial, setCreateTourOptOut } from '@/lib/legal';
 import { draftFromProfile, payoutAddressPatch, type PayoutAddressDraft } from '@/lib/payoutAddress';
 import { tabBarLift, THEME } from '@/lib/theme';
@@ -234,7 +235,7 @@ export default function AccountScreen() {
               }
               void health.connect().then((row) => {
                 if (row.status === 'not_connected') {
-                  Alert.alert(health.title, copy('health.permissionDenied'));
+                  Alert.alert(health.title, healthPermissionDeniedMessage());
                   return;
                 }
                 if (row.status === 'unavailable') {

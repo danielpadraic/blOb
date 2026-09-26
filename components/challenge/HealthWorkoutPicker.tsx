@@ -9,6 +9,7 @@ import { useProfile } from '@/hooks/useProfile';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { copy } from '@/lib/copy';
+import { healthEmptyMessage, healthPermissionDeniedMessage } from '@/lib/health/howTo';
 import {
   healthAttachRulesFor,
   workoutAttachBlockReason,
@@ -327,7 +328,7 @@ export function HealthWorkoutPicker({
           <AppText className="mt-2 text-sm text-muted">{copy('health.offline')}</AppText>
         ) : null}
         {denied ? (
-          <AppText className="mt-2 text-sm text-muted">{copy('health.permissionDenied')}</AppText>
+          <AppText className="mt-2 text-sm text-muted">{healthPermissionDeniedMessage()}</AppText>
         ) : null}
       </View>
 
@@ -354,7 +355,7 @@ export function HealthWorkoutPicker({
         <View className="flex-1 items-center px-6 pt-8">
           <BlobMascot size={96} motion="float" />
           <AppText className="mt-3 text-center text-[15px] font-semibold text-charcoal">
-            {copy('health.empty')}
+            {healthEmptyMessage()}
           </AppText>
           <View className="mt-5 w-full gap-3">
             <Button title={copy('health.addPhoto')} size="lg" onPress={onAddPhoto} />

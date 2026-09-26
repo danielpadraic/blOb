@@ -10,6 +10,7 @@ import { HealthWorkoutSheet } from '@/components/challenge/HealthWorkoutSheet';
 import { AppText } from '@/components/ui/AppText';
 import { proofMeta } from '@/lib/constants';
 import { copy } from '@/lib/copy';
+import { healthPermissionDeniedMessage } from '@/lib/health/howTo';
 import type { ChallengeProof } from '@/lib/challengeProofs';
 import {
   cameraIsAvailable,
@@ -276,8 +277,9 @@ export function ProofUploader({
             onClose={() => setHealthOpen(false)}
             onDenied={() => {
               setHealthOpen(false);
-              setToast(copy('health.permissionDenied'));
-              setTimeout(() => setToast((current) => (current === copy('health.permissionDenied') ? null : current)), 2200);
+              const denied = healthPermissionDeniedMessage();
+              setToast(denied);
+              setTimeout(() => setToast((current) => (current === denied ? null : current)), 2200);
             }}
             onAttach={health.onAttach}
           />

@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyProfile } from '@/hooks/useProfile';
 import { asCopyTone, copy } from '@/lib/copy';
+import { healthHowToLine } from '@/lib/health/howTo';
 import { fetchHealthConnection, upsertHealthConnection } from '@/lib/health/remote';
 import { getHealthProvider } from '@/services/health';
 import { getErrorMessage } from '@/utils/errors';
@@ -141,7 +142,14 @@ export function useHealthConnection() {
     available,
     showRow,
     title,
-    helper: Platform.OS === 'android' ? copy('health.androidHelper') : Platform.OS === 'ios' ? copy('health.reads') : null,
+    helper:
+      Platform.OS === 'android'
+        ? copy('health.androidHelper')
+        : Platform.OS === 'ios'
+          ? status === 'not_connected'
+            ? healthHowToLine()
+            : copy('health.reads')
+          : healthHowToLine(),
     lastSyncedLabel,
     lastError: Platform.OS === 'ios' ? row?.lastError ?? null : null,
     status,

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
@@ -122,7 +122,9 @@ export function ProofRequirementIcons({ challenge, tint = 'light' }: ProofRequir
 
   const color = tint === 'light' ? '#FFFFFF' : THEME.textPrimary;
   const copyFor = (kind: ProofKind) =>
-    kind === 'camera' ? officialBob('proofCamera') : officialBob('proofHeart');
+    kind === 'camera'
+      ? officialBob('proofCamera')
+      : officialBob(Platform.OS === 'android' ? 'proofHeartAndroid' : 'proofHeart');
 
   return (
     <View style={{ zIndex: 8 }}>
