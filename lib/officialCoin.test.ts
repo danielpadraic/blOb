@@ -22,8 +22,10 @@ import {
   officialCoinPickerRank,
   officialCoinRoomIds,
   officialCoinScoreLabel,
+  officialCoinToFinishLabel,
   OFFICIAL_COIN_ABOUT,
   OFFICIAL_COIN_HERO_LINE,
+  OFFICIAL_COIN_MECHANICS,
   officialCoinWindowBounds,
   officialCoinWindowDays,
 } from '@/lib/officialCoin';
@@ -210,6 +212,46 @@ describe('Overview copy', () => {
     expect(shown).not.toContain('The house room');
     expect(shown).not.toContain('Log a workout each Chicago day');
     expect(shown).not.toContain('CST');
+  });
+});
+
+describe('MECHANICS', () => {
+  it('lists the three proofs as sentences with their method', () => {
+    expect(OFFICIAL_COIN_MECHANICS.proofs.map((p) => [p.label, p.method])).toEqual([
+      ['Post a pre-workout selfie.', 'Photo'],
+      ['Post a post-workout selfie.', 'Photo'],
+      ['Share proof of at least 30 minutes of elevated heart rate.', 'Heart rate'],
+    ]);
+  });
+
+  it('counts TO FINISH from the real window, never a hardcoded 30', () => {
+    expect(officialCoinToFinishLabel(WEEKLY, FRIDAY)).toBe('7-Day Consistency');
+    expect(officialCoinToFinishLabel(MONTHLY, FRIDAY)).toBe('30-Day Consistency');
+    // February rolls the same room to 29 without a code change.
+    expect(
+      officialCoinToFinishLabel(
+        { ...MONTHLY, starts_at: '2028-02-01T06:00:00.000Z', ends_at: '2028-03-01T06:00:00.000Z' },
+        new Date('2028-02-10T18:00:00.000Z'),
+      ),
+    ).toBe('29-Day Consistency');
+  });
+
+  it('never says month or 30 on the weekly room', () => {
+    const weekly = [
+      officialCoinToFinishLabel(WEEKLY, FRIDAY),
+      officialCoinMidWindowLine(WEEKLY, { window_starts_at: '2026-09-25T17:59:33.000Z' }, FRIDAY),
+      officialCoinEndDateLabel(WEEKLY),
+    ].join(' ');
+    expect(weekly).not.toContain('month');
+    expect(weekly).not.toContain('30-Day');
+    expect(weekly).toContain('mid-week');
+    expect(weekly).toContain('7');
+  });
+
+  it('says mid-month on the monthly room', () => {
+    expect(
+      officialCoinMidWindowLine(MONTHLY, { window_starts_at: '2026-09-25T17:59:33.000Z' }, FRIDAY),
+    ).toBe('You joined mid-month, so 6 of 30 days are still open to you.');
   });
 });
 

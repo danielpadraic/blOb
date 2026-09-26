@@ -280,6 +280,31 @@ export const OFFICIAL_COIN_ABOUT = {
   ],
 } as const;
 
+/**
+ * MECHANICS card. One list for both rooms — only the day count moves.
+ * Order matches the proofs on the challenge row: pre, post, heart rate.
+ */
+export const OFFICIAL_COIN_MECHANICS = {
+  proofs: [
+    { id: 'pre', label: 'Post a pre-workout selfie.', method: 'Photo' },
+    { id: 'post', label: 'Post a post-workout selfie.', method: 'Photo' },
+    {
+      id: 'hr',
+      label: 'Share proof of at least 30 minutes of elevated heart rate.',
+      method: 'Heart rate',
+    },
+  ],
+} as const;
+
+/** TO FINISH. `7-Day Consistency` weekly, `30-Day Consistency` in September. */
+export function officialCoinToFinishLabel(
+  challenge?: OfficialCoinChallenge | null,
+  now: Date = new Date(),
+): string {
+  const days = officialCoinWindowDays(challenge, now);
+  return days > 0 ? `${days}-Day Consistency` : '';
+}
+
 /** Shown when the roster row started mid-window. */
 export function officialCoinMidWindowLine(
   challenge?: OfficialCoinChallenge | null,

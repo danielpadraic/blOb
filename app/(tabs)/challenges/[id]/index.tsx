@@ -210,7 +210,11 @@ import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { useStableChallengeRouteId, scrollNodeTo } from '@/lib/challengeRoute';
 import { copy } from '@/lib/copy';
 import { isViewerOutOfPrize } from '@/lib/lobbyChallenge';
-import { isOfficialCoinChallenge } from '@/lib/officialCoin';
+import {
+  isOfficialCoinChallenge,
+  officialCoinToFinishLabel,
+  OFFICIAL_COIN_MECHANICS,
+} from '@/lib/officialCoin';
 import { officialCashJoinBlock } from '@/lib/officialCash';
 import { officialDobStatus } from '@/lib/officialDob';
 import { getErrorMessage } from '@/utils/errors';
@@ -1480,7 +1484,8 @@ export default function ChallengeDetailScreen() {
           <ChallengeLifecycleStatus status={challenge.status} />
         </View>
         ) : null}
-        {pageTab === 'overview' && !isCalloutObserver && lobbyAllowed ? (
+        {/* Official Coin puts the Board under MECHANICS — see below. */}
+        {pageTab === 'overview' && !isCalloutObserver && lobbyAllowed && !officialCoinRoom ? (
           <View className="mt-3">
             <ChallengeLeaderboard
               variant="compact"
@@ -1646,9 +1651,11 @@ export default function ChallengeDetailScreen() {
                 ? comparablePointsHeadline(comparableConfig)
                 : isPoints
                   ? `${totalTaskPoints(tasks)} pts`
-                  : challenge.is_official
-                    ? challengeGoalLabel(challenge)
-                    : ruleCopy.toFinish || challenge.task?.trim() || ruleCopy.cadenceLong}
+                  : officialCoinRoom
+                    ? officialCoinToFinishLabel(challenge, new Date(nowMs))
+                    : challenge.is_official
+                      ? challengeGoalLabel(challenge)
+                      : ruleCopy.toFinish || challenge.task?.trim() || ruleCopy.cadenceLong}
             </AppText>
           {comparable && comparableConfig ? (
               <View className="mt-1 gap-1">
@@ -1673,7 +1680,31 @@ export default function ChallengeDetailScreen() {
               <AppText className="mt-1 text-xs leading-4 text-muted">{ruleCopy.totalHint}</AppText>
             )}
           </View>
-          {isPoints || usesPointsBoard(challenge) || proofSteps.length === 0 ? null : (
+          {officialCoinRoom ? (
+            /* One locked proof list, same words on both rooms. */
+            <View>
+              <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
+                {proofHeadline}
+              </AppText>
+              <View className="mt-2 gap-2.5">
+                {OFFICIAL_COIN_MECHANICS.proofs.map((proof, index) => (
+                  <View key={proof.id} className="flex-row gap-3">
+                    <View
+                      className="h-6 w-6 items-center justify-center rounded-full"
+                      style={{ backgroundColor: THEME.accentSoft }}>
+                      <AppText className="text-[12px] font-bold" style={{ color: THEME.accent }}>
+                        {index + 1}
+                      </AppText>
+                    </View>
+                    <View className="flex-1">
+                      <AppText className="font-semibold text-charcoal">{proof.label}</AppText>
+                      <AppText className="text-[13px] leading-5 text-muted">{proof.method}</AppText>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : isPoints || usesPointsBoard(challenge) || proofSteps.length === 0 ? null : (
             <View>
               <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
                 {proofHeadline}
@@ -1711,6 +1742,25 @@ export default function ChallengeDetailScreen() {
             </View>
           )}
         </Card>
+
+        {/* Board sits after MECHANICS on a house room, with Members below it. */}
+        {officialCoinRoom && pageTab === 'overview' && !isCalloutObserver && lobbyAllowed ? (
+          <View className="mt-3">
+            <ChallengeLeaderboard
+              variant="compact"
+              challenge={challenge}
+              roster={boardRoster}
+              completedUserIds={completions.data ?? new Set()}
+              joined={isJoined}
+              viewerId={user?.id}
+              settlement={moneyPhase === 'settled' ? receipt : null}
+              showReceipt={false}
+              onOpenBoard={() => setPageTab('board')}
+              error={roster.error instanceof Error ? roster.error.message : null}
+              missesUsed={periodMisses.data ?? 0}
+            />
+          </View>
+        ) : null}
 
         {challenge.is_official ? null : (
         <Card className="mt-4">
