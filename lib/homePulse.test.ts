@@ -5,6 +5,7 @@ import {
   PULSE_CAP,
   buildPulsePills,
   isPulsePillEligible,
+  partitionPulsePills,
   pulseChallengeHref,
   pulseSnippet,
   selectPulseChallenges,
@@ -135,12 +136,13 @@ describe('sortPulsePills', () => {
 });
 
 describe('buildPulsePills', () => {
-  it('caps at 12, sorts by last Live post, and keeps Official on the same chrome', () => {
+  it('keeps Official first, uses last Live or check-in for recency, and drops ended', () => {
     const challenges = Array.from({ length: 14 }, (_, index) => ({
       id: `c${index + 1}`,
       status: index === 13 ? 'ended' : 'live',
       title: index === 0 ? 'Official Weekly' : `Peer ${index + 1}`,
       joined: true,
+      official_kind: index === 0 ? 'coin_weekly' : null,
     }));
     const posts = [
       { id: 'p2', challenge_id: 'c2', content: 'starting now', author_id: 'a2', created_at: '2026-09-01T18:00:00.000Z' },
@@ -148,16 +150,34 @@ describe('buildPulsePills', () => {
       { id: 'p3', challenge_id: 'c3', content: 'later', author_id: 'a3', created_at: '2026-09-01T19:00:00.000Z' },
     ];
     const pills = buildPulsePills({ challenges, posts });
-    expect(pills).toHaveLength(PULSE_CAP);
+    expect(pills).toHaveLength(13);
     expect(pills.map((row) => row.id).includes('c14')).toBe(false);
     expect(pills[0]).toMatchObject({
       id: 'c1',
-      title: 'Official Weekly',
       snippet: 'Check-in Complete',
+      officialCoinKind: 'coin_weekly',
     });
+    expect(pills.find((row) => row.id === 'c2')?.lastAt).toBe('2026-09-01T18:00:00.000Z');
     expect(pills.find((row) => row.id === 'c2')?.snippet).toBe('No chatter yet');
     expect(pills.find((row) => row.id === 'c3')?.snippet).toBe('No chatter yet');
     expect(pills.find((row) => row.id === 'c4')?.snippet).toBe('No chatter yet');
+  });
+
+  it('keeps Official on the rail and parks quiet rooms behind See More', () => {
+    const now = Date.parse('2026-09-25T18:00:00.000Z');
+    const rail = partitionPulsePills(
+      [
+        { id: 'quiet', lastAt: '2026-09-10T12:00:00.000Z' },
+        { id: 'pinnacle', lastAt: '2026-09-23T14:00:00.000Z' },
+        { id: 'monthly', lastAt: null, officialCoinKind: 'coin_monthly' as const },
+        { id: 'weekly', lastAt: null, officialCoinKind: 'coin_weekly' as const },
+        { id: 'silent', lastAt: null },
+      ],
+      now,
+    );
+    expect(rail.visible.map((row) => row.id)).toEqual(['weekly', 'monthly', 'pinnacle']);
+    expect(rail.aged.map((row) => row.id)).toEqual(['quiet', 'silent']);
+    expect(rail.visible.length).toBeLessThanOrEqual(PULSE_CAP);
   });
 
   it('keeps Check-in Complete when a later Live reply exists', () => {

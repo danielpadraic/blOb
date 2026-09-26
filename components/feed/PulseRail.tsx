@@ -16,6 +16,7 @@ import { wasHomeTourCompleted } from '@/lib/homeTour';
 import { copy } from '@/lib/copy';
 import { OFFICIAL_COIN_REJOIN_PILL } from '@/lib/officialCoin';
 import {
+  partitionPulsePills,
   pulseChallengeHref,
   sortPulsePills,
   type PulseFace,
@@ -133,6 +134,36 @@ function RejoinOfficialChip({
   );
 }
 
+function SeeMoreChip({
+  expanded,
+  onPress,
+}: {
+  expanded: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={expanded ? copy('pulse.showLess') : copy('pulse.seeMore')}
+      onPress={onPress}
+      style={{
+        width: PILL_WIDTH,
+        minHeight: 44,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: THEME.radius,
+        backgroundColor: THEME.surface2,
+        borderWidth: 1,
+        borderColor: THEME.border,
+        justifyContent: 'center',
+      }}>
+      <AppText numberOfLines={1} className="text-[13px] font-extrabold" style={{ color: THEME.textMuted }}>
+        {expanded ? copy('pulse.showLess') : copy('pulse.seeMore')}
+      </AppText>
+    </Pressable>
+  );
+}
+
 /** Home Pulse. Fetches itself so a refresh does not remount the Home composer. */
 export function PulseRail() {
   const { user } = useAuth();
@@ -163,6 +194,8 @@ export function PulseRail() {
     }
   }, [coin.status.canRejoin]);
 
+  const [showAged, setShowAged] = useState(false);
+
   const pills = useMemo(() => {
     const live = pulse.data ?? [];
     if (!rejoined) {
@@ -181,6 +214,8 @@ export function PulseRail() {
       }));
     return sortPulsePills([...optimistic, ...live]);
   }, [coin.status.rooms, pulse.data, rejoined]);
+
+  const { visible, aged } = useMemo(() => partitionPulsePills(pills), [pills]);
 
   const showRail = showRejoin || (pulse.isFetched && !pulse.isError && pills.length > 0);
   const homeTourDone = wasHomeTourCompleted(profile?.id, profile?.tutorial_completed_at);
@@ -220,9 +255,18 @@ export function PulseRail() {
             onPress={onRejoin}
           />
         ) : null}
-        {pills.map((pill) => (
+        {visible.map((pill) => (
           <PulseChip key={pill.id} pill={pill} />
         ))}
+        {showAged
+          ? aged.map((pill) => <PulseChip key={pill.id} pill={pill} />)
+          : null}
+        {aged.length > 0 ? (
+          <SeeMoreChip
+            expanded={showAged}
+            onPress={() => setShowAged((open) => !open)}
+          />
+        ) : null}
       </ScrollView>
     </View>
     </TourAnchor>

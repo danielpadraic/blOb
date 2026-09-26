@@ -202,6 +202,47 @@ export function buildHonorProofCard(input: {
   };
 }
 
+/** Build display stats from the check-in log so every Live viewer sees the same card. */
+export function honorStatsFromLog(input: {
+  config: ComparablePointsConfig | null | undefined;
+  metrics?: unknown;
+  laneId?: string | null;
+  title?: string | null;
+  periodKey?: string | null;
+  timeZone?: string | null;
+  existing?: CheckinProofStats | null;
+}): CheckinProofStats | null {
+  if (isHonorCardStats(input.existing)) {
+    return input.existing;
+  }
+  if (!input.config) {
+    return input.existing ?? null;
+  }
+  const metrics = honorMetricsFromCheckin(input.metrics);
+  if (Object.keys(metrics).length === 0) {
+    return input.existing ?? null;
+  }
+  const card = buildHonorProofCard({
+    config: input.config,
+    metrics,
+    laneId: input.laneId,
+    title: String(input.title ?? '').trim() || 'Check-in',
+    periodKey: String(input.periodKey ?? ''),
+    timeZone: String(input.timeZone ?? '').trim() || 'UTC',
+  });
+  if (!card) {
+    return input.existing ?? null;
+  }
+  return honorCardStatsPayload({
+    fields: card.fields,
+    laneId: input.laneId,
+    laneLabel: card.laneLabel,
+    title: card.title,
+    periodLabel: card.periodLabel,
+    cardUrl: input.existing?.card_url ?? null,
+  });
+}
+
 export function honorCardModelFromStats(
   stats?: CheckinProofStats | null,
   title?: string | null,

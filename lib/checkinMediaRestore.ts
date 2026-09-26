@@ -13,7 +13,11 @@ import {
   uniqueProofUrls,
   type ChallengeProofPart,
 } from '@/lib/challengeProofs';
+import { challengeDisplayTitle } from '@/lib/challengeTitle';
+import { honorStatsFromLog, isHonorCardStats } from '@/lib/checkin/honorCard';
 import type { CheckinProofStats } from '@/lib/checkin/proofStats';
+import { challengeClockTz } from '@/lib/checkinPeriod';
+import { comparablePointsFromChallenge } from '@/lib/comparablePoints';
 import { isVendorHealthSlot } from '@/lib/health/ocrBackfill';
 import {
   isRecapCardUrl,
@@ -30,10 +34,23 @@ export type CachedCheckinMedia = {
 
 export type CheckinProofMediaRow = {
   id?: string | null;
+  challenge_id?: string | null;
+  user_id?: string | null;
+  metric_values?: unknown;
+  period_key?: string | null;
   proof_parts?: unknown;
   pre_selfie_url?: string | null;
   post_selfie_url?: string | null;
   hr_monitor_url?: string | null;
+};
+
+export type CheckinProofMedia = {
+  urls: string[];
+  cardUrl: string;
+  challenge_id?: string | null;
+  user_id?: string | null;
+  metric_values?: unknown;
+  period_key?: string | null;
 };
 
 function asUrlList(value: unknown): string[] {
@@ -194,16 +211,18 @@ export function collectCachedCheckinMedia(
 
 export async function fetchCheckinProofMedia(
   checkinIds: string[],
-): Promise<Map<string, { urls: string[]; cardUrl: string }>> {
+): Promise<Map<string, CheckinProofMedia>> {
   const ids = [...new Set(checkinIds.map((id) => liveCheckinKey(id)).filter(Boolean))];
-  const out = new Map<string, { urls: string[]; cardUrl: string }>();
+  const out = new Map<string, CheckinProofMedia>();
   if (ids.length === 0) {
     return out;
   }
   try {
     const { data, error } = await supabase
       .from('challenge_checkins')
-      .select('id, proof_parts, pre_selfie_url, post_selfie_url, hr_monitor_url')
+      .select(
+        'id, challenge_id, user_id, metric_values, period_key, proof_parts, pre_selfie_url, post_selfie_url, hr_monitor_url',
+      )
       .in('id', ids);
     if (error || !Array.isArray(data)) {
       return out;
@@ -216,10 +235,123 @@ export async function fetchCheckinProofMedia(
       out.set(id, {
         urls: mediaUrlsFromProofParts(row.proof_parts, row),
         cardUrl: vendorCardUrlFromProofParts(row.proof_parts),
+        challenge_id: row.challenge_id ?? null,
+        user_id: row.user_id ?? null,
+        metric_values: row.metric_values,
+        period_key: row.period_key ?? null,
       });
     }
   } catch {
     return out;
+  }
+  return out;
+}
+
+async function honorStatsForLivePosts(
+  posts: Array<{
+    checkin_id?: string | null;
+    author_id?: string | null;
+    challenge_id?: string | null;
+    checkin_stats?: unknown;
+  }>,
+  parts: Map<string, CheckinProofMedia>,
+): Promise<Map<string, CheckinProofStats>> {
+  const out = new Map<string, CheckinProofStats>();
+  const needIds = new Set<string>();
+  const authorByCheckin = new Map<string, string>();
+  const challengeByCheckin = new Map<string, string>();
+  for (const post of posts) {
+    const checkinId = liveCheckinKey(post.checkin_id);
+    const row = checkinId ? parts.get(checkinId) : undefined;
+    if (!checkinId || !row || isHonorCardStats(asStats(post.checkin_stats))) {
+      continue;
+    }
+    needIds.add(checkinId);
+    const authorId = String(post.author_id ?? row.user_id ?? '').trim();
+    if (authorId) {
+      authorByCheckin.set(checkinId, authorId);
+    }
+    const challengeId = String(post.challenge_id ?? row.challenge_id ?? '').trim();
+    if (challengeId) {
+      challengeByCheckin.set(checkinId, challengeId);
+    }
+  }
+  if (needIds.size === 0) {
+    return out;
+  }
+  const challengeIds = [...new Set([...challengeByCheckin.values(), ...[...needIds].map((id) => String(parts.get(id)?.challenge_id ?? '').trim())].filter(Boolean))];
+  const challenges = new Map<
+    string,
+    { id: string; title?: string | null; scoring_config?: unknown; timezone?: string | null }
+  >();
+  if (challengeIds.length > 0) {
+    const { data, error } = await supabase
+      .from('challenges')
+      .select('id, title, scoring_config, timezone')
+      .in('id', challengeIds);
+    if (!error && Array.isArray(data)) {
+      for (const row of data as Array<{
+        id?: string;
+        title?: string | null;
+        scoring_config?: unknown;
+        timezone?: string | null;
+      }>) {
+        const id = String(row.id ?? '').trim();
+        if (id) {
+          challenges.set(id, {
+            id,
+            title: row.title,
+            scoring_config: row.scoring_config,
+            timezone: row.timezone,
+          });
+        }
+      }
+    }
+  }
+  const lanes = new Map<string, string | null>();
+  const userIds = [...new Set([...authorByCheckin.values(), ...[...needIds].map((id) => String(parts.get(id)?.user_id ?? '').trim())].filter(Boolean))];
+  if (challengeIds.length > 0 && userIds.length > 0) {
+    const { data, error } = await supabase
+      .from('challenge_participants')
+      .select('challenge_id, user_id, scoring_lane')
+      .in('challenge_id', challengeIds)
+      .in('user_id', userIds);
+    if (!error && Array.isArray(data)) {
+      for (const row of data as Array<{
+        challenge_id?: string | null;
+        user_id?: string | null;
+        scoring_lane?: string | null;
+      }>) {
+        const key = `${String(row.challenge_id ?? '').trim()}:${String(row.user_id ?? '').trim()}`;
+        if (key !== ':') {
+          lanes.set(key, row.scoring_lane ?? null);
+        }
+      }
+    }
+  }
+  for (const checkinId of needIds) {
+    const row = parts.get(checkinId);
+    if (!row) {
+      continue;
+    }
+    const challengeId = challengeByCheckin.get(checkinId) || String(row.challenge_id ?? '').trim();
+    const challenge = challenges.get(challengeId);
+    const config = comparablePointsFromChallenge(challenge);
+    if (!config) {
+      continue;
+    }
+    const userId = authorByCheckin.get(checkinId) || String(row.user_id ?? '').trim();
+    const stats = honorStatsFromLog({
+      config,
+      metrics: row.metric_values,
+      laneId: lanes.get(`${challengeId}:${userId}`) ?? null,
+      title: challengeDisplayTitle(challenge),
+      periodKey: row.period_key,
+      timeZone: challengeClockTz(challenge),
+    });
+    if (stats) {
+      out.set(checkinId, stats);
+    }
   }
   return out;
 }
@@ -253,17 +385,24 @@ export async function hydrateLiveCheckinMedia<T extends {
     ...new Set(posts.map((post) => liveCheckinKey(post.checkin_id)).filter(Boolean)),
   ];
   const parts = await fetchCheckinProofMedia(uniqueNeed);
+  let honorByCheckin = new Map<string, CheckinProofStats>();
+  try {
+    honorByCheckin = await honorStatsForLivePosts(posts, parts);
+  } catch {
+    honorByCheckin = new Map();
+  }
 
   let changed = false;
   const next = posts.map((post) => {
     const checkinId = liveCheckinKey(post.checkin_id);
     const fromCache = cached.get(checkinId) ?? cached.get(post.id);
     const fromParts = checkinId ? parts.get(checkinId) : undefined;
+    const honorStats = checkinId ? honorByCheckin.get(checkinId) : undefined;
     const restored = restoreCheckinMediaUrls({
       mediaUrls: post.media_urls,
       homeMediaUrls: fromCache?.media_urls,
       proofPartUrls: fromParts?.urls,
-      stats: asStats(post.checkin_stats),
+      stats: asStats(richestCheckinStats(post.checkin_stats, honorStats)),
       homeStats: fromCache?.checkin_stats,
       cardUrl: fromParts?.cardUrl,
     });

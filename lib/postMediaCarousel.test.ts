@@ -14,6 +14,7 @@ import {
   pagerFrameHeight,
   pagerUrlsForViewer,
   mediaUrlsForPost,
+  liveHonorFrameHeight,
   liveInlineFrameHeight,
   liveInlineSeedWidth,
   rememberPagerIndex,
@@ -193,6 +194,8 @@ describe('post media carousel', () => {
 
   it('sizes the Live tile from the workout card shape and seeds a width before layout', () => {
     expect(liveInlineFrameHeight(360)).toBe(540);
+    expect(liveHonorFrameHeight(360)).toBe(450);
+    expect(liveHonorFrameHeight(360)).toBeLessThan(liveInlineFrameHeight(360));
     expect(liveInlineSeedWidth(400)).toBe(288);
     expect(liveInlineSeedWidth(80)).toBe(160);
   });

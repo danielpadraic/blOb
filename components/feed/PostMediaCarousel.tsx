@@ -47,6 +47,7 @@ import {
   canAutoCyclePager,
   carouselClaimsHorizontal,
   isStillPostMedia,
+  liveHonorFrameHeight,
   liveInlineFrameHeight,
   liveInlineSeedWidth,
   nextAutoCycleIndex,
@@ -277,14 +278,13 @@ export function PostMediaCarousel({
         ? Math.min(windowW, FEED_COLUMN_MAX)
         : windowW,
   );
-  const liveFrameH = useRef(
-    liveInline ? liveInlineFrameHeight(liveInlineSeedWidth(Math.max(windowW, 160))) : 0,
-  ).current;
   const firstSize = useFirstMediaSize(urls[0]);
   const orientation = orientationFromSize(firstSize);
   const pageWidth = Math.max(cardWidth, 1);
   const frameH = liveInline
-    ? liveFrameH
+    ? honor
+      ? liveHonorFrameHeight(Math.max(cardWidth, liveInlineSeedWidth(Math.max(windowW, 160))))
+      : liveInlineFrameHeight(Math.max(cardWidth, liveInlineSeedWidth(Math.max(windowW, 160))))
     : pagerFrameHeight({
         viewportHeight: windowH,
         cardWidth,

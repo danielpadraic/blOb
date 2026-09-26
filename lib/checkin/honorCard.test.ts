@@ -6,6 +6,7 @@ import {
   buildHonorProofCard,
   hasHonorRecapUrl,
   honorCardFieldsFromLog,
+  honorStatsFromLog,
   honorPeriodLabel,
   honorSlideForPost,
   honorStatChipLabel,
@@ -79,6 +80,25 @@ describe('honor recap card', () => {
       '2 Pres',
       '$400 AP',
     ]);
+  });
+
+  it('builds the same honor payload from stored log numbers for any author', () => {
+    const stats = honorStatsFromLog({
+      config: pinnacleConfig(),
+      metrics: { 'act-dials': 1143, 'multiplier:presentations': 1, 'act-ap': 0 },
+      laneId: 'rookie',
+      title: 'Rookies vs. Veterans',
+      periodKey: '2026-09-25',
+      timeZone: 'America/Chicago',
+    });
+    expect(stats?.source).toBe(HONOR_CARD_SOURCE);
+    expect(stats?.lane_label).toBe('Rookie');
+    expect(stats?.honor_fields?.map((field) => `${field.label}:${field.value}`)).toEqual([
+      'Dials:1143',
+      'Presentations:1',
+      'AP:0',
+    ]);
+    expect(honorStatsFromLog({ existing: stats, config: pinnacleConfig(), metrics: {} })).toBe(stats);
   });
 
   it('shows zeros when the field was on the form', () => {

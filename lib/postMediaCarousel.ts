@@ -1,5 +1,5 @@
 import { uniqueProofUrls, mediaUrlKey } from '@/lib/challengeProofs';
-import { pagerUrlsWithHonorCard } from '@/lib/checkin/honorCard';
+import { HONOR_CARD_HEIGHT, HONOR_CARD_WIDTH, pagerUrlsWithHonorCard } from '@/lib/checkin/honorCard';
 import type { CheckinProofStats } from '@/lib/checkin/proofStats';
 import { pagerUrlsWithWorkoutCard } from '@/lib/health/postWorkoutCard';
 import { WORKOUT_CARD_HEIGHT, WORKOUT_CARD_WIDTH } from '@/lib/health/workoutProofCard';
@@ -241,6 +241,11 @@ export function pagerFrameHeight(input: {
 /** Live check-in tile: same 2:3 card shape Home uses, not the Home 65vh hero. */
 export function liveInlineFrameHeight(cardWidth: number): number {
   return Math.round(Math.max(cardWidth, 1) * (WORKOUT_CARD_HEIGHT / WORKOUT_CARD_WIDTH));
+}
+
+/** Honor recap is shorter than a workout card. Never a full-viewport empty slab. */
+export function liveHonorFrameHeight(cardWidth: number): number {
+  return Math.round(Math.max(cardWidth, 1) * (HONOR_CARD_HEIGHT / HONOR_CARD_WIDTH));
 }
 
 /** Seed Live carousel width before onLayout so photos paint instead of an empty cream slab. */

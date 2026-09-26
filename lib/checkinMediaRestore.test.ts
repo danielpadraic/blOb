@@ -5,6 +5,7 @@ import {
   restoreCheckinMediaUrls,
   vendorCardUrlFromProofParts,
 } from '@/lib/checkinMediaRestore';
+import { HONOR_CARD_SLIDE, HONOR_CARD_SOURCE } from '@/lib/checkin/honorCard';
 import { mediaUrlsForPost } from '@/lib/postMediaCarousel';
 
 const SELFIE = 'https://cdn.test/pre_selfie-1.jpg';
@@ -50,6 +51,24 @@ describe('restoreCheckinMediaUrls', () => {
       stats: { ...WALK, card_url: CARD },
     });
     expect(next.media_urls).toEqual([SELFIE, SHOT, CARD]);
+  });
+
+  it('keeps an honor-only check-in with no selfie and still draws the recap', () => {
+    const honor = {
+      source: HONOR_CARD_SOURCE,
+      honor_fields: [
+        { key: 'act-dials', label: 'Dials', chip_label: 'Dials', value: 1143, kind: 'count' },
+        { key: 'act-ap', label: 'AP', chip_label: 'AP', value: 0, kind: 'money' },
+      ],
+    };
+    const next = restoreCheckinMediaUrls({
+      mediaUrls: [],
+      stats: honor,
+    });
+    expect(next.media_urls).toEqual([]);
+    expect(mediaUrlsForPost({ urls: next.media_urls, stats: next.checkin_stats })).toEqual([
+      HONOR_CARD_SLIDE,
+    ]);
   });
 
   it('does not invent a recap for OCR numbers with no vendor JPEG', () => {

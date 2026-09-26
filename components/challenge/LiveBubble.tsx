@@ -36,7 +36,12 @@ import {
   REPLY_SWIPE_MAX,
   REPLY_SWIPE_TRIGGER,
 } from '@/lib/liveThread';
-import { liveInlineFrameHeight, liveInlineSeedWidth, mediaUrlsForPost } from '@/lib/postMediaCarousel';
+import {
+  liveHonorFrameHeight,
+  liveInlineFrameHeight,
+  liveInlineSeedWidth,
+  mediaUrlsForPost,
+} from '@/lib/postMediaCarousel';
 import { resolveLiveAuthor } from '@/lib/safeIds';
 import { CheckinProofStatsRow } from '@/components/challenge/CheckinProofStats';
 import { LiftPostCard } from '@/components/lift/LiftPostCard';
@@ -101,7 +106,6 @@ export const LiveBubble = memo(function LiveBubble({
   const system = isLiveSystemPost(post);
   const visuals = liveVisualUrls(post, mine);
   const { width: windowW } = useWindowDimensions();
-  const reservedProofH = liveInlineFrameHeight(liveInlineSeedWidth(Math.max(windowW, 160)));
   const time = formatLiveClock(post.created_at);
   const proxy = splitProxyCheckinContent(post.content);
   const caption = checkin
@@ -122,6 +126,8 @@ export const LiveBubble = memo(function LiveBubble({
     [post.checkin_id, post.checkin_stats],
   );
   const honor = useMemo(() => honorSlideForPost({ stats: post.checkin_stats }), [post.checkin_stats]);
+  const seedW = liveInlineSeedWidth(Math.max(windowW, 160));
+  const reservedProofH = honor ? liveHonorFrameHeight(seedW) : liveInlineFrameHeight(seedW);
   const items: LightboxItem[] = visuals.map((uri) => ({
     uri,
     label: liveProofCaption(post, uri, checkin ? headline : caption),
@@ -407,22 +413,22 @@ export const LiveBubble = memo(function LiveBubble({
                   </View>
                 ) : null}
                 {/* Fitness stats only. The caption above stays whatever the user typed. */}
-                <View style={{ marginTop: 4, minHeight: visuals.length > 0 ? 26 : 0 }}>
+                <View style={{ marginTop: 4, minHeight: visuals.length > 0 || honor ? 26 : 0 }}>
                   <CheckinProofStatsRow stats={post.checkin_stats} align={alignEnd ? 'right' : 'left'} />
                 </View>
                 <EditedMark editedAt={post.edited_at} onPress={onHistory} />
               </View>
               </Pressable>
-              <View
-                style={{
-                  height: reservedProofH,
-                  width: '100%',
-                  marginTop: 6,
-                  borderRadius: 18,
-                  overflow: 'hidden',
-                  backgroundColor: THEME.line,
-                }}>
-                {visuals.length > 0 ? (
+              {visuals.length > 0 ? (
+                <View
+                  style={{
+                    height: reservedProofH,
+                    width: '100%',
+                    marginTop: 6,
+                    borderRadius: 18,
+                    overflow: 'hidden',
+                    backgroundColor: THEME.line,
+                  }}>
                   <PostMediaCarousel
                     postId={post.id}
                     urls={visuals}
@@ -440,8 +446,8 @@ export const LiveBubble = memo(function LiveBubble({
                         : { kind: 'other' }
                     }
                   />
-                ) : null}
-              </View>
+                </View>
+              ) : null}
             </View>
             {removed || editing ? null : (
               <LiveReactionChip

@@ -23,6 +23,7 @@ import type { PublicProfile } from '@/lib/types';
 export const PULSE_CAP = 12;
 export const PULSE_FACE_CAP = 3;
 export const HOME_PULSE_KEY = 'home-pulse';
+export const PULSE_RECENT_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type PulseFace = {
   id: string;
@@ -167,6 +168,36 @@ function officialCoinPillRank(kind?: OfficialCoinKind | null): number {
   return 2;
 }
 
+export function isOfficialPulsePill(pill: { officialCoinKind?: OfficialCoinKind | null }): boolean {
+  return officialCoinPillRank(pill.officialCoinKind) < 2;
+}
+
+/** Live / check-in / honor chatter on this pill is younger than 7 days. */
+export function isPulseRecent(lastAt: string | null | undefined, now = Date.now()): boolean {
+  const at = Date.parse(String(lastAt ?? ''));
+  return Number.isFinite(at) && now - at < PULSE_RECENT_MS;
+}
+
+export function partitionPulsePills<T extends { lastAt: string | null; officialCoinKind?: OfficialCoinKind | null }>(
+  pills: T[],
+  now = Date.now(),
+): { visible: T[]; aged: T[] } {
+  const sorted = sortPulsePills(pills);
+  const visible: T[] = [];
+  const aged: T[] = [];
+  for (const pill of sorted) {
+    if (isOfficialPulsePill(pill) || isPulseRecent(pill.lastAt, now)) {
+      visible.push(pill);
+    } else {
+      aged.push(pill);
+    }
+  }
+  return {
+    visible: visible.slice(0, PULSE_CAP),
+    aged,
+  };
+}
+
 type PulseProfile = Pick<PublicProfile, 'id' | 'display_name' | 'username' | 'avatar_url'>;
 
 export function collectPulseFaces(
@@ -248,13 +279,13 @@ export function buildPulsePills(input: {
             ? 'Watching'
             : pulseSnippet(null),
       faces: isCallout && fighterFaces.length > 0 ? fighterFaces : collectPulseFaces(newestFirst, id, profiles),
-      lastAt: latestCheckin?.created_at ?? (isCallout ? latest?.created_at ?? null : null),
+      lastAt: latest?.created_at ?? latestCheckin?.created_at ?? null,
       isCallout,
       watching: Boolean(row.watching),
       officialCoinKind: officialCoinKind(row),
     };
   });
-  return sortPulsePills(pills).slice(0, PULSE_CAP);
+  return sortPulsePills(pills);
 }
 
 async function fetchPulseLobbyPosts(challengeIds: string[]): Promise<PulseLobbyPost[]> {

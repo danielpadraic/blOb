@@ -931,6 +931,8 @@ const STRINGS = {
   'live.joinToPost': 'Join the challenge to post in Live.',
   'pulse.noChatter': 'No chatter yet',
   'pulse.rail': 'Pulse',
+  'pulse.seeMore': 'See More',
+  'pulse.showLess': 'Show less',
   'detail.checkinDue': 'Check-in due',
   'detail.caughtUp': 'Caught Up',
 } as const;
