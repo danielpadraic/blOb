@@ -1,4 +1,5 @@
 import { calloutTitle, isCalloutChallenge } from '@/lib/callouts';
+import { officialCoinDisplayTitle } from '@/lib/officialCoin';
 
 const PLACEHOLDER_TITLES = new Set(['untitled challenge', 'unknown challenge', 'challenge']);
 
@@ -25,12 +26,19 @@ export function challengeDisplayTitle(row: {
   extra_tasks?: Array<{ title?: string | null } | string> | unknown | null;
   is_callout?: boolean | null;
   win_condition?: string | null;
+  is_official?: boolean | null;
+  official_kind?: string | null;
 } | null | undefined): string {
   if (!row) {
     return '';
   }
   if (isCalloutChallenge(row)) {
     return calloutTitle(row.win_condition || row.title || row.task || firstTaskTitle(row.tasks));
+  }
+  // The two house rooms are named by product, not by whatever the column holds.
+  const houseRoom = officialCoinDisplayTitle(row);
+  if (houseRoom) {
+    return houseRoom;
   }
   const title = String(row.title ?? '').trim();
   if (title && !isPlaceholderChallengeTitle(title)) {

@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import { normalizeChallenge } from '@/lib/challenges';
+import { displayChallengePot } from '@/lib/challengePot';
+import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import {
   canRejoinOfficialCoin,
+  formatOfficialCoinAmount,
   isOfficialCoinChallenge,
+  officialCoinDisplayTitle,
   OFFICIAL_COIN_LEAVE_CONFIRM,
   OFFICIAL_COIN_REJOIN_PILL,
+  OFFICIAL_COIN_TITLE,
   officialCoinAllowedDays,
   officialCoinBoardHeaderLine,
   officialCoinDaysLeft,
@@ -207,6 +212,82 @@ describe('officialCoinGuarantee', () => {
     expect(officialCoinGuarantee(MONTHLY)).toBe(1000);
     expect(officialCoinGuarantee({ official_kind: 'coin_weekly' })).toBe(100);
     expect(officialCoinGuarantee({ id: 'x' })).toBe(0);
+  });
+});
+
+describe('public titles', () => {
+  it('names the two rooms by product, not by official_kind', () => {
+    expect(OFFICIAL_COIN_TITLE.coin_weekly).toBe('Weekly Fitness Challenge');
+    expect(OFFICIAL_COIN_TITLE.coin_monthly).toBe('Monthly Fitness Challenge');
+    expect(officialCoinDisplayTitle(WEEKLY)).toBe('Weekly Fitness Challenge');
+    expect(officialCoinDisplayTitle(MONTHLY)).toBe('Monthly Fitness Challenge');
+  });
+
+  it('rewrites a stale stored title even when official_kind was not selected', () => {
+    expect(officialCoinDisplayTitle({ title: 'Official Weekly Coin' })).toBe(
+      'Weekly Fitness Challenge',
+    );
+    expect(officialCoinDisplayTitle({ title: '  official monthly coin ' })).toBe(
+      'Monthly Fitness Challenge',
+    );
+  });
+
+  it('leaves every other challenge alone', () => {
+    expect(officialCoinDisplayTitle({ title: '30-Day Consistency' })).toBe('');
+    expect(officialCoinDisplayTitle({ title: 'Weekly $10 Guarantee' })).toBe('');
+    expect(officialCoinDisplayTitle(null)).toBe('');
+  });
+
+  it('never leaves the internal words on a user-visible string', () => {
+    const shown = [
+      OFFICIAL_COIN_TITLE.coin_weekly,
+      OFFICIAL_COIN_TITLE.coin_monthly,
+      OFFICIAL_COIN_REJOIN_PILL.title,
+      OFFICIAL_COIN_REJOIN_PILL.subline,
+      OFFICIAL_COIN_LEAVE_CONFIRM.title,
+      OFFICIAL_COIN_LEAVE_CONFIRM.body,
+      officialCoinRulesParagraph(WEEKLY),
+      officialCoinRulesParagraph(MONTHLY),
+      officialCoinBoardHeaderLine(WEEKLY, FRIDAY),
+      officialCoinBoardHeaderLine(MONTHLY, FRIDAY),
+    ].join(' | ');
+    expect(shown).not.toContain('Official Weekly Coin');
+    expect(shown).not.toContain('Official Monthly Coin');
+  });
+});
+
+describe('challengeDisplayTitle', () => {
+  it('prints the public name for the house rooms', () => {
+    expect(challengeDisplayTitle({ ...WEEKLY, title: 'Official Weekly Coin' })).toBe(
+      'Weekly Fitness Challenge',
+    );
+    expect(challengeDisplayTitle({ ...MONTHLY, title: 'Official Monthly Coin' })).toBe(
+      'Monthly Fitness Challenge',
+    );
+  });
+
+  it('leaves other challenge names untouched', () => {
+    expect(challengeDisplayTitle({ title: 'Weekly $10 Guarantee' })).toBe('Weekly $10 Guarantee');
+    expect(challengeDisplayTitle({ title: '30-Day Consistency' })).toBe('30-Day Consistency');
+  });
+});
+
+describe('displayChallengePot', () => {
+  it('reads the house guarantee, never the empty prize_pool', () => {
+    expect(displayChallengePot({ ...WEEKLY, prize_pool: 0, status: 'live' })).toBe(100);
+    expect(displayChallengePot({ ...MONTHLY, prize_pool: 0, status: 'live' })).toBe(1000);
+  });
+
+  it('formats the monthly guarantee with a comma', () => {
+    expect(formatOfficialCoinAmount(displayChallengePot({ ...MONTHLY, prize_pool: 0 }))).toBe(
+      '1,000',
+    );
+    expect(formatOfficialCoinAmount(displayChallengePot({ ...WEEKLY, prize_pool: 0 }))).toBe('100');
+  });
+
+  it('still reads prize_pool for every other room', () => {
+    expect(displayChallengePot({ prize_pool: 250, status: 'live' })).toBe(250);
+    expect(displayChallengePot({ prize_pool: 0, host_budget: 10, status: 'settled' })).toBe(10);
   });
 });
 

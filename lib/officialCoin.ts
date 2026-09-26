@@ -1,8 +1,9 @@
 /**
  * Official Coin — the two standing house rooms owned by @blob.
+ * Internal kinds are coin_weekly / coin_monthly; people read the titles below.
  *
- *   Official Weekly Coin   Mon 00:00 -> Sun end, America/Chicago,   100 coin guarantee
- *   Official Monthly Coin  1st 00:00 -> last day end, America/Chicago, 1,000 coin guarantee
+ *   coin_weekly   "Weekly Fitness Challenge"   Mon 00:00 -> Sun end, America/Chicago, 100 coins
+ *   coin_monthly  "Monthly Fitness Challenge"  1st 00:00 -> last day end, America/Chicago, 1,000 coins
  *
  * The same challenge row rolls to the next window, so nothing here may assume a
  * fresh id per week. Scoring is count-days, never knockout: no Remaining, no
@@ -23,10 +24,36 @@ export const OFFICIAL_COIN_GUARANTEE: Record<OfficialCoinKind, number> = {
   coin_monthly: 1000,
 };
 
+/**
+ * What people read. `official_kind` and the SQL keep the old internal words —
+ * these two strings are the only names a user ever sees.
+ */
 export const OFFICIAL_COIN_TITLE: Record<OfficialCoinKind, string> = {
-  coin_weekly: 'Official Weekly Coin',
-  coin_monthly: 'Official Monthly Coin',
+  coin_weekly: 'Weekly Fitness Challenge',
+  coin_monthly: 'Monthly Fitness Challenge',
 };
+
+/** Internal names that may still be sitting in `challenges.title`. */
+const LEGACY_OFFICIAL_COIN_TITLES: Record<string, OfficialCoinKind> = {
+  'official weekly coin': 'coin_weekly',
+  'official monthly coin': 'coin_monthly',
+};
+
+/**
+ * Public name for a house room, or '' for anything else.
+ * Keys off `official_kind` first, then falls back to matching the old stored
+ * title so a partial row that never selected `official_kind` still reads right.
+ */
+export function officialCoinDisplayTitle(
+  row?: (OfficialCoinChallenge & { title?: string | null }) | null,
+): string {
+  const kind = officialCoinKind(row);
+  if (kind) {
+    return OFFICIAL_COIN_TITLE[kind];
+  }
+  const legacy = LEGACY_OFFICIAL_COIN_TITLES[String(row?.title ?? '').trim().toLowerCase()];
+  return legacy ? OFFICIAL_COIN_TITLE[legacy] : '';
+}
 
 /** House chrome on the Check In picker. Different from private / user challenges. */
 export const OFFICIAL_COIN_CHECKIN_LABEL = 'Official Check-In';

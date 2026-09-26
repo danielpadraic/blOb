@@ -516,7 +516,7 @@ export function ChallengeInviteCard({
                 <ChallengeTagRow
                   tags={tags}
                   compact
-                  trailing={<HostRigorChip hostRigor={challenge.host_rigor} />}
+                  trailing={<HostRigorChip challenge={challenge} hostRigor={challenge.host_rigor} />}
                 />
               </View>
             </View>

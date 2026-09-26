@@ -114,7 +114,7 @@ export function ChallengeHeroCard({
           <ChallengeTagRow
             tags={tags}
             tone={official ? 'dark' : 'light'}
-            trailing={<HostRigorChip hostRigor={challenge.host_rigor} tone={official ? 'dark' : 'light'} />}
+            trailing={<HostRigorChip challenge={challenge} hostRigor={challenge.host_rigor} tone={official ? 'dark' : 'light'} />}
           />
           <AppText
             className="mt-2 text-[24px] font-extrabold leading-7"

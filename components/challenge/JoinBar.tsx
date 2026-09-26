@@ -42,7 +42,7 @@ export function JoinBar({
     <Card className="gap-3">
       <ChallengeTagRow
         tags={challengeCardTags({ challenge })}
-        trailing={<HostRigorChip hostRigor={challenge.host_rigor} />}
+        trailing={<HostRigorChip challenge={challenge} hostRigor={challenge.host_rigor} />}
       />
       <View className="flex-row items-end justify-between">
         <View>

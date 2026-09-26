@@ -5,6 +5,7 @@ import { EntryFeeAmount } from '@/components/currency/EntryFeeAmount';
 import { AppText } from '@/components/ui/AppText';
 import { displayChallengePot } from '@/lib/challengePot';
 import { formatCashPrizeAmount, isBucksChallenge } from '@/lib/currency';
+import { formatOfficialCoinAmount, isOfficialCoinChallenge } from '@/lib/officialCoin';
 
 type PrizeChallenge = {
   buy_in_amount?: number | null;
@@ -14,6 +15,8 @@ type PrizeChallenge = {
   host_budget?: number | null;
   creator_contribution?: number | null;
   status?: string | null;
+  official_kind?: string | null;
+  prize_guarantee_coins?: number | null;
 };
 
 export function LobbyEntryPrizeRow({
@@ -52,7 +55,9 @@ export function LobbyEntryPrizeRow({
         <View className="flex-row items-center" style={{ gap: compact ? 3 : 4 }}>
           <CurrencyMark currency={challenge.currency} size={icon} />
           <AppText className={type} style={{ color: prizeColor }}>
-            {String(Math.round(prize))}
+            {isOfficialCoinChallenge(challenge)
+              ? formatOfficialCoinAmount(prize)
+              : String(Math.round(prize))}
           </AppText>
         </View>
       )}

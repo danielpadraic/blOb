@@ -1,3 +1,5 @@
+import { isOfficialCoinChallenge, officialCoinGuarantee } from '@/lib/officialCoin';
+
 const ENDED_POT_STATUSES = new Set([
   'ended',
   'settling',
@@ -15,6 +17,8 @@ export type ChallengePotInput = {
   creator_contribution?: number | null;
   buy_in_amount?: number | null;
   settled_prize_pool?: number | null;
+  official_kind?: string | null;
+  prize_guarantee_coins?: number | null;
 };
 
 export function isEndedPrizeStatus(status?: string | null): boolean {
@@ -30,6 +34,11 @@ function hostBudgetAmount(challenge: ChallengePotInput): number {
 
 /** Live/upcoming: challenges.prize_pool. After settle that column is zeroed. */
 export function displayChallengePot(challenge: ChallengePotInput): number {
+  // Official Coin is a standing house guarantee. prize_pool is always 0 on
+  // those rooms because nobody pays in, so reading it would print a 0 prize.
+  if (isOfficialCoinChallenge(challenge)) {
+    return officialCoinGuarantee(challenge);
+  }
   if (!isEndedPrizeStatus(challenge.status)) {
     return Math.max(Number(challenge.prize_pool) || 0, 0);
   }

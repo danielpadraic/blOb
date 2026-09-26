@@ -236,6 +236,7 @@ export function LobbyListCardView({
                   callout ? undefined : (
                     <View className="flex-row items-center" style={{ gap: 5 }}>
                       <HostRigorChip
+                        challenge={challenge}
                         hostRigor={challenge.host_rigor}
                         tone={darkHero ? 'dark' : 'light'}
                       />
