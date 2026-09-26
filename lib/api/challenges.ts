@@ -1,6 +1,7 @@
 import { copy } from '@/lib/copy';
 import { reportAppError } from '@/lib/appErrors';
 import { isGeoGateDeny } from '@/lib/geo/eligibility';
+import { CASH_OFFICIAL_PAYOUTS_PENDING } from '@/lib/officialCash';
 import { supabase } from '@/lib/supabase';
 import type {
   CloseChallengeForJudgingResult,
@@ -58,6 +59,7 @@ const RPC_MESSAGES: Record<string, string> = {
   DOB_REQUIRED: 'Add your birth date to enter Official Challenges.',
   UNDERAGE: 'Official Challenges are for 18 and up.',
   ALREADY_JOINED: 'You already joined this challenge.',
+  CASH_OFFICIALS_NOT_LIVE: CASH_OFFICIAL_PAYOUTS_PENDING,
   REMOVED_NO_REJOIN: 'You were removed from this challenge. Ask the host to add you back.',
   LOBBY_FULL: 'This challenge is full.',
   NOT_INVITED: 'This challenge is private. Ask the host for an invite.',

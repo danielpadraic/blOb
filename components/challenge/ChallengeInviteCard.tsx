@@ -406,6 +406,12 @@ export function ChallengeInviteCard({
       await openDetail();
       return;
     }
+    // A shut cash Official opens the room instead of a dead tap, so the greyed
+    // price and the reason are both visible.
+    if (joinSheet.cashBlockedCopy(challenge as never)) {
+      await openDetail();
+      return;
+    }
     if (joining || joinSheet.loading) {
       return;
     }

@@ -88,7 +88,8 @@ export function JoinBar({
       {topUp ? (
         <Button title={cta.topUpLabel} onPress={onTopUp} loading={loading} />
       ) : disabledReason ? (
-        <Button title="Unavailable" onPress={onJoin} disabled />
+        /* Blocked means blocked — a disabled Button must not still hold onJoin. */
+        <Button title="Unavailable" onPress={() => {}} disabled />
       ) : (
         <JoinCtaButton
           currency={challenge.currency}

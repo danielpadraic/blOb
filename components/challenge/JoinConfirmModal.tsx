@@ -17,6 +17,8 @@ import { formatCash, formatWalletNumber, isBucksChallenge, walletBalance } from 
 import { bucksJoinCta } from '@/lib/joinCta';
 import { copy } from '@/lib/copy';
 import { officialDetailsParagraphs } from '@/copy/officialBob';
+import { officialCashJoinBlock } from '@/lib/officialCash';
+import { officialDobStatus } from '@/lib/officialDob';
 import { useMyProfile } from '@/hooks/useProfile';
 import {
   allowsSelfModeratorCheckbox,
@@ -157,12 +159,21 @@ export function JoinConfirmModal({
     hasProfile: Boolean(profile),
   });
   const official = Boolean(challenge.is_official);
-  const confirmTitle = official && cta.needsTopUp
+  // The sheet should never open for a shut cash Official — this is the backstop
+  // if one is ever presented directly.
+  const cashBlock = officialCashJoinBlock({
+    challenge,
+    dobStatus: officialDobStatus(profile?.date_of_birth),
+    declaredRegion: profile?.declared_region,
+  });
+  const cashBlocked = cashBlock.blocked;
+  const cashBlockedCopy = cashBlock.blocked ? cashBlock.copy : '';
+  const confirmTitle = official && cta.needsTopUp && !cashBlocked
     ? cta.topUpLabel
     : isFree
       ? 'Confirm and join free'
       : null;
-  const payEntry = !isFree && !(official && cta.needsTopUp);
+  const payEntry = !isFree && !(official && cta.needsTopUp && !cashBlocked);
 
   useEffect(() => {
     if (!visible) {
@@ -396,6 +407,11 @@ export function JoinConfirmModal({
             {error ? (
               <AppText className="mt-4 text-sm leading-5 text-coral-dark">{error}</AppText>
             ) : null}
+            {cashBlockedCopy ? (
+              <AppText className="mt-4 text-sm leading-5" style={{ color: THEME.textMuted }}>
+                {cashBlockedCopy}
+              </AppText>
+            ) : null}
             <View className="mt-6 gap-3">
               {payEntry ? (
                 <JoinCtaButton
@@ -404,10 +420,17 @@ export function JoinConfirmModal({
                   currency={challenge.currency}
                   amount={buyInAmount}
                   loading={loading}
-                  onPress={onConfirm}
+                  disabled={cashBlocked}
+                  onPress={cashBlocked ? () => {} : onConfirm}
                 />
               ) : (
-                <Button title={confirmTitle ?? 'Confirm and join free'} size="lg" loading={loading} onPress={onConfirm} />
+                <Button
+                  title={confirmTitle ?? 'Confirm and join free'}
+                  size="lg"
+                  loading={loading}
+                  disabled={cashBlocked}
+                  onPress={cashBlocked ? () => {} : onConfirm}
+                />
               )}
               <Button title="Not now." variant="ghost" onPress={close} disabled={loading} />
             </View>

@@ -211,6 +211,8 @@ import { useStableChallengeRouteId, scrollNodeTo } from '@/lib/challengeRoute';
 import { copy } from '@/lib/copy';
 import { isViewerOutOfPrize } from '@/lib/lobbyChallenge';
 import { isOfficialCoinChallenge } from '@/lib/officialCoin';
+import { officialCashJoinBlock } from '@/lib/officialCash';
+import { officialDobStatus } from '@/lib/officialDob';
 import { getErrorMessage } from '@/utils/errors';
 
 const BODY_METRICS_JOIN_COPY =
@@ -680,6 +682,15 @@ export default function ChallengeDetailScreen() {
     wallet: walletBalance(profile, challenge?.currency),
     hasProfile: Boolean(profile),
   });
+  // House cash Officials are shut while payouts are held. The price stays on
+  // screen, the button greys out, and the reason sits under it.
+  const cashOfficialBlock = officialCashJoinBlock({
+    challenge,
+    dobStatus: officialDobStatus(profile?.date_of_birth),
+    declaredRegion: profile?.declared_region,
+  });
+  const cashOfficialBlocked = cashOfficialBlock.blocked && !isJoined && !isHost;
+  const cashOfficialCopy = cashOfficialBlock.blocked ? cashOfficialBlock.copy : '';
   const needsTopUp =
     Boolean(challenge) &&
     joinCta.needsTopUp &&
@@ -687,6 +698,7 @@ export default function ChallengeDetailScreen() {
     !isHost &&
     !needsBodyMetrics &&
     !joinBlocked &&
+    !cashOfficialBlocked &&
     !geoJoinBlocked;
   const canJoin = canJoinBase && !geoJoinBlocked;
   const wasCancelled = challenge?.status === 'cancelled';
@@ -977,6 +989,10 @@ export default function ChallengeDetailScreen() {
 
   function onJoinPress() {
     if (joinSheet.loading || !challenge || isHost || isJoined || !canJoinBase || isTeacher3DayChallenge(challenge)) {
+      return;
+    }
+    // No confirm sheet, no Add Money, no wallet debit while the room is shut.
+    if (cashOfficialBlocked) {
       return;
     }
     if (challenge.is_official && !officialDob.ensureAdult()) {
@@ -1938,6 +1954,21 @@ export default function ChallengeDetailScreen() {
                 size="md"
                 onPress={() => router.push(BODY_METRICS_HREF)}
               />
+            ) : cashOfficialBlocked ? (
+              /* Price stays on screen. Greyed out, reason underneath, tap is a no-op. */
+              <View className="gap-1.5">
+                <JoinCtaButton
+                  currency={challenge.currency}
+                  amount={buyInAmount}
+                  disabled
+                  onPress={() => {}}
+                />
+                <AppText
+                  className="text-center text-[13px] leading-5"
+                  style={{ color: THEME.textMuted }}>
+                  {cashOfficialCopy}
+                </AppText>
+              </View>
             ) : geoJoinBlocked ? (
               <Button title="View" size="md" onPress={() => setPageTab('overview')} />
             ) : joinClosed || joinRemoved ? (

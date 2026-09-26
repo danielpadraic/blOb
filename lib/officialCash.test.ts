@@ -8,6 +8,8 @@ import {
   cashOfficialGate,
   cashOfficialJoinBlockedCopy,
   cashOfficialJoinsAllowed,
+  isOfficialCashChallenge,
+  officialCashJoinBlock,
 } from '@/lib/officialCash';
 
 describe('CASH_OFFICIAL_JOINS_LIVE', () => {
@@ -78,6 +80,107 @@ describe('cashOfficialGate', () => {
 
   it('never opens a join with no state on file while payouts are off', () => {
     expect(cashOfficialJoinsAllowed(cashOfficialGate({ dobStatus: 'ok' }))).toBe(false);
+  });
+});
+
+const WEEK_10 = {
+  is_official: true,
+  currency: 'bucks',
+  challenge_lane: 'coins',
+  buy_in_amount: 1,
+};
+
+describe('isOfficialCashChallenge', () => {
+  it('matches the house real-money ladder', () => {
+    expect(isOfficialCashChallenge(WEEK_10)).toBe(true);
+    expect(
+      isOfficialCashChallenge({ is_official: true, challenge_lane: 'cash', buy_in_amount: 10 }),
+    ).toBe(true);
+  });
+
+  it('never matches Official Coin', () => {
+    expect(
+      isOfficialCashChallenge({
+        is_official: true,
+        official_kind: 'coin_weekly',
+        currency: 'coins',
+        buy_in_amount: 0,
+      }),
+    ).toBe(false);
+    expect(
+      isOfficialCashChallenge({
+        is_official: true,
+        official_kind: 'coin_monthly',
+        currency: 'bucks',
+        buy_in_amount: 5,
+      }),
+    ).toBe(false);
+  });
+
+  it('leaves user-created $ rooms alone', () => {
+    expect(isOfficialCashChallenge({ is_official: false, currency: 'bucks', buy_in_amount: 5 })).toBe(
+      false,
+    );
+  });
+
+  it('leaves free Official rooms and coin Officials alone', () => {
+    expect(isOfficialCashChallenge({ is_official: true, currency: 'bucks', buy_in_amount: 0 })).toBe(
+      false,
+    );
+    expect(isOfficialCashChallenge({ is_official: true, currency: 'coins', buy_in_amount: 25 })).toBe(
+      false,
+    );
+  });
+
+  it('is false for nothing', () => {
+    expect(isOfficialCashChallenge(null)).toBe(false);
+    expect(isOfficialCashChallenge(undefined)).toBe(false);
+  });
+});
+
+describe('officialCashJoinBlock', () => {
+  it('shuts the paid house join while payouts are held', () => {
+    const block = officialCashJoinBlock({
+      challenge: WEEK_10,
+      dobStatus: 'ok',
+      declaredRegion: 'TX',
+    });
+    expect(block.blocked).toBe(true);
+    expect(block.blocked && block.copy).toBe(CASH_OFFICIAL_PAYOUTS_PENDING);
+  });
+
+  it('shows the legal line ahead of the payouts line', () => {
+    const under = officialCashJoinBlock({ challenge: WEEK_10, dobStatus: 'underage' });
+    expect(under.blocked && under.copy).toBe('Official Challenges are for 18 and up.');
+    const geo = officialCashJoinBlock({
+      challenge: WEEK_10,
+      dobStatus: 'ok',
+      declaredRegion: 'NV',
+    });
+    expect(geo.blocked && geo.copy).toBe('Sorry, this Challenge isn’t available in your State.');
+  });
+
+  it('passes every other room straight through', () => {
+    for (const challenge of [
+      { is_official: true, official_kind: 'coin_weekly', currency: 'coins', buy_in_amount: 0 },
+      { is_official: false, currency: 'bucks', buy_in_amount: 5 },
+      { is_official: false, currency: 'coins', buy_in_amount: 25 },
+      { is_official: true, currency: 'bucks', buy_in_amount: 0 },
+      null,
+    ]) {
+      expect(officialCashJoinBlock({ challenge, dobStatus: 'underage' }).blocked).toBe(false);
+    }
+  });
+
+  it('opens once payouts go live for an eligible viewer', () => {
+    expect(
+      officialCashJoinBlock({
+        challenge: WEEK_10,
+        dobStatus: 'ok',
+        declaredRegion: 'TX',
+        joinsLive: true,
+      }).blocked,
+    ).toBe(false);
   });
 });
 

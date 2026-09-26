@@ -15,6 +15,8 @@ import {
   skipsCashGeo,
 } from '@/lib/geo/eligibility';
 import { bucksJoinCta } from '@/lib/joinCta';
+import { officialCashJoinBlock } from '@/lib/officialCash';
+import { officialDobStatus } from '@/lib/officialDob';
 import type { JoinRolePicks } from '@/lib/joinRole';
 import type { Challenge } from '@/lib/types';
 import { getJoinChallengeMessage } from '@/utils/errors';
@@ -26,6 +28,8 @@ type JoinConfirmContextValue = {
   loading: boolean;
   challenge: Challenge | null;
   error: string | null;
+  /** Why a house cash Official cannot be joined right now, or '' when it can. */
+  cashBlockedCopy: (challenge?: Challenge | null) => string;
 };
 
 const JoinConfirmContext = createContext<JoinConfirmContextValue | null>(null);
@@ -50,7 +54,25 @@ export function JoinConfirmProvider({ children }: { children: ReactNode }) {
     setChallenge(null);
   }, [join.isPending]);
 
+  /**
+   * Cash Officials are shut while the payouts MID is held, and the legal gates
+   * stand regardless. Every join surface funnels through open(), so this is the
+   * one place a paid house join can be stopped.
+   */
+  const cashBlock = useCallback(
+    (next?: Challenge | null) =>
+      officialCashJoinBlock({
+        challenge: next,
+        dobStatus: officialDobStatus(profile?.date_of_birth),
+        declaredRegion: profile?.declared_region,
+      }),
+    [profile?.date_of_birth, profile?.declared_region],
+  );
+
   const open = useCallback((next: Challenge) => {
+    if (cashBlock(next).blocked) {
+      return;
+    }
     if (next.is_official && officialDob && !officialDob.ensureAdult()) {
       return;
     }
@@ -66,10 +88,15 @@ export function JoinConfirmProvider({ children }: { children: ReactNode }) {
       return;
     }
     setChallenge(next);
-  }, [geo, officialDob]);
+  }, [cashBlock, geo, officialDob]);
 
   const confirm = useCallback(async (picks?: JoinRolePicks) => {
     if (!challenge || join.isPending) {
+      return;
+    }
+    const cash = cashBlock(challenge);
+    if (cash.blocked) {
+      setError(cash.copy);
       return;
     }
     const buyIn = Math.max(Number(challenge.buy_in_amount) || 0, 0);
@@ -117,7 +144,7 @@ export function JoinConfirmProvider({ children }: { children: ReactNode }) {
       }
       setError(message);
     }
-  }, [challenge, geo, join, officialDob, profile, wallet]);
+  }, [cashBlock, challenge, geo, join, officialDob, profile, wallet]);
 
   useEffect(() => {
     if (topUpOpen || !pendingRef.current) {
@@ -138,8 +165,12 @@ export function JoinConfirmProvider({ children }: { children: ReactNode }) {
       loading: join.isPending || Boolean(geo?.busy),
       challenge,
       error,
+      cashBlockedCopy: (next?: Challenge | null) => {
+        const block = cashBlock(next);
+        return block.blocked ? block.copy : '';
+      },
     }),
-    [challenge, close, confirm, error, geo?.busy, join.isPending, open],
+    [cashBlock, challenge, close, confirm, error, geo?.busy, join.isPending, open],
   );
 
   return <JoinConfirmContext.Provider value={value}>{children}</JoinConfirmContext.Provider>;
