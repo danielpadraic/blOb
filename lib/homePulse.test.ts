@@ -4,9 +4,12 @@ import { namedChallengeHref } from '@/lib/routes';
 import {
   PULSE_CAP,
   buildPulsePills,
+  countNewCheckins,
   isPulsePillEligible,
   partitionPulsePills,
+  pulseActivityLine,
   pulseChallengeHref,
+  pulsePrivacyLabel,
   pulseSnippet,
   selectPulseChallenges,
   sortPulsePills,
@@ -285,6 +288,140 @@ describe('buildPulsePills', () => {
     expect(pills[0].faces.map((face) => face.id)).toEqual(['me', 'them']);
     expect(pills[0].snippet).toBe('vs Lee · 3 watching');
     expect(pills[0].snippet.toLowerCase()).not.toMatch(/odds|pot|bet|wager/);
+  });
+});
+
+describe('pulsePrivacyLabel', () => {
+  it('chips private and corporate, and leaves public peer rooms bare', () => {
+    expect(pulsePrivacyLabel('private')).toBe('Private');
+    expect(pulsePrivacyLabel('private_corporate')).toBe('Private');
+    expect(pulsePrivacyLabel('public')).toBe('');
+    expect(pulsePrivacyLabel(null)).toBe('');
+  });
+});
+
+describe('countNewCheckins', () => {
+  const now = Date.parse('2026-09-26T18:00:00.000Z');
+  const posts = [
+    { challenge_id: 'c1', source: 'checkin', created_at: '2026-09-26T17:00:00.000Z' },
+    { challenge_id: 'c1', source: 'checkin', created_at: '2026-09-26T12:00:00.000Z' },
+    { challenge_id: 'c1', source: 'checkin', created_at: '2026-09-20T12:00:00.000Z' },
+    { challenge_id: 'c1', source: 'challenge', content: 'chat', created_at: '2026-09-26T17:30:00.000Z' },
+    { challenge_id: 'c2', source: 'checkin', created_at: '2026-09-26T17:00:00.000Z' },
+  ];
+
+  it('counts only unseen check-ins in that room', () => {
+    expect(countNewCheckins(posts, 'c1', '2026-09-26T13:00:00.000Z', now)).toBe(1);
+    expect(countNewCheckins(posts, 'c1', '2026-09-26T11:00:00.000Z', now)).toBe(2);
+  });
+
+  it('falls back to the last day when they have never opened the room', () => {
+    expect(countNewCheckins(posts, 'c1', null, now)).toBe(2);
+  });
+
+  it('ignores plain Live chat and other rooms', () => {
+    expect(countNewCheckins(posts, 'c2', null, now)).toBe(1);
+    expect(countNewCheckins(posts, 'nope', null, now)).toBe(0);
+  });
+});
+
+describe('pulseActivityLine', () => {
+  it('names the person who checked in', () => {
+    expect(
+      pulseActivityLine({
+        latestCheckin: { created_at: '2026-09-26T17:00:00.000Z' },
+        authorName: 'Daniel',
+        relative: () => '4m ago',
+      }),
+    ).toBe('Daniel checked in 4m ago');
+  });
+
+  it('falls back to real consistency progress', () => {
+    expect(pulseActivityLine({ progress: { done: 15, target: 30 } })).toBe('15/30 days');
+  });
+
+  it('says nothing rather than "No chatter yet" so the card can say Live now', () => {
+    expect(pulseActivityLine({})).toBe('');
+    expect(pulseActivityLine({ progress: { done: 0, target: 0 } })).toBe('');
+  });
+});
+
+describe('buildPulsePills card data', () => {
+  it('binds the real skin fields instead of hardcoded mock values', () => {
+    const pills = buildPulsePills({
+      challenges: [
+        {
+          id: 'weekly',
+          status: 'live',
+          title: 'Weekly Fitness Challenge',
+          joined: true,
+          official_kind: 'coin_weekly',
+          is_official: true,
+          category: 'fitness',
+          privacy_mode: 'public',
+        },
+        {
+          id: 'thirty',
+          status: 'live',
+          title: '30-Day Consistency',
+          joined: true,
+          category: 'fitness',
+          privacy_mode: 'private',
+          cover_image_url: 'https://cdn.example.com/run.jpg',
+          days_required: 30,
+        },
+      ],
+      posts: [
+        {
+          challenge_id: 'thirty',
+          source: 'checkin',
+          checkin_stage: 'complete',
+          author_id: 'a1',
+          created_at: '2026-09-26T17:00:00.000Z',
+        },
+      ],
+      profiles: [{ id: 'a1', display_name: 'Daniel', username: 'dh', avatar_url: null }],
+      memberCounts: { weekly: 52, thirty: 11 },
+      lastReadAt: { weekly: null, thirty: null },
+      progress: { thirty: { done: 15, target: 30 } },
+      relative: () => '4m ago',
+      now: Date.parse('2026-09-26T18:00:00.000Z'),
+    });
+
+    const weekly = pills.find((row) => row.id === 'weekly');
+    expect(weekly).toMatchObject({ isOfficial: true, category: 'fitness', coverUrl: null });
+    // 52 in the room, no faces yet, so the pile is all overflow.
+    expect(weekly?.faceOverflow).toBe(52);
+
+    const thirty = pills.find((row) => row.id === 'thirty');
+    expect(thirty).toMatchObject({
+      isOfficial: false,
+      coverUrl: 'https://cdn.example.com/run.jpg',
+      privacyMode: 'private',
+      activityLine: 'Daniel checked in 4m ago',
+    });
+    expect(thirty?.faceOverflow).toBe(10);
+    expect(pulsePrivacyLabel(thirty?.privacyMode)).toBe('Private');
+  });
+
+  it('uses progress when nobody has checked in yet', () => {
+    const pills = buildPulsePills({
+      challenges: [
+        { id: 'thirty', status: 'live', title: '30-Day', joined: true, days_required: 30 },
+      ],
+      posts: [],
+      progress: { thirty: { done: 15, target: 30 } },
+    });
+    expect(pills[0].activityLine).toBe('15/30 days');
+  });
+
+  it('leaves the activity line empty on a silent room', () => {
+    const pills = buildPulsePills({
+      challenges: [{ id: 'quiet', status: 'live', title: 'Quiet', joined: true }],
+      posts: [],
+    });
+    expect(pills[0].activityLine).toBe('');
+    expect(pills[0].faceOverflow).toBe(0);
   });
 });
 

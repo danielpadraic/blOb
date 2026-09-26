@@ -935,6 +935,7 @@ const STRINGS = {
   'live.quietBody': '',
   'live.joinToPost': 'Join the challenge to post in Live.',
   'pulse.noChatter': 'No chatter yet',
+  'pulse.liveNow': 'Live now',
   'pulse.rail': 'Pulse',
   'pulse.seeMore': 'See More',
   'pulse.showLess': 'Show less',

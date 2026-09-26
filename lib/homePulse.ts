@@ -12,7 +12,9 @@ import {
 } from '@/lib/callouts';
 import { isCheckinPost } from '@/lib/checkinPost';
 import { copy } from '@/lib/copy';
+import { peekLiveLastRead } from '@/lib/liveLastRead';
 import { liveCheckinLabel } from '@/lib/liveThread';
+import { formatRelative } from '@/utils/format';
 import { isEndedLobbyStatus } from '@/lib/lobbyChallenge';
 import { officialCoinKind, type OfficialCoinKind } from '@/lib/officialCoin';
 import { namedChallengeHref } from '@/lib/routes';
@@ -61,6 +63,19 @@ export type PulsePill = {
   watching?: boolean;
   /** Standing house rooms lead the rail, weekly then monthly. */
   officialCoinKind?: OfficialCoinKind | null;
+  /** Card skin: dark house field vs light peer card. */
+  isOfficial?: boolean;
+  coverUrl?: string | null;
+  category?: string | null;
+  privacyMode?: string | null;
+  /** Room members beyond the faces shown. 0 hides the +N chip. */
+  faceOverflow?: number;
+  /** Check-ins since this viewer last opened the room's Live thread. */
+  newCheckins?: number;
+  /** Consistency rooms only: the viewer's own days. */
+  progress?: { done: number; target: number } | null;
+  /** One real line of activity, or '' when the room is simply live. */
+  activityLine?: string;
 };
 
 export type PulseChallengeLike = {
@@ -81,6 +96,10 @@ export type PulseChallengeLike = {
   hosting?: boolean | null;
   created_by?: string | null;
   official_kind?: string | null;
+  is_official?: boolean | null;
+  cover_image_url?: string | null;
+  category?: string | null;
+  privacy_mode?: string | null;
 };
 
 function pulseStatus(status: string | null | undefined): string {
@@ -138,6 +157,12 @@ export function pulseSnippet(post?: PulseLobbyPost | null): string {
 
 export function pulseChallengeHref(id: string) {
   return namedChallengeHref(String(id).trim(), { tab: 'live' });
+}
+
+/** `Private` on private / corporate rooms. Public peer rooms wear no chip. */
+export function pulsePrivacyLabel(privacyMode?: string | null): string {
+  const mode = String(privacyMode ?? '').trim().toLowerCase();
+  return mode === 'private' || mode === 'private_corporate' ? 'Private' : '';
 }
 
 export function sortPulsePills<
@@ -229,12 +254,81 @@ export function collectPulseFaces(
   return faces;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Distinct authors who posted in this room, from the window we fetched. */
+function authorCount(posts: PulseLobbyPost[], challengeId: string): number {
+  const seen = new Set<string>();
+  for (const post of posts) {
+    if (String(post.challenge_id ?? '') !== challengeId || post.deleted_at) {
+      continue;
+    }
+    const authorId = pulseAuthorId(post);
+    if (authorId) {
+      seen.add(authorId);
+    }
+  }
+  return seen.size;
+}
+
+/**
+ * Check-ins the viewer has not seen. Falls back to the last day when they have
+ * never opened the room, so a brand-new member is never told "52 new".
+ */
+export function countNewCheckins(
+  posts: PulseLobbyPost[],
+  challengeId: string,
+  lastReadAt?: string | null,
+  now = Date.now(),
+): number {
+  const read = Date.parse(String(lastReadAt ?? ''));
+  const since = Number.isFinite(read) ? read : now - DAY_MS;
+  let count = 0;
+  for (const post of posts) {
+    if (String(post.challenge_id ?? '') !== challengeId || post.deleted_at || !isCheckinPost(post)) {
+      continue;
+    }
+    const at = Date.parse(String(post.created_at ?? ''));
+    if (Number.isFinite(at) && at > since) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+/** The one real line under a peer card. Empty means the card just says Live now. */
+export function pulseActivityLine(input: {
+  latestCheckin?: PulseLobbyPost | null;
+  latestPost?: PulseLobbyPost | null;
+  authorName?: string;
+  progress?: { done: number; target: number } | null;
+  relative?: (at: string) => string;
+}): string {
+  const name = String(input.authorName ?? '').trim();
+  const at = String(input.latestCheckin?.created_at ?? '').trim();
+  if (name && at && input.relative) {
+    return `${name} checked in ${input.relative(at)}`;
+  }
+  if (input.progress && input.progress.target > 0) {
+    return `${input.progress.done}/${input.progress.target} days`;
+  }
+  return '';
+}
+
 export function buildPulsePills(input: {
   challenges: PulseChallengeLike[];
   posts: PulseLobbyPost[];
   profiles?: PulseProfile[];
   calloutParties?: Map<string, CalloutCardParty> | CalloutCardParty[];
   viewerId?: string | null;
+  /** challenge_id -> members, so +N means people in the room. */
+  memberCounts?: Record<string, number>;
+  /** challenge_id -> the viewer's Live read cursor. */
+  lastReadAt?: Record<string, string | null>;
+  /** challenge_id -> the viewer's consistency progress. */
+  progress?: Record<string, { done: number; target: number }>;
+  relative?: (at: string) => string;
+  now?: number;
 }): PulsePill[] {
   const challenges = selectPulseChallenges(input.challenges, input.viewerId);
   const newestFirst = [...input.posts]
@@ -268,6 +362,20 @@ export function buildPulsePills(input: {
     const party = isCallout ? parties.get(id) ?? null : null;
     const fighterFaces = calloutPartyFaces(party);
     const calloutLine = isCallout ? calloutCardMetaLine(party, input.viewerId) : '';
+    const faces =
+      isCallout && fighterFaces.length > 0
+        ? fighterFaces
+        : collectPulseFaces(newestFirst, id, profiles);
+    // Room size when we have it, else the people we actually saw post.
+    const members = Math.max(
+      input.memberCounts?.[id] ?? authorCount(newestFirst, id),
+      0,
+    );
+    const progress = input.progress?.[id] ?? null;
+    const latestCheckinAuthor = latestCheckin ? pulseAuthorId(latestCheckin) : '';
+    const latestCheckinName = latestCheckinAuthor
+      ? personDisplayName(profiles.get(latestCheckinAuthor))
+      : '';
     return {
       id,
       title: challengeDisplayTitle(row) || 'Challenge',
@@ -278,11 +386,27 @@ export function buildPulsePills(input: {
           : row.watching
             ? 'Watching'
             : pulseSnippet(null),
-      faces: isCallout && fighterFaces.length > 0 ? fighterFaces : collectPulseFaces(newestFirst, id, profiles),
+      faces,
       lastAt: latest?.created_at ?? latestCheckin?.created_at ?? null,
       isCallout,
       watching: Boolean(row.watching),
       officialCoinKind: officialCoinKind(row),
+      isOfficial: Boolean(row.is_official) || officialCoinKind(row) != null,
+      coverUrl: String(row.cover_image_url ?? '').trim() || null,
+      category: row.category ?? null,
+      privacyMode: row.privacy_mode ?? null,
+      faceOverflow: Math.max(members - faces.length, 0),
+      newCheckins: countNewCheckins(newestFirst, id, input.lastReadAt?.[id], input.now),
+      progress,
+      activityLine: isCallout
+        ? calloutLine
+        : pulseActivityLine({
+            latestCheckin,
+            latestPost: latest,
+            authorName: profiles.has(latestCheckinAuthor) ? latestCheckinName : '',
+            progress,
+            relative: input.relative,
+          }),
     };
   });
   return sortPulsePills(pills);
@@ -406,5 +530,97 @@ export async function fetchHomePulsePills(userId?: string): Promise<PulsePill[]>
   } catch {
     calloutParties = new Map();
   }
-  return buildPulsePills({ challenges, posts, profiles, calloutParties, viewerId: userId });
+  const ids = challenges.map((row) => String(row.id ?? '').trim()).filter(Boolean);
+  const [memberCounts, progress] = await Promise.all([
+    fetchPulseMemberCounts(ids),
+    fetchPulseProgress(userId, ids, challenges),
+  ]);
+  const lastReadAt: Record<string, string | null> = {};
+  for (const id of ids) {
+    lastReadAt[id] = peekLiveLastRead(userId, id);
+  }
+  return buildPulsePills({
+    challenges,
+    posts,
+    profiles,
+    calloutParties,
+    viewerId: userId,
+    memberCounts,
+    lastReadAt,
+    progress,
+    relative: formatRelative,
+  });
+}
+
+/** Room size for the +N beside the face pile. A miss just hides the chip. */
+async function fetchPulseMemberCounts(ids: string[]): Promise<Record<string, number>> {
+  const counts: Record<string, number> = {};
+  if (ids.length === 0) {
+    return counts;
+  }
+  try {
+    const { data, error } = await supabase
+      .from('challenge_participants')
+      .select('challenge_id, status')
+      .in('challenge_id', ids);
+    if (error) {
+      return counts;
+    }
+    for (const row of (data ?? []) as { challenge_id?: string | null; status?: string | null }[]) {
+      const id = String(row.challenge_id ?? '');
+      const status = String(row.status ?? 'joined');
+      if (!id || status === 'refunded_pre_start' || status === 'withdrawn') {
+        continue;
+      }
+      counts[id] = (counts[id] ?? 0) + 1;
+    }
+  } catch {
+    return counts;
+  }
+  return counts;
+}
+
+/** The viewer's own day count, for the "15/30 days" line on consistency rooms. */
+async function fetchPulseProgress(
+  userId: string,
+  ids: string[],
+  challenges: PulseChallengeLike[],
+): Promise<Record<string, { done: number; target: number }>> {
+  const out: Record<string, { done: number; target: number }> = {};
+  if (ids.length === 0) {
+    return out;
+  }
+  const targets = new Map(
+    challenges.map((row) => [
+      String(row.id ?? ''),
+      Math.max(
+        Math.trunc(Number(row.days_required ?? row.duration_days ?? row.length_value ?? 0)) || 0,
+        0,
+      ),
+    ]),
+  );
+  try {
+    const { data, error } = await supabase
+      .from('challenge_participants')
+      .select('challenge_id, days_completed')
+      .eq('user_id', userId)
+      .in('challenge_id', ids);
+    if (error) {
+      return out;
+    }
+    for (const row of (data ?? []) as {
+      challenge_id?: string | null;
+      days_completed?: number | null;
+    }[]) {
+      const id = String(row.challenge_id ?? '');
+      const target = targets.get(id) ?? 0;
+      if (!id || target <= 0) {
+        continue;
+      }
+      out[id] = { done: Math.max(Math.trunc(Number(row.days_completed) || 0), 0), target };
+    }
+  } catch {
+    return out;
+  }
+  return out;
 }
