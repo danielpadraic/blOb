@@ -1,17 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
-import { checkinPeriodCacheStamp, normalizePeriodKey, periodKeyFor } from '@/lib/checkinPeriod';
+import { checkinPeriodCacheStamp, periodKeyFor } from '@/lib/checkinPeriod';
+import { distanceProofIsSessionLog } from '@/lib/challengeExperience';
 import { isCheckinPickerRow, isLoggable, loggableStatusLine, usesPeriodCheckinGate } from '@/lib/loggable';
 import { supabase } from '@/lib/supabase';
 import type { Challenge, ChallengeParticipant } from '@/lib/types';
 import { checkinCtaTitle, type CheckinPhase } from '@/lib/challengeCheckin';
 import { checkinTaskLabel } from '@/lib/checkin';
-import { officialCoinPickerRank } from '@/lib/officialCoin';
-import { remainingProofLabelsOf } from '@/lib/multiCheckin';
+import { isOfficialCoinChallenge, officialCoinPickerRank } from '@/lib/officialCoin';
+import { resolveOpenPeriodCheckin, type StoredPeriodCheckin } from '@/lib/multiCheckin';
 import { requiredChallengeProofs } from '@/lib/challenges';
 import { blockingProofsForCheckin } from '@/lib/taskCadence';
-import { parseProofParts, partSatisfies, proofDisplayName } from '@/lib/challengeProofs';
+import { partSatisfies, proofDisplayName, proofSlotPart } from '@/lib/challengeProofs';
 import { getErrorMessage } from '@/utils/errors';
 
 export { asLoggableList, loggableStatusLine } from '@/lib/loggable';
@@ -55,6 +56,8 @@ export type LoggableChallenge = Pick<
   tasks?: unknown[] | null;
   taskLabel?: string;
   remainingProofLabels?: string[];
+  filledProofCount?: number;
+  requiredProofCount?: number;
   daysCompleted?: number;
   statusLine?: string;
   submittedThisPeriod?: boolean;
@@ -125,12 +128,11 @@ export function useLoggableChallenges() {
           const expected = periodKeyFor(challenge, clock);
           const history = historyByChallenge.get(challenge.id) ?? [];
           const proofs = requiredChallengeProofs(challenge as never);
-          const rawPhase = phaseForPeriod(challenge, checkinRows);
-          const parts = partsForPeriod(challenge, checkinRows);
-          const parsed = parseProofParts(parts);
-          const required = proofs.filter((proof) => proof.method !== 'honor');
           const taskLabel = checkinTaskLabel(challenge);
-          const remaining = remainingProofLabelsOf({ ...challenge, taskLabel }, parts);
+          const resolved = resolveOpenPeriodCheckin({ ...challenge, taskLabel }, checkinRows, clock);
+          const snapshot = resolved.snapshot;
+          const rawPhase = resolved.phase;
+          const satisfy = { sessionDistance: distanceProofIsSessionLog(challenge as never) };
           const blocking = blockingProofsForCheckin(proofs, challenge, {
             now: clock,
             periodKey: expected,
@@ -139,20 +141,20 @@ export function useLoggableChallenges() {
           });
           const blockingRemaining = blocking
             .filter((proof) => proof.method !== 'honor')
-            .filter((proof) => !partSatisfies(proof, parsed[proof.id]))
+            .filter((proof) => !partSatisfies(proof, proofSlotPart(proof, snapshot.parts), satisfy))
             .map((proof) => proofDisplayName(proof));
-          const open = remaining.length > 0 ? remaining : blockingRemaining;
-          const satisfied = required.some((proof) => partSatisfies(proof, parsed[proof.id]));
+          const open = snapshot.remaining.length > 0 ? snapshot.remaining : blockingRemaining;
+          const filled = snapshot.filled;
           const phase: CheckinPhase =
-            open.length > 0
-              ? satisfied || rawPhase === 'in_progress' || rawPhase === 'ready' || rawPhase === 'submitted'
-                ? 'in_progress'
-                : 'none'
-              : rawPhase;
-          const stamped = open.length === 0 && rawPhase === 'submitted' && usesPeriodCheckinGate(challenge);
-          if (
-            !isLoggable(challenge, { isParticipant: true }, { now: clock, submittedThisPeriod: stamped })
-          ) {
+            open.length > 0 ? (filled > 0 ? 'in_progress' : 'none') : rawPhase;
+          const slotsComplete =
+            snapshot.required > 0 && open.length === 0 && filled >= snapshot.required;
+          const stamped = slotsComplete && rawPhase === 'submitted' && usesPeriodCheckinGate(challenge);
+          const official = isOfficialCoinChallenge(challenge as never);
+          const listed = official
+            ? isCheckinPickerRow(challenge, { isParticipant: true }, { now: clock })
+            : isLoggable(challenge, { isParticipant: true }, { now: clock, submittedThisPeriod: stamped });
+          if (!listed) {
             continue;
           }
           const completed = daysCompleted.get(challenge.id) ?? 0;
@@ -164,7 +166,9 @@ export function useLoggableChallenges() {
             ctaTitle: checkinCtaTitle(phase),
             taskLabel,
             remainingProofLabels: open,
-            proofParts: parts ?? null,
+            filledProofCount: filled,
+            requiredProofCount: snapshot.required,
+            proofParts: snapshot.parts,
             statusLine: loggableStatusLine({
               ends_at: challenge.ends_at,
               days_required: challenge.days_required,
@@ -224,54 +228,29 @@ export function useLoggableChallenge() {
   };
 }
 
-type CheckinPeriodState = { phase: CheckinPhase; parts: unknown };
-
 function historyFromCheckins(
-  checkinRows: Map<string, CheckinPeriodState>,
+  checkinRows: StoredPeriodCheckin[],
 ): Map<string, { period_key: string; status: string; submitted_at: string | null; proof_parts: unknown }[]> {
-  const history = new Map<string, { period_key: string; status: string; submitted_at: string | null; proof_parts: unknown }[]>();
-  for (const [key, state] of checkinRows) {
-    const colon = key.indexOf(':');
-    if (colon < 0) {
+  const history = new Map<
+    string,
+    { period_key: string; status: string; submitted_at: string | null; proof_parts: unknown }[]
+  >();
+  for (const row of checkinRows) {
+    const challengeId = String(row.challenge_id ?? '');
+    if (!challengeId) {
       continue;
     }
-    const challengeId = key.slice(0, colon);
-    const periodKey = key.slice(colon + 1);
+    const submitted = Boolean(row.submitted_at) || row.status === 'submitted';
     const list = history.get(challengeId) ?? [];
     list.push({
-      period_key: periodKey,
-      status: state.phase === 'submitted' ? 'submitted' : String(state.phase),
-      submitted_at: state.phase === 'submitted' ? '1' : null,
-      proof_parts: state.parts,
+      period_key: String(row.period_key ?? ''),
+      status: submitted ? 'submitted' : String(row.status ?? 'in_progress'),
+      submitted_at: row.submitted_at ?? null,
+      proof_parts: row.proof_parts,
     });
     history.set(challengeId, list);
   }
   return history;
-}
-
-function submittedThisPeriod(
-  challenge: LoggableChallenge,
-  checkinRows: Map<string, CheckinPeriodState>,
-): boolean {
-  const key = periodKeyFor(challenge);
-  return Boolean(key) && checkinRows.get(`${challenge.id}:${key}`)?.phase === 'submitted';
-}
-
-function phaseForPeriod(
-  challenge: LoggableChallenge,
-  checkinRows: Map<string, CheckinPeriodState>,
-): CheckinPhase {
-  const key = periodKeyFor(challenge);
-  const phase = key ? checkinRows.get(`${challenge.id}:${key}`)?.phase : undefined;
-  return phase ?? 'none';
-}
-
-function partsForPeriod(
-  challenge: LoggableChallenge,
-  checkinRows: Map<string, CheckinPeriodState>,
-): unknown {
-  const key = periodKeyFor(challenge);
-  return key ? checkinRows.get(`${challenge.id}:${key}`)?.parts ?? null : null;
 }
 
 async function fetchActiveParticipations(userId: string): Promise<ParticipationRow[]> {
@@ -327,58 +306,51 @@ async function fetchChallenges(ids: string[]): Promise<LoggableChallenge[]> {
   return [];
 }
 
-async function fetchCheckinPhases(
-  userId: string,
-  challengeIds: string[],
-): Promise<Map<string, CheckinPeriodState>> {
-  const phases = new Map<string, CheckinPeriodState>();
+const CHECKIN_PHASE_SELECTS = [
+  'challenge_id, period_key, status, submitted_at, proof_parts, pre_selfie_url, post_selfie_url, hr_monitor_url',
+  'challenge_id, period_key, status, submitted_at, proof_parts',
+  'challenge_id, period_key, status, submitted_at',
+] as const;
+
+async function fetchCheckinPhases(userId: string, challengeIds: string[]): Promise<StoredPeriodCheckin[]> {
   if (challengeIds.length === 0) {
-    return phases;
+    return [];
   }
-  const withParts = await supabase
-    .from('challenge_checkins')
-    .select('challenge_id, period_key, status, submitted_at, proof_parts')
-    .eq('user_id', userId)
-    .in('challenge_id', challengeIds);
-  const result = withParts.error
-    ? await supabase
-        .from('challenge_checkins')
-        .select('challenge_id, period_key, status, submitted_at')
-        .eq('user_id', userId)
-        .in('challenge_id', challengeIds)
-    : withParts;
-  if (result.error) {
-    const text = result.error.message.toLowerCase();
+  let result: { data: unknown[] | null; error: { message?: string } | null } | null = null;
+  for (const columns of CHECKIN_PHASE_SELECTS) {
+    const query = await supabase
+      .from('challenge_checkins')
+      .select(columns)
+      .eq('user_id', userId)
+      .in('challenge_id', challengeIds);
+    if (!query.error) {
+      result = query;
+      break;
+    }
+    result = query;
+  }
+  if (!result || result.error) {
+    const text = String(result?.error?.message ?? '').toLowerCase();
     if (
       text.includes('does not exist') ||
       text.includes('schema cache') ||
       text.includes('42p01') ||
       text.includes('pgrst')
     ) {
-      return phases;
+      return [];
     }
-    throw new Error(getErrorMessage(result.error));
+    throw new Error(getErrorMessage(result?.error));
   }
-  for (const row of (result.data ?? []) as {
-    challenge_id: string;
-    period_key: string;
-    status?: string | null;
-    submitted_at?: string | null;
-    proof_parts?: unknown;
-  }[]) {
-    const status = row.status;
-    const phase: CheckinPhase =
-      row.submitted_at || status === 'submitted'
-        ? 'submitted'
-        : status === 'ready' || status === 'in_progress'
-          ? status
-          : 'in_progress';
-    phases.set(`${String(row.challenge_id)}:${normalizePeriodKey(row.period_key)}`, {
-      phase,
-      parts: row.proof_parts ?? null,
-    });
-  }
-  return phases;
+  return ((result.data ?? []) as StoredPeriodCheckin[]).map((row) => ({
+    challenge_id: String(row.challenge_id),
+    period_key: row.period_key ?? null,
+    status: row.status ?? null,
+    submitted_at: row.submitted_at ?? null,
+    proof_parts: row.proof_parts ?? null,
+    pre_selfie_url: row.pre_selfie_url ?? null,
+    post_selfie_url: row.post_selfie_url ?? null,
+    hr_monitor_url: row.hr_monitor_url ?? null,
+  }));
 }
 
 async function fetchLoggedDates(

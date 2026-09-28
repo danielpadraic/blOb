@@ -573,7 +573,16 @@ function SubmitWorkoutInner() {
           eliminatedAt: subjectRow?.eliminated_at,
           periodComplete: checkinPeriodComplete(challenge, {
             checkinPhase: checkinQuery.data?.phase,
-            remainingProofLabels: remainingProofLabelsOf(challenge, checkinQuery.data?.proof_parts),
+            remainingProofLabels: remainingProofLabelsOf(
+              challenge,
+              checkinQuery.data?.proof_parts,
+              null,
+              {
+                pre_selfie_url: checkinQuery.data?.pre_selfie_url,
+                post_selfie_url: checkinQuery.data?.post_selfie_url,
+                hr_monitor_url: checkinQuery.data?.hr_monitor_url,
+              },
+            ),
           }),
         })
     : null;
@@ -585,7 +594,11 @@ function SubmitWorkoutInner() {
     if (
       checkinPeriodComplete(challenge, {
         checkinPhase: checkinQuery.data?.phase,
-        remainingProofLabels: remainingProofLabelsOf(challenge, checkinQuery.data?.proof_parts),
+        remainingProofLabels: remainingProofLabelsOf(challenge, checkinQuery.data?.proof_parts, null, {
+          pre_selfie_url: checkinQuery.data?.pre_selfie_url,
+          post_selfie_url: checkinQuery.data?.post_selfie_url,
+          hr_monitor_url: checkinQuery.data?.hr_monitor_url,
+        }),
       })
     ) {
       router.replace(challengeDetailHref(id, 'lobby', null, { tab: 'overview' }) as never);
@@ -594,6 +607,9 @@ function SubmitWorkoutInner() {
     challenge,
     checkinQuery.data?.phase,
     checkinQuery.data?.proof_parts,
+    checkinQuery.data?.pre_selfie_url,
+    checkinQuery.data?.post_selfie_url,
+    checkinQuery.data?.hr_monitor_url,
     checkinQuery.isFetched,
     id,
     isProxy,
@@ -1376,7 +1392,11 @@ function SubmitWorkoutInner() {
         mergedParts[proof.id] = { ...mergedParts[proof.id], ...part };
       }
     }
-    const remainingNow = remainingProofLabelsOf(challenge, mergedParts);
+    const remainingNow = remainingProofLabelsOf(challenge, mergedParts, null, {
+      pre_selfie_url: checkinQuery.data?.pre_selfie_url,
+      post_selfie_url: checkinQuery.data?.post_selfie_url,
+      hr_monitor_url: checkinQuery.data?.hr_monitor_url,
+    });
     const readyNow =
       honorOnly ||
       remainingNow.length === 0;
@@ -1824,6 +1844,14 @@ function SubmitWorkoutInner() {
       const from = Array.isArray(params.from) ? params.from[0] : params.from;
       if (from === 'multi') {
         void queryClient.invalidateQueries({ queryKey: ['loggable-challenge'] });
+        // The first stored slot may Send alone. That does not close the period,
+        // so this room's lobby opens and the picker stays In progress.
+        if (remainingNow.length > 0) {
+          router.replace(
+            challengeDetailHref(id, 'lobby', postId, { tab: 'feed', notice: extraWarning }),
+          );
+          return;
+        }
         router.replace(multiCheckinHref([...parseDoneIds(params.done), id], extraWarning));
         return;
       }

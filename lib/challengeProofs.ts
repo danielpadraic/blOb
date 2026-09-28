@@ -615,6 +615,85 @@ export function existingUrlForProof(
   return null;
 }
 
+const PROOF_SLOT_ALIASES: Record<'pre' | 'post' | 'hr' | 'distance', readonly string[]> = {
+  pre: ['pre', 'pre_selfie'],
+  post: ['post', 'post_selfie'],
+  hr: ['hr', 'hr_monitor'],
+  distance: ['distance'],
+};
+
+function proofSlotRole(proof: ChallengeProof): 'pre' | 'post' | 'hr' | 'distance' | null {
+  if (isPreWorkoutProof(proof)) {
+    return 'pre';
+  }
+  if (isPostWorkoutProof(proof)) {
+    return 'post';
+  }
+  if (proof.method === 'hr') {
+    return 'hr';
+  }
+  if (proof.method === 'distance') {
+    return 'distance';
+  }
+  return null;
+}
+
+/**
+ * The part the composer would show for this slot: proof id, role alias, or a
+ * legacy selfie / HR column. Empty when nothing is stored.
+ */
+export function proofSlotPart(
+  proof: ChallengeProof,
+  parts?: Record<string, ChallengeProofPart> | null,
+  legacy?: {
+    pre_selfie_url?: string | null;
+    post_selfie_url?: string | null;
+    hr_monitor_url?: string | null;
+  } | null,
+): ChallengeProofPart | null {
+  const bag = parts ?? {};
+  const chunks: ChallengeProofPart[] = [];
+  if (bag[proof.id]) {
+    chunks.push(bag[proof.id]);
+  }
+  const role = proofSlotRole(proof);
+  if (role) {
+    for (const key of PROOF_SLOT_ALIASES[role]) {
+      if (key !== proof.id && bag[key]) {
+        chunks.push(bag[key]);
+      }
+    }
+  }
+  const url = existingUrlForProof(proof, bag, legacy ?? undefined);
+  if (chunks.length === 0 && !url) {
+    return null;
+  }
+  let acc: ChallengeProofPart = {
+    method: proof.method,
+    url: url || null,
+    urls: url ? [url] : [],
+  };
+  for (const chunk of chunks) {
+    const urls = uniqueProofUrls([...(acc.urls ?? []), acc.url, ...(chunk.urls ?? []), chunk.url, url]);
+    acc = {
+      ...acc,
+      ...chunk,
+      method: proof.method,
+      url: String(acc.url || chunk.url || url || '').trim() || null,
+      urls,
+      text: acc.text?.trim() ? acc.text : (chunk.text ?? null),
+      health: acc.health ?? chunk.health ?? null,
+      healthWorkoutId: acc.healthWorkoutId || chunk.healthWorkoutId || null,
+      distanceMeters:
+        Number(acc.distanceMeters) > 0 ? acc.distanceMeters : (chunk.distanceMeters ?? null),
+    };
+  }
+  if (url && !String(acc.url ?? '').trim()) {
+    acc = { ...acc, url, urls: uniqueProofUrls([...(acc.urls ?? []), url]) };
+  }
+  return acc;
+}
+
 function isBeforeAfterHeartRateProofs(proofs: ChallengeProof[]): boolean {
   return (
     proofs.length === 3 &&

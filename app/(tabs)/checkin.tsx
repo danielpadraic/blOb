@@ -7,15 +7,17 @@ import { Button } from '@/components/ui/Button';
 import { AppText } from '@/components/ui/AppText';
 import { Screen } from '@/components/ui/Screen';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
-import { useLoggableChallenges } from '@/hooks/useLoggableChallenge';
+import { useLoggableChallenges, type LoggableChallenge } from '@/hooks/useLoggableChallenge';
 import { copy } from '@/lib/copy';
 import {
   mergeMultiCheckinRows,
   nextEmptyCheckinId,
+  officialPairChip,
   parseDoneIds,
   rememberMultiCheckinSnapshot,
   type MultiCheckinRow,
   type MultiCheckinState,
+  type OfficialRoomSlots,
 } from '@/lib/multiCheckin';
 import { pushCheckinPickerRow } from '@/lib/challengeNav';
 import { useOfficialCoinStatus } from '@/hooks/useOfficialCoin';
@@ -69,20 +71,32 @@ export default function MultiCheckinScreen() {
   // for the pair instead of a Weekly and a Monthly that do the same thing.
   const coinStatus = officialCoin.status;
   const coinWeeklyId = coinStatus.weekly?.challenge.id ?? '';
+  const coinMonthlyId = coinStatus.monthly?.challenge.id ?? '';
   const otherLoggable = useMemo(
     () => (loggable.data ?? []).filter((row) => !isOfficialCoinChallenge(row)),
     [loggable.data],
   );
-  const coinRow = useMemo(
+  const coinWeeklyRow = useMemo(
     () => (loggable.data ?? []).find((row) => row.id === coinWeeklyId) ?? null,
     [coinWeeklyId, loggable.data],
   );
-  const coinDone = coinStatus.checkedInToday || doneIds.includes(coinWeeklyId);
+  const coinMonthlyRow = useMemo(
+    () => (loggable.data ?? []).find((row) => row.id === coinMonthlyId) ?? null,
+    [coinMonthlyId, loggable.data],
+  );
+  const coinChip = useMemo(
+    () => officialPairChip(roomSlots(coinWeeklyRow), roomSlots(coinMonthlyRow)),
+    [coinMonthlyRow, coinWeeklyRow],
+  );
   const showCoinRow = Boolean(coinStatus.joined && coinWeeklyId);
+  const coinIds = useMemo(
+    () => [coinWeeklyId, coinMonthlyId].filter(Boolean),
+    [coinMonthlyId, coinWeeklyId],
+  );
 
   const rows = useMemo(
-    () => mergeMultiCheckinRows(otherLoggable, doneIds.filter((id) => id !== coinWeeklyId)),
-    [coinWeeklyId, doneIds, otherLoggable],
+    () => mergeMultiCheckinRows(otherLoggable, doneIds.filter((id) => !coinIds.includes(id))),
+    [coinIds, doneIds, otherLoggable],
   );
   const nextId = nextEmptyCheckinId(rows, doneIds[doneIds.length - 1] ?? null);
 
@@ -95,7 +109,7 @@ export default function MultiCheckinScreen() {
     if (!coinWeeklyId) {
       return;
     }
-    if (coinDone) {
+    if (coinChip.state === 'complete') {
       router.push(
         challengeDetailHref(coinWeeklyId, 'lobby', null, {
           tab: 'overview',
@@ -128,11 +142,7 @@ export default function MultiCheckinScreen() {
       ) : null}
       {showCoinRow ? (
         <View style={{ marginBottom: 10 }}>
-          <OfficialCheckinRow
-            done={coinDone}
-            remainingProofLabels={coinRow?.remainingProofLabels ?? []}
-            onPress={openOfficialCoin}
-          />
+          <OfficialCheckinRow state={coinChip.state} line={coinChip.line} onPress={openOfficialCoin} />
         </View>
       ) : null}
       {rows.length === 0 && !showCoinRow && !loggable.isLoading ? (
@@ -190,20 +200,30 @@ export default function MultiCheckinScreen() {
  * House chrome. One row for the pair of Official Coin rooms, sponsored by blOb,
  * visibly different from a private or user-made challenge.
  */
+function roomSlots(row: LoggableChallenge | null): OfficialRoomSlots {
+  if (!row) {
+    return null;
+  }
+  return {
+    remaining: row.remainingProofLabels ?? [],
+    filled: row.filledProofCount ?? 0,
+  };
+}
+
 function OfficialCheckinRow({
-  done,
-  remainingProofLabels,
+  state,
+  line,
   onPress,
 }: {
-  done: boolean;
-  remainingProofLabels: string[];
+  state: MultiCheckinState;
+  line: string;
   onPress: () => void;
 }) {
-  const state = done ? OFFICIAL_COIN_ALREADY_TODAY : copy('checkin.multiEmpty');
+  const chip = CHIP[state];
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${OFFICIAL_COIN_CHECKIN_LABEL}, ${state}`}
+      accessibilityLabel={`${OFFICIAL_COIN_CHECKIN_LABEL}, ${STATE_COPY[state]}`}
       onPress={onPress}
       style={{
         backgroundColor: THEME.surface,
@@ -223,25 +243,21 @@ function OfficialCheckinRow({
           <AppText className="mt-0.5 text-[13px]" style={{ color: THEME.accent }} numberOfLines={1}>
             {OFFICIAL_COIN_SPONSOR_LINE}
           </AppText>
-          <AppText className="mt-1 text-[12px] text-muted" numberOfLines={2}>
-            {done
-              ? 'Weekly and Monthly are both stamped for today.'
-              : remainingProofLabels.length > 0
-                ? remainingProofLabels.join(' · ')
-                : 'Fills the Weekly and Monthly rooms in one go.'}
-          </AppText>
+          {line ? (
+            <AppText className="mt-1 text-[12px] text-muted" numberOfLines={2}>
+              {line}
+            </AppText>
+          ) : null}
         </View>
         <View
           style={{
-            backgroundColor: done ? THEME.accentSoft : THEME.calloutSoft,
+            backgroundColor: chip.bg,
             borderRadius: 999,
             paddingHorizontal: 10,
             paddingVertical: 5,
           }}>
-          <AppText
-            className="text-[12px] font-bold"
-            style={{ color: done ? THEME.accent : '#6B4E12' }}>
-            {done ? copy('checkin.multiComplete') : copy('checkin.multiEmpty')}
+          <AppText className="text-[12px] font-bold" style={{ color: chip.fg }}>
+            {STATE_COPY[state]}
           </AppText>
         </View>
       </View>

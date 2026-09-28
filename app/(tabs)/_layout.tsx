@@ -52,6 +52,7 @@ import {
   MULTI_CHECKIN_HREF,
 } from '@/lib/routes';
 import { useOfficialCoinStatus } from '@/hooks/useOfficialCoin';
+import { officialPairChip } from '@/lib/multiCheckin';
 import { isOfficialCoinChallenge, OFFICIAL_COIN_ALREADY_TODAY } from '@/lib/officialCoin';
 import { isLiveCameraPath, stopAllLiveMedia, stopMediaUnlessCameraPath } from '@/lib/cameraSession';
 import { startFreshRoundCapture, startFreshWaveCapture } from '@/lib/waveCapture';
@@ -365,13 +366,27 @@ function TabLayoutInner() {
     }
     if (id === 'log') {
       const list = loggable.data ?? [];
-      // Today's Chicago slot is already filled on both Official rooms. Land the
-      // Weekly Overview instead of reopening the camera.
-      const coinDone =
-        officialCoin.status.checkedInToday && officialCoin.status.weekly?.challenge.id;
-      if (coinDone && (isOfficialCoinChallenge(challenge) || (!challenge?.id && list.length === 0))) {
+      // Both Official rooms have every required slot for today. A pre selfie
+      // alone stays on Check In.
+      const weeklyId = officialCoin.status.weekly?.challenge.id ?? '';
+      const monthlyId = officialCoin.status.monthly?.challenge.id ?? '';
+      const weeklyRow = list.find((row) => row.id === weeklyId) ?? null;
+      const monthlyRow = list.find((row) => row.id === monthlyId) ?? null;
+      const coinChip = officialPairChip(
+        weeklyRow
+          ? { remaining: weeklyRow.remainingProofLabels ?? [], filled: weeklyRow.filledProofCount ?? 0 }
+          : null,
+        monthlyRow
+          ? { remaining: monthlyRow.remainingProofLabels ?? [], filled: monthlyRow.filledProofCount ?? 0 }
+          : null,
+      );
+      if (
+        coinChip.state === 'complete' &&
+        weeklyId &&
+        (isOfficialCoinChallenge(challenge) || (!challenge?.id && list.length === 0))
+      ) {
         go(
-          challengeDetailHref(String(coinDone), 'lobby', null, {
+          challengeDetailHref(weeklyId, 'lobby', null, {
             tab: 'overview',
             notice: OFFICIAL_COIN_ALREADY_TODAY,
           }),

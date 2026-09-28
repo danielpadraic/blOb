@@ -1,11 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
+import { periodKeyFor } from '@/lib/checkinPeriod';
+import { periodWorkoutSlotOpen } from '@/lib/health/workoutPromptTargets';
+import { checkinPeriodComplete } from '@/lib/loggable';
 import {
+  checkinSlotSnapshot,
   hubRowState,
   mergeMultiCheckinRows,
   nextEmptyCheckinId,
+  OFFICIAL_PAIR_IDLE,
+  OFFICIAL_PAIR_PROGRESS,
+  OFFICIAL_PAIR_STAMPED,
+  officialPairChip,
   parseDoneIds,
   remainingProofLabelsOf,
+  resolveOpenPeriodCheckin,
   stackHomeCheckinPosts,
   type HomeCheckinPost,
 } from '@/lib/multiCheckin';
@@ -139,6 +148,178 @@ describe('Multi Check-In hub rows', () => {
       state: 'in_progress',
       remainingProofLabels: ['post-workout selfie', 'heart rate'],
     });
+  });
+
+  it('keeps Official on In progress after a pre selfie, and Complete only when both rooms are full', () => {
+    const preOnly = checkinSlotSnapshot(
+      { proofs: thirtyDayProofs },
+      {},
+      { pre_selfie_url: 'https://cdn.test/pre.jpg' },
+    );
+    expect(preOnly.filled).toBe(1);
+    expect(preOnly.remaining.join(' ').toLowerCase()).not.toMatch(/pre-workout/);
+    expect(preOnly.remaining.join(' ').toLowerCase()).toMatch(/post-workout/);
+    expect(preOnly.remaining.join(' ').toLowerCase()).toMatch(/heart rate/);
+
+    const partial = officialPairChip(
+      { remaining: preOnly.remaining, filled: preOnly.filled },
+      { remaining: preOnly.remaining, filled: preOnly.filled },
+    );
+    expect(partial).toEqual({ state: 'in_progress', line: OFFICIAL_PAIR_PROGRESS });
+    expect(partial.line).not.toBe(OFFICIAL_PAIR_STAMPED);
+
+    const fromParts = checkinSlotSnapshot(
+      { proofs: thirtyDayProofs },
+      { pre: { method: 'photo', url: 'https://cdn.test/pre.jpg' } },
+    );
+    expect(
+      officialPairChip(
+        { remaining: fromParts.remaining, filled: fromParts.filled },
+        { remaining: fromParts.remaining, filled: fromParts.filled },
+      ).state,
+    ).toBe('in_progress');
+
+    expect(
+      officialPairChip(
+        { remaining: preOnly.remaining, filled: 1 },
+        null,
+      ).state,
+    ).toBe('in_progress');
+
+    expect(
+      officialPairChip(
+        { remaining: ['Post a pre-workout selfie.', 'Post a post-workout selfie.', 'Share proof of at least 30 minutes of elevated heart rate.'], filled: 0 },
+        { remaining: ['Post a pre-workout selfie.', 'Post a post-workout selfie.', 'Share proof of at least 30 minutes of elevated heart rate.'], filled: 0 },
+      ),
+    ).toEqual({ state: 'not_started', line: OFFICIAL_PAIR_IDLE });
+
+    const full = officialPairChip(
+      { remaining: [], filled: 3 },
+      { remaining: [], filled: 3 },
+    );
+    expect(full).toEqual({ state: 'complete', line: OFFICIAL_PAIR_STAMPED });
+    expect(officialPairChip({ remaining: [], filled: 3 }, { remaining: [], filled: 0 }).state).toBe(
+      'in_progress',
+    );
+    expect(officialPairChip({ remaining: [], filled: 3 }, null).line).not.toBe(OFFICIAL_PAIR_STAMPED);
+  });
+
+  it('reads a stored pre selfie back onto the 30-Day chip and leaves the period open', () => {
+    const now = new Date('2026-09-09T18:00:00.000Z');
+    const challenge = {
+      id: '30-day',
+      title: '30-Day Consistency',
+      format: 'consistency',
+      challenge_type: 'consistency',
+      frequency: 'daily',
+      timezone: 'America/Denver',
+      starts_at: '2026-08-01T06:00:00.000Z',
+      proofs: thirtyDayProofs,
+    };
+    const key = periodKeyFor(challenge, now);
+    const resolved = resolveOpenPeriodCheckin(
+      challenge,
+      [
+        {
+          challenge_id: '30-day',
+          period_key: '1999-01-01',
+          status: 'submitted',
+          submitted_at: now.toISOString(),
+          proof_parts: {},
+          pre_selfie_url: 'https://cdn.test/pre.jpg',
+        },
+      ],
+      now,
+    );
+    expect(key).toBeTruthy();
+    expect(resolved.snapshot.filled).toBe(1);
+    expect(resolved.snapshot.remaining.length).toBeGreaterThan(0);
+    expect(
+      hubRowState(
+        'submitted',
+        true,
+        resolved.snapshot.remaining,
+        true,
+        resolved.snapshot.filled,
+        resolved.snapshot.required,
+      ),
+    ).toBe('in_progress');
+    expect(
+      checkinPeriodComplete(challenge, {
+        submittedThisPeriod: true,
+        checkinPhase: 'submitted',
+        remainingProofLabels: resolved.snapshot.remaining,
+      }),
+    ).toBe(false);
+    expect(periodWorkoutSlotOpen(challenge, { proof_parts: resolved.snapshot.parts })).toBe(true);
+  });
+
+  it('leaves a miles race Not started until this log has miles', () => {
+    const now = new Date('2026-09-09T18:00:00.000Z');
+    const challenge = {
+      id: 'run-128',
+      title: 'Long run',
+      format: 'cumulative',
+      challenge_type: 'cumulative',
+      cumulative_target: 128,
+      cumulative_metric: 'distance',
+      timezone: 'America/Denver',
+      starts_at: '2026-08-01T06:00:00.000Z',
+      proofs: [{ id: 'dist', name: 'Log your miles.', method: 'distance', distance_meters: 1609 }],
+    };
+    const key = periodKeyFor(challenge, now);
+    const closed = resolveOpenPeriodCheckin(
+      challenge,
+      [
+        {
+          challenge_id: 'run-128',
+          period_key: key,
+          status: 'submitted',
+          submitted_at: now.toISOString(),
+          proof_parts: { dist: { method: 'distance', distanceMeters: 8000 } },
+        },
+      ],
+      now,
+    );
+    expect(closed.phase).toBe('none');
+    expect(closed.snapshot.filled).toBe(0);
+    expect(
+      hubRowState('submitted', true, closed.snapshot.remaining, false, closed.snapshot.filled, closed.snapshot.required),
+    ).toBe('not_started');
+
+    const open = resolveOpenPeriodCheckin(
+      challenge,
+      [
+        {
+          challenge_id: 'run-128',
+          period_key: key,
+          status: 'in_progress',
+          proof_parts: { dist: { method: 'distance', distanceMeters: 1609 } },
+        },
+      ],
+      now,
+    );
+    expect(open.snapshot.filled).toBe(1);
+    expect(
+      hubRowState('in_progress', false, open.snapshot.remaining, false, open.snapshot.filled, open.snapshot.required),
+    ).not.toBe('not_started');
+
+    const rows = mergeMultiCheckinRows(
+      [
+        {
+          id: 'run-128',
+          title: 'Long run',
+          format: 'cumulative',
+          challenge_type: 'cumulative',
+          checkinPhase: 'none',
+          remainingProofLabels: ['Log your miles.'],
+          filledProofCount: 0,
+          requiredProofCount: 1,
+        } as never,
+      ],
+      ['run-128'],
+    );
+    expect(rows[0]?.state).toBe('not_started');
   });
 });
 

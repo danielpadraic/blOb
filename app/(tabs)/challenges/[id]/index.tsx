@@ -614,7 +614,11 @@ export default function ChallengeDetailScreen() {
     );
   }, [challenge, isJoined, roster.data, user?.id]);
   const durationDays = challengeDurationDays(challenge);
-  const remainingPeriodProofs = remainingProofLabelsOf(challenge, periodCheckin.data?.proof_parts);
+  const remainingPeriodProofs = remainingProofLabelsOf(challenge, periodCheckin.data?.proof_parts, null, {
+    pre_selfie_url: periodCheckin.data?.pre_selfie_url,
+    post_selfie_url: periodCheckin.data?.post_selfie_url,
+    hr_monitor_url: periodCheckin.data?.hr_monitor_url,
+  });
   const periodSubmitted =
     periodCheckin.data?.phase === 'submitted' || isSubmittedCheckin(periodCheckin.data);
   const loggedToday = remainingPeriodProofs.length === 0 && periodSubmitted;
