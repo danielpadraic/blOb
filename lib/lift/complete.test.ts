@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   buildCompletedCard,
   canCompleteSession,
-  COMPLETE_LEFTOVER_HINT,
   defaultHistoryTab,
   filterHistoryTab,
+  firstLeftoverTarget,
   leftoverIncompleteWork,
   sessionWeightMoved,
   toggleRoundComplete,
@@ -51,10 +51,40 @@ describe('complete gate', () => {
     expect(leftoverIncompleteWork(draft).sets).toBe(1);
   });
 
-  it('blocks Complete when a warm-up is leftover', () => {
+  it('does not block Complete for an open warm-up', () => {
     const draft = bench([warmup(45, 10, false), work(135, 8, true)]);
+    expect(canCompleteSession(draft)).toBe(true);
+    expect(leftoverIncompleteWork(draft).sets).toBe(0);
+    expect(firstLeftoverTarget(draft)).toBeNull();
+  });
+
+  it('does not block Complete for a blank set slot', () => {
+    const draft = bench([
+      work(135, 8, true),
+      { key: 'blank', kind: 'work', weight: null, reps: null, completedAt: null },
+    ]);
+    expect(canCompleteSession(draft)).toBe(true);
+    expect(leftoverIncompleteWork(draft).sets).toBe(0);
+    expect(firstLeftoverTarget(draft)).toBeNull();
+  });
+
+  it('names the unchecked working set', () => {
+    const draft = bench([
+      work(20, 12, true),
+      work(25, 10, true),
+      work(30, 8, true),
+      work(30, 8, false),
+    ]);
+    draft.exercises[0].name = 'Cable Skull Crusher';
+    const target = firstLeftoverTarget(draft);
     expect(canCompleteSession(draft)).toBe(false);
-    expect(leftoverIncompleteWork(draft).sets).toBe(1);
+    expect(target?.line).toBe('Check or remove Cable Skull Crusher set 4');
+    expect(target?.setNumber).toBe(4);
+  });
+
+  it('numbers working sets and skips a warm-up in between', () => {
+    const draft = bench([warmup(45, 10, true), work(135, 8, true), work(135, 8, false)]);
+    expect(firstLeftoverTarget(draft)?.line).toBe('Check or remove Incline BB Bench Press set 2');
   });
 
   it('allows Complete when every remaining set is Done', () => {
@@ -72,8 +102,15 @@ describe('complete gate', () => {
     expect(canCompleteSession(newSessionDraft({ muscleKeys: ['chest'], unit: 'lb' }))).toBe(false);
   });
 
-  it('explains leftover work in the copy the footer uses', () => {
-    expect(COMPLETE_LEFTOVER_HINT).toBe('Check or remove the leftover sets first.');
+  it('does not block for a rest row when cardio was never added', () => {
+    let draft = bench([work(100, 10, true)]);
+    draft = addTimedRow(draft, {
+      kind: 'rest',
+      muscleKey: 'chest',
+      name: 'Rest',
+    });
+    expect(canCompleteSession(draft)).toBe(true);
+    expect(firstLeftoverTarget(draft)).toBeNull();
   });
 });
 
@@ -88,6 +125,7 @@ describe('cardio rounds', () => {
     });
     expect(canCompleteSession(draft)).toBe(false);
     expect(leftoverIncompleteWork(draft).rounds).toBe(1);
+    expect(firstLeftoverTarget(draft)?.line).toBe('Check or remove Treadmill');
     const done = {
       ...draft,
       exercises: [{ ...draft.exercises[0], completedAt: DONE }],
@@ -105,6 +143,7 @@ describe('cardio rounds', () => {
     const row = draft.exercises[0];
     expect((row.rounds ?? []).length).toBeGreaterThan(0);
     expect(canCompleteSession(draft)).toBe(false);
+    expect(firstLeftoverTarget(draft)?.line).toBe('Check or remove Air Bike round 1');
 
     const checked = {
       ...draft,

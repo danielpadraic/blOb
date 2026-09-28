@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, View } from 'react-native';
+import { Animated, Pressable, ScrollView, View } from 'react-native';
 
 import { DurationField } from '@/components/lift/DurationField';
 import { NumberField } from '@/components/lift/NumberField';
@@ -15,6 +15,7 @@ import {
 } from '@/lib/lift/session';
 import type { LiftCardioType, LiftExerciseDraft, LiftRound } from '@/lib/lift/types';
 import { THEME, themeShadow } from '@/lib/theme';
+import { useLeftoverPulse } from '@/components/lift/useLeftoverPulse';
 
 /**
  * A cardio or rest row inside a muscle section.
@@ -36,6 +37,8 @@ type TimedRowCardProps = {
   onChangeRounds?: (rounds: LiftRound[]) => void;
   onToggleComplete?: () => void;
   onPlay?: () => void;
+  /** Increments when Complete should scroll this row into view and pulse it. */
+  pulseToken?: number;
   canMoveUp?: boolean;
   canMoveDown?: boolean;
 };
@@ -53,6 +56,7 @@ export function TimedRowCard({
   onChangeRounds,
   onToggleComplete,
   onPlay,
+  pulseToken = 0,
   canMoveUp,
   canMoveDown,
 }: TimedRowCardProps) {
@@ -65,6 +69,7 @@ export function TimedRowCard({
   const showDuration = !interval;
   const playable = !rest && canPlay(row);
   const showMainDone = !rest && !interval;
+  const pulse = useLeftoverPulse(readOnly ? 0 : pulseToken);
 
   if (readOnly) {
     return (
@@ -110,7 +115,10 @@ export function TimedRowCard({
   }
 
   return (
-    <View style={cardStyle(rest)}>
+    <Animated.View
+      ref={pulse.ref}
+      collapsable={false}
+      style={[cardStyle(rest), pulseToken ? pulse.style : null]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
         <Glyph
           name={rest ? GLYPH.clock : GLYPH.anyExercise}
@@ -282,7 +290,7 @@ export function TimedRowCard({
           </AppText>
         </Pressable>
       ) : null}
-    </View>
+    </Animated.View>
   );
 }
 

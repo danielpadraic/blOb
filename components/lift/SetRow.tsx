@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Animated, Pressable, View } from 'react-native';
 
 import { NumberField } from '@/components/lift/NumberField';
 import { AppText } from '@/components/ui/AppText';
@@ -16,6 +16,7 @@ import {
 import type { LiftSetDraft } from '@/lib/lift/types';
 import { THEME } from '@/lib/theme';
 import type { WeightUnit } from '@/lib/types';
+import { useLeftoverPulse } from '@/components/lift/useLeftoverPulse';
 
 /** Fixed columns, so the header labels line up with every row underneath them. */
 const LABEL_WIDTH = 24;
@@ -31,6 +32,8 @@ type SetRowProps = {
   readOnly?: boolean;
   autoFocus?: boolean;
   canRemove?: boolean;
+  /** Increments when Complete should scroll this row into view and pulse it. */
+  pulseToken?: number;
   onChange: (patch: Partial<Pick<LiftSetDraft, 'weight' | 'reps'>>) => void;
   onToggleComplete: () => void;
   onRemove: () => void;
@@ -43,6 +46,7 @@ export function SetRow({
   readOnly,
   autoFocus,
   canRemove,
+  pulseToken = 0,
   onChange,
   onToggleComplete,
   onRemove,
@@ -54,6 +58,7 @@ export function SetRow({
   const removable = !readOnly && canRemove;
   const filled = !isEmptySet(set);
   const [confirming, setConfirming] = useState(false);
+  const pulse = useLeftoverPulse(pulseToken);
 
   // An armed delete that stays armed is a trap the next time they reach for the row.
   useEffect(() => {
@@ -65,14 +70,19 @@ export function SetRow({
   }, [confirming]);
 
   return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: GAP,
-        paddingVertical: 3,
-        opacity: readOnly && !done ? 0.7 : 1,
-      }}>
+    <Animated.View
+      ref={pulse.ref}
+      collapsable={false}
+      style={[
+        {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: GAP,
+          paddingVertical: 3,
+          opacity: readOnly && !done ? 0.7 : 1,
+        },
+        pulseToken ? pulse.style : null,
+      ]}>
       <View style={{ width: LABEL_WIDTH, alignItems: 'center' }}>
         <AppText
           style={{
@@ -163,7 +173,7 @@ export function SetRow({
           </Pressable>
         ) : null}
       </View>
-    </View>
+    </Animated.View>
   );
 }
 

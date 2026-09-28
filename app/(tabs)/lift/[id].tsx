@@ -34,7 +34,7 @@ import {
   useSaveLiftSession,
   useShareLiftSession,
 } from '@/hooks/useLift';
-import { canCompleteSession, COMPLETE_LEFTOVER_HINT, leftoverIncompleteWork, sessionWeightMoved } from '@/lib/lift/complete';
+import { canCompleteSession, firstLeftoverTarget, sessionWeightMoved } from '@/lib/lift/complete';
 import { rankHealthKitWorkouts } from '@/lib/lift/healthkit';
 import { bumpSessionInPlace, canOverloadSession, overloadChipLabel } from '@/lib/lift/overload';
 import { hasShareableWork, sessionCardioSeconds } from '@/lib/lift/recap';
@@ -146,6 +146,8 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
   const [lockedChallengeIds, setLockedChallengeIds] = useState<string[]>([]);
   const [collapsedMuscles, setCollapsedMuscles] = useState<Set<string>>(new Set());
   const [collapsedExercises, setCollapsedExercises] = useState<Set<string>>(new Set());
+  const [pulseKey, setPulseKey] = useState<string | null>(null);
+  const [pulseToken, setPulseToken] = useState(0);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [focusExerciseKey, setFocusExerciseKey] = useState<string | null>(null);
   const [sheetMuscle, setSheetMuscle] = useState<MuscleKey | null>(null);
@@ -402,12 +404,32 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
     setError(null);
   }
 
+  function revealLeftover() {
+    if (!draft) {
+      return;
+    }
+    const target = firstLeftoverTarget(draft);
+    if (!target) {
+      return;
+    }
+    setError(null);
+    const nextMuscles = new Set(collapsedMuscles);
+    nextMuscles.delete(target.muscleKey);
+    const nextExercises = new Set(collapsedExercises);
+    nextExercises.delete(target.exerciseKey);
+    setCollapsedMuscles(nextMuscles);
+    setCollapsedExercises(nextExercises);
+    writeCollapse(draft.id, nextMuscles, nextExercises);
+    setPulseKey(target.setKey ?? target.exerciseKey);
+    setPulseToken((tick) => tick + 1);
+  }
+
   async function onComplete() {
     if (!draft) {
       return;
     }
     if (!canCompleteSession(draft)) {
-      setError(COMPLETE_LEFTOVER_HINT);
+      revealLeftover();
       return;
     }
     dirty.current = false;
@@ -681,8 +703,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
     0,
   );
 
-  const leftover = leftoverIncompleteWork(draft);
-  const leftoverOpen = leftover.sets > 0 || leftover.rounds > 0;
+  const leftover = firstLeftoverTarget(draft);
   const canFinish = canCompleteSession(draft);
 
   return (
@@ -712,7 +733,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
               <LiftDraftFooter
                 canPlay={Boolean(playableRow)}
                 canComplete={canFinish}
-                leftover={leftoverOpen}
+                leftoverLine={leftover?.line ?? null}
                 saving={finishing}
                 completing={completing}
                 statusLine={error}
@@ -723,6 +744,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
                 }}
                 onSave={() => void onSave()}
                 onComplete={() => void onComplete()}
+                onLeftover={revealLeftover}
               />
             </TourAnchor>
           )
@@ -1027,6 +1049,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
                           <TimedRowCard
                             key={exercise.key}
                             row={exercise}
+                            pulseToken={pulseKey === exercise.key ? pulseToken : 0}
                             readOnly={readOnly}
                             onChangeDuration={(seconds) =>
                               edit((current) =>
@@ -1084,6 +1107,8 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
                             unit={draft.unit}
                             readOnly={readOnly}
                             autoFocusSet={focusExerciseKey === exercise.key}
+                            pulseKey={pulseKey}
+                            pulseToken={pulseToken}
                             collapsed={collapsedExercises.has(exercise.key)}
                             supersetLabel={labels[exercise.key] ?? null}
                             supersetAbove={grouped != null && previous?.supersetGroup === grouped}

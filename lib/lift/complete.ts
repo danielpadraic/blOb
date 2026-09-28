@@ -2,18 +2,18 @@ import { formatDuration } from '@/lib/lift/duration';
 import { formatMassMoved } from '@/lib/lift/massUnit';
 import { formatVolume } from '@/lib/lift/recap';
 import { cardioRowSeconds } from '@/lib/lift/rounds';
-import { sessionTitle, shortDate, timedRowLabel } from '@/lib/lift/session';
-import type { LiftExerciseDraft, LiftRound, LiftSessionDraft, LiftSessionSummary } from '@/lib/lift/types';
+import { isEmptySet, sessionTitle, shortDate, timedRowLabel } from '@/lib/lift/session';
+import type { LiftExerciseDraft, LiftRound, LiftSessionDraft, LiftSessionSummary, LiftSetDraft } from '@/lib/lift/types';
+import type { MuscleKey } from '@/lib/lift/muscles';
 import type { WeightUnit } from '@/lib/types';
 
 /**
  * When a lift can leave Draft, what weight moved means, and the summary card for a finished session.
  *
- * Complete is a gate, not a save. Autosave and Save stay Draft. Complete is allowed only when every
- * leftover set and cardio round is Done or gone.
+ * Complete is a gate, not a save. Autosave and Save stay Draft. Complete is allowed when every
+ * remaining working set is Done or removed. Blank slots, warm-ups, and Cardio/Rest chips that were
+ * never inserted do not block it.
  */
-
-export const COMPLETE_LEFTOVER_HINT = 'Check or remove the leftover sets first.';
 
 export type LiftSessionStatus = 'open' | 'saved' | 'completed';
 
@@ -36,7 +36,12 @@ export type LeftoverWork = {
   rounds: number;
 };
 
-/** Remaining sets and cardio rounds that still need Done. Rest rows between sets do not count. */
+/**
+ * Working sets and inserted cardio rounds that still need Done.
+ *
+ * Warm-ups, rest rows, and blank set slots (nothing typed, and not checked) do not count.
+ * Cardio and Rest chips that were never inserted are not exercises, so they are not here.
+ */
 export function leftoverIncompleteWork(draft: LiftSessionDraft | null | undefined): LeftoverWork {
   if (!draft) {
     return { sets: 0, rounds: 0 };
@@ -51,9 +56,80 @@ export function leftoverIncompleteWork(draft: LiftSessionDraft | null | undefine
       rounds += leftoverCardioRounds(exercise);
       continue;
     }
-    sets += exercise.sets.filter((set) => !set.completedAt).length;
+    sets += exercise.sets.filter((set) => set.kind === 'work' && blocksComplete(set)).length;
   }
   return { sets, rounds };
+}
+
+/** A working set the user actually started and has not checked Done. */
+function blocksComplete(set: LiftSetDraft): boolean {
+  return set.kind === 'work' && !set.completedAt && !isEmptySet(set);
+}
+
+export type LeftoverTarget = {
+  exerciseKey: string;
+  exerciseName: string;
+  muscleKey: MuscleKey;
+  /** The unchecked working set. Null when the leftover is a cardio row. */
+  setKey: string | null;
+  setNumber: number | null;
+  line: string;
+};
+
+/** The first working set or inserted cardio row that still blocks Complete, in session order. */
+export function firstLeftoverTarget(draft: LiftSessionDraft | null | undefined): LeftoverTarget | null {
+  if (!draft) {
+    return null;
+  }
+  for (const exercise of draft.exercises) {
+    if (exercise.kind === 'rest') {
+      continue;
+    }
+    if (exercise.kind === 'cardio') {
+      const cardio = cardioLeftover(exercise);
+      if (cardio) {
+        return cardio;
+      }
+      continue;
+    }
+    let number = 0;
+    for (const set of exercise.sets) {
+      if (set.kind !== 'work') {
+        continue;
+      }
+      number += 1;
+      if (!blocksComplete(set)) {
+        continue;
+      }
+      return {
+        exerciseKey: exercise.key,
+        exerciseName: exercise.name,
+        muscleKey: exercise.muscleKey,
+        setKey: set.key,
+        setNumber: number,
+        line: `Check or remove ${exercise.name} set ${number}`,
+      };
+    }
+  }
+  return null;
+}
+
+function cardioLeftover(exercise: LiftExerciseDraft): LeftoverTarget | null {
+  if (leftoverCardioRounds(exercise) === 0) {
+    return null;
+  }
+  const name = timedRowLabel(exercise);
+  const rounds = exercise.rounds ?? [];
+  const roundIndex = exercise.cardioType === 'interval' ? rounds.findIndex((round) => !round.completedAt) : -1;
+  const setNumber = roundIndex >= 0 ? roundIndex + 1 : null;
+  return {
+    exerciseKey: exercise.key,
+    exerciseName: name,
+    muscleKey: exercise.muscleKey,
+    setKey: null,
+    setNumber,
+    line: setNumber ? `Check or remove ${name} round ${setNumber}` : `Check or remove ${name}`,
+  };
 }
 
 export function leftoverCardioRounds(exercise: LiftExerciseDraft): number {
@@ -68,11 +144,7 @@ export function leftoverCardioRounds(exercise: LiftExerciseDraft): number {
 }
 
 export function canCompleteSession(draft: LiftSessionDraft | null | undefined): boolean {
-  if (!draft) {
-    return false;
-  }
-  const leftover = leftoverIncompleteWork(draft);
-  if (leftover.sets > 0 || leftover.rounds > 0) {
+  if (!draft || firstLeftoverTarget(draft)) {
     return false;
   }
   return draft.exercises.some((exercise) => {
@@ -82,7 +154,7 @@ export function canCompleteSession(draft: LiftSessionDraft | null | undefined): 
     if (exercise.kind === 'cardio') {
       return leftoverCardioRounds(exercise) === 0 && cardioHasWork(exercise);
     }
-    return exercise.sets.some((set) => set.completedAt);
+    return exercise.sets.some((set) => set.kind === 'work' && set.completedAt);
   });
 }
 

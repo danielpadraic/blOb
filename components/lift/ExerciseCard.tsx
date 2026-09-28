@@ -27,6 +27,9 @@ type ExerciseCardProps = {
   supersetBelow?: boolean;
   readOnly?: boolean;
   autoFocusSet?: boolean;
+  /** Set key that Complete should scroll to, with a token that bumps on each tap. */
+  pulseKey?: string | null;
+  pulseToken?: number;
   onToggleCollapsed: () => void;
   onChangeSet: (setKey: string, patch: Partial<Pick<LiftSetDraft, 'weight' | 'reps'>>) => void;
   onToggleSet: (setKey: string) => void;
@@ -50,6 +53,8 @@ export function ExerciseCard({
   supersetBelow,
   readOnly,
   autoFocusSet,
+  pulseKey,
+  pulseToken = 0,
   onToggleCollapsed,
   onChangeSet,
   onToggleSet,
@@ -255,6 +260,7 @@ export function ExerciseCard({
                   readOnly={readOnly}
                   autoFocus={Boolean(autoFocusSet) && index === 0}
                   canRemove={exercise.sets.length > 1}
+                  pulseToken={pulseKey === set.key ? pulseToken : 0}
                   onChange={(patch) => onChangeSet(set.key, patch)}
                   onToggleComplete={() => onToggleSet(set.key)}
                   onRemove={() => onRemoveSet(set.key)}

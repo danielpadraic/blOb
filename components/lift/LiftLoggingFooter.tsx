@@ -2,7 +2,6 @@ import { ActivityIndicator, Pressable, useWindowDimensions, View } from 'react-n
 
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
-import { COMPLETE_LEFTOVER_HINT } from '@/lib/lift/complete';
 import { THEME } from '@/lib/theme';
 
 const FOOTER_H = 44;
@@ -47,7 +46,7 @@ export function LiftFooterBtn({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={title}
-      accessibilityState={{ disabled: isDisabled || grey, busy: Boolean(loading) }}
+      accessibilityState={{ disabled: isDisabled, busy: Boolean(loading) }}
       disabled={isDisabled}
       onPress={onPress}
       style={({ pressed }) => ({
@@ -64,7 +63,7 @@ export function LiftFooterBtn({
         backgroundColor: fill,
         borderWidth: variant === 'outline' ? 1 : 0,
         borderColor: variant === 'outline' ? THEME.border : 'transparent',
-        opacity: isDisabled || grey ? 0.38 : pressed ? 0.88 : 1,
+        opacity: isDisabled || grey ? 0.4 : pressed ? 0.88 : 1,
       })}>
       {loading ? (
         <ActivityIndicator color={labelColor} />
@@ -130,45 +129,56 @@ export function LiftSavedFooter({
 export function LiftDraftFooter({
   canPlay,
   canComplete,
-  leftover,
+  leftoverLine,
   saving,
   completing,
   statusLine,
   onPlay,
   onSave,
   onComplete,
+  onLeftover,
 }: {
   canPlay: boolean;
   canComplete: boolean;
-  leftover: boolean;
+  /** Names the set that still blocks Complete. Null when nothing is in the way. */
+  leftoverLine?: string | null;
   saving: boolean;
   completing: boolean;
   statusLine?: string | null;
   onPlay: () => void;
   onSave: () => void;
   onComplete: () => void;
+  onLeftover?: () => void;
 }) {
-  const hint = leftover && !canComplete ? COMPLETE_LEFTOVER_HINT : statusLine;
+  const blocked = Boolean(leftoverLine) && !canComplete;
+  const showLeftover = blocked && !statusLine;
+  const hint = statusLine || (blocked ? leftoverLine : null);
 
   return (
     <View style={{ gap: 8 }}>
       {hint ? (
-        <AppText numberOfLines={2} style={{ fontSize: 13, fontWeight: '600', color: leftover ? THEME.danger : THEME.textMuted }}>
-          {hint}
-        </AppText>
-      ) : (
-        <View style={{ height: 4 }} />
-      )}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={hint}
+          disabled={!showLeftover}
+          onPress={showLeftover ? onLeftover : undefined}>
+          <AppText
+            numberOfLines={2}
+            style={{ fontSize: 13, fontWeight: '600', color: showLeftover ? THEME.danger : THEME.textMuted }}>
+            {hint}
+          </AppText>
+        </Pressable>
+      ) : null}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <LiftFooterBtn title="Play" variant="play" disabled={!canPlay} onPress={onPlay} />
-        {canComplete ? (
-          <LiftFooterBtn title="Complete" variant="save" loading={completing} onPress={onComplete} />
-        ) : (
-          <LiftFooterBtn title="Save session" variant="save" loading={saving} onPress={onSave} />
-        )}
-        {canComplete ? null : leftover ? (
-          <LiftFooterBtn title="Complete" variant="save" dimmed onPress={onComplete} />
-        ) : null}
+        <LiftFooterBtn title="Save session" variant="save" loading={saving} onPress={onSave} />
+        <LiftFooterBtn
+          title="Complete"
+          variant="save"
+          dimmed={!canComplete}
+          loading={completing}
+          onPress={onComplete}
+        />
       </View>
     </View>
   );
