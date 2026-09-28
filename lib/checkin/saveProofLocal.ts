@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { saveOwnCapture, type SaveCaptureResult } from '@/lib/saveCapture';
 
 export const CHECKIN_SAVE_PERMISSION =
-  'blOb saves videos and photos you record so you can keep them.';
+  'blOb saves the photos you take so you can resubmit if the upload fails.';
 
 export const CHECKIN_UPLOAD_SAVED_NATIVE =
   'Saved to your photos. You can pick it from Gallery and send again.';

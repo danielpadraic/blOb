@@ -1228,15 +1228,23 @@ function SubmitWorkoutInner() {
     setCaptureId(null);
     setSkippedAuto(true);
     setPreferCamera(false);
-    if (!fromLibrary) {
-      void saveCapturedProofLocally({ uri, fromLibrary: false }).catch(() => undefined);
-    }
-    if (draft) {
+    const keep = () => {
+      if (!draft) {
+        return;
+      }
       void persistProof(proof, draft).catch(() => {
         setError(null);
         setFailKind(null);
       });
+    };
+    if (!fromLibrary) {
+      // Copy into Photos first. A failed library write still keeps the in-app slot.
+      void saveCapturedProofLocally({ uri, fromLibrary: false })
+        .catch(() => undefined)
+        .finally(keep);
+      return;
     }
+    keep();
   }
 
   function onRetakeCurrent(proof?: ChallengeProof) {

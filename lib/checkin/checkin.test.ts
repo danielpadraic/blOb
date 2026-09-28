@@ -173,7 +173,9 @@ describe('official weekly proofs', () => {
       reason: 'empty',
     });
     expect(checkinUploadStayCopy()).toMatch(/Saved to your photos|Kept on this device/);
-    expect(CHECKIN_SAVE_PERMISSION).toBe('blOb saves videos and photos you record so you can keep them.');
+    expect(CHECKIN_SAVE_PERMISSION).toBe(
+      'blOb saves the photos you take so you can resubmit if the upload fails.',
+    );
     expect(appJson.expo.ios.infoPlist.NSPhotoLibraryAddUsageDescription).toBe(CHECKIN_SAVE_PERMISSION);
     const mediaPlugin = (appJson.expo.plugins ?? []).find(
       (plugin) => Array.isArray(plugin) && plugin[0] === 'expo-media-library',

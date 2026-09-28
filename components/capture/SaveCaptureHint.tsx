@@ -59,7 +59,9 @@ export function SaveCaptureHint({ compact, ...input }: SaveCaptureHintProps) {
     return (
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={copy('capture.saveDenied')}
+        accessibilityLabel={
+          Platform.OS === 'android' ? copy('capture.saveDeniedAndroid') : copy('capture.saveDenied')
+        }
         onPress={() => void openAppSettings()}
         hitSlop={8}
         style={{
@@ -68,7 +70,7 @@ export function SaveCaptureHint({ compact, ...input }: SaveCaptureHintProps) {
           justifyContent: 'center',
         }}>
         <AppText className="text-[13px]" style={{ color: THEME.textMuted }}>
-          {copy('capture.saveDenied')}
+          {Platform.OS === 'android' ? copy('capture.saveDeniedAndroid') : copy('capture.saveDenied')}
         </AppText>
       </Pressable>
     );

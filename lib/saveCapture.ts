@@ -1,6 +1,9 @@
 import { Platform } from 'react-native';
 
-export const SAVE_CAPTURE_DENIED = 'Couldn’t save to Photos.';
+export const SAVE_CAPTURE_DENIED =
+  'Couldn’t save to Photos. Enable Photos for blOb in iOS Settings.';
+export const SAVE_CAPTURE_DENIED_ANDROID =
+  'Couldn’t save to Photos. Enable Photos for blOb in Settings.';
 export const SAVE_CAPTURE_WEB = 'Save to Photos';
 
 export type SaveCaptureInput = {
@@ -105,8 +108,13 @@ export async function saveOwnCapture(input: SaveCaptureInput): Promise<SaveCaptu
   const copied = await copyCaptureForLibrary(input);
   const toSave = copied ?? uri;
   try {
-    const media = await import('expo-media-library');
-    const permission = await media.requestPermissionsAsync(true);
+    // The default `expo-media-library` export throws on saveToLibraryAsync.
+    // The real Photos / MediaStore write lives on the legacy entry.
+    const media = await import('expo-media-library/legacy');
+    let permission = await media.getPermissionsAsync(true);
+    if (permission.status === 'undetermined') {
+      permission = await media.requestPermissionsAsync(true);
+    }
     if (!permission.granted) {
       pendingUris.delete(uri);
       const result: SaveCaptureResult = { saved: false, uri, copiedUri: copied ?? undefined, reason: 'denied' };
@@ -122,8 +130,13 @@ export async function saveOwnCapture(input: SaveCaptureInput): Promise<SaveCaptu
     const result: SaveCaptureResult = { saved: true, uri, copiedUri: copied ?? undefined };
     emit(result);
     return result;
-  } catch {
+  } catch (error) {
     pendingUris.delete(uri);
+    console.log('[blob:capture]', {
+      phase: 'photos',
+      status: 'fail',
+      message: error instanceof Error ? error.message : String(error ?? ''),
+    });
     const result: SaveCaptureResult = { saved: false, uri, copiedUri: copied ?? undefined, reason: 'failed' };
     emit(result);
     return result;
@@ -144,9 +157,15 @@ export async function copyCaptureForLibrary(input: SaveCaptureInput): Promise<st
     const ext =
       input.mediaType === 'video' ? (input.mimeType?.includes('mp4') ? 'mp4' : 'mov') : 'jpg';
     const dest = `${cacheDirectory}blob-save-${Date.now()}.${ext}`;
-    await copyAsync({ from: uri, to: dest });
+    const from = uri.startsWith('/') ? `file://${uri}` : uri;
+    await copyAsync({ from, to: dest });
     return dest;
-  } catch {
+  } catch (error) {
+    console.log('[blob:capture]', {
+      phase: 'photos-copy',
+      status: 'fail',
+      message: error instanceof Error ? error.message : String(error ?? ''),
+    });
     return null;
   }
 }

@@ -8,6 +8,7 @@ import { MentionField, type MentionFieldHandle } from '@/components/feed/Mention
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { AppText } from '@/components/ui/AppText';
 import { useAuthOptional } from '@/hooks/useAuth';
+import { saveCapturedProofLocally } from '@/lib/checkin';
 import { copy } from '@/lib/copy';
 import type { MentionChip, MentionDoc } from '@/lib/mentions';
 import {
@@ -301,6 +302,7 @@ export function InlineComposer({
         return;
       }
       const asset = result.assets[0];
+      await saveCapturedProofLocally({ uri: asset.uri, fromLibrary: false });
       addAttachment({
         uri: asset.uri,
         kind: 'photo',

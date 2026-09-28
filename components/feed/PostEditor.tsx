@@ -193,8 +193,8 @@ export function PostEditor({
     if (!asset.uri) {
       return;
     }
-    if (proofId && !fromLibrary) {
-      void saveCapturedProofLocally({ uri: asset.uri, fromLibrary: false });
+    if (!fromLibrary) {
+      await saveCapturedProofLocally({ uri: asset.uri, fromLibrary: false });
     }
     setDrafts((current) => [
       ...current.filter((row) => row.proofId !== proofId),

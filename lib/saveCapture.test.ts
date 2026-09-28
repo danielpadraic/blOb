@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
@@ -5,6 +7,7 @@ import {
   copyCaptureForLibrary,
   resetSaveCaptureForTests,
   SAVE_CAPTURE_DENIED,
+  SAVE_CAPTURE_DENIED_ANDROID,
   SAVE_CAPTURE_WEB,
 } from '@/lib/saveCapture';
 
@@ -40,8 +43,20 @@ describe('save own capture', () => {
   });
 
   it('keeps the denied caption short', () => {
-    expect(SAVE_CAPTURE_DENIED).toBe('Couldn’t save to Photos.');
+    expect(SAVE_CAPTURE_DENIED).toBe(
+      'Couldn’t save to Photos. Enable Photos for blOb in iOS Settings.',
+    );
+    expect(SAVE_CAPTURE_DENIED_ANDROID).toBe(
+      'Couldn’t save to Photos. Enable Photos for blOb in Settings.',
+    );
     expect(SAVE_CAPTURE_WEB).toBe('Save to Photos');
+  });
+
+  it('writes Photos through the legacy media-library saver', () => {
+    const source = readFileSync(join(process.cwd(), 'lib/saveCapture.ts'), 'utf8');
+    expect(source).toContain("import('expo-media-library/legacy')");
+    expect(source).toContain('saveToLibraryAsync');
+    expect(source).not.toMatch(/import\('expo-media-library'\)/);
   });
 
   it('exposes copyCaptureForLibrary for the copy-then-Photos path', () => {
