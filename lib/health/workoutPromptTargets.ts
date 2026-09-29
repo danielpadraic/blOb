@@ -9,6 +9,7 @@
  */
 
 import { isCorporateChallenge } from '@/lib/challengeExperience';
+import { officialCoinKind } from '@/lib/officialCoin';
 import { usesPeriodCheckinGate } from '@/lib/loggable';
 import { challengeAcceptsWorkoutProof } from '@/lib/health/acceptsWorkout';
 import {
@@ -49,6 +50,7 @@ export type PromptChallenge = {
   days_required?: number | null;
   is_unlimited?: boolean | null;
   is_official?: boolean | null;
+  official_kind?: string | null;
   series_id?: string | null;
   privacy_mode?: string | null;
   proofs?: unknown;
@@ -163,7 +165,17 @@ export function workoutPromptTargets(input: {
     return [];
   }
 
+  const officialWorkoutClosed = input.candidates.some((candidate) => {
+    if (!officialCoinKind(candidate.challenge)) {
+      return false;
+    }
+    return (
+      usesPeriodCheckinGate(candidate.challenge as never) &&
+      !periodWorkoutSlotOpen(candidate.challenge, candidate.checkin)
+    );
+  });
   const targets: PromptTarget[] = [];
+  let offeredOfficial = false;
   for (const candidate of input.candidates) {
     const challenge = candidate.challenge;
     if (!challenge?.id) {
@@ -180,6 +192,13 @@ export function workoutPromptTargets(input: {
     }
     if (!challengeAcceptsWorkoutProof(challenge as never)) {
       continue;
+    }
+    // One workout stamps Weekly and Monthly. A filled slot on either room closes both,
+    // and the banner names only one of them.
+    if (officialCoinKind(challenge)) {
+      if (officialWorkoutClosed || offeredOfficial) {
+        continue;
+      }
     }
     // Period-gated consistency: a selfie must not hide the banner. Only a filled HR/duration
     // slot (or a fully complete period) drops the offer. Miles races stay open after a log.
@@ -217,6 +236,9 @@ export function workoutPromptTargets(input: {
       continue;
     }
 
+    if (officialCoinKind(challenge)) {
+      offeredOfficial = true;
+    }
     targets.push({
       challengeId: challenge.id,
       title: String(challenge.title ?? '').trim() || 'this challenge',

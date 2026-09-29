@@ -326,4 +326,43 @@ describe('the prompt heading', () => {
       'Run 128 Miles by January 1',
     ]);
   });
+
+  it('offers one Official room and still offers Run 128', () => {
+    const proofs = [
+      { id: 'pre', name: 'Post a pre-workout selfie.', method: 'photo' as const },
+      { id: 'post', name: 'Post a post-workout selfie.', method: 'photo' as const },
+      { id: 'hr', name: 'Heart rate', method: 'hr' as const },
+    ];
+    const targets = workoutPromptTargets({
+      workouts: [session('run', { minutes: 32, avgHr: 140 })],
+      candidates: [
+        candidate({
+          id: 'week',
+          title: 'Weekly Fitness Challenge',
+          official_kind: 'coin_weekly',
+          is_official: true,
+          proofs,
+        }),
+        candidate({
+          id: 'month',
+          title: 'Monthly Fitness Challenge',
+          official_kind: 'coin_monthly',
+          is_official: true,
+          proofs,
+        }),
+        candidate({
+          id: 'c-128',
+          title: 'Run 128 Miles by January 1',
+          metrics: [{ id: 'm1', target: 128, name: 'miles', unit: 'mi' }],
+          cumulative_target: 128,
+          cumulative_metric: 'distance_m',
+        }),
+      ],
+      now: NOW,
+    });
+    expect(targets.map((row) => row.title)).toEqual([
+      'Weekly Fitness Challenge',
+      'Run 128 Miles by January 1',
+    ]);
+  });
 });

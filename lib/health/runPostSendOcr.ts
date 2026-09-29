@@ -31,6 +31,7 @@ import {
 } from '@/lib/health/ocrSession';
 import { unionOcrFields } from '@/lib/health/ocrUnion';
 import { patchFeedPostFields } from '@/lib/liveFeedPatch';
+import { ocrCheckinStats, stampOfficialPairStats } from '@/lib/officialPairCheckin';
 import { supabase } from '@/lib/supabase';
 import type { CheckinHealthProof } from '@/lib/health/checkinHealthProof';
 import { hasOcrNumbers } from '@/lib/health/workoutOcr';
@@ -170,6 +171,9 @@ async function readSlotStills(slotId: string, urls: string[]): Promise<{
 export async function runPostSendOcr(input: {
   challengeId: string;
   postId?: string | null;
+  /** Every Official Live post from this send, so chips land on Weekly and Monthly. */
+  postIds?: readonly string[];
+  siblingChallengeId?: string | null;
   periodKey?: string | null;
   timeZone: string;
   slots: PostSendOcrSlot[];
@@ -215,10 +219,26 @@ export async function runPostSendOcr(input: {
       urls,
       health: snapshot,
     });
+    const siblingId = String(input.siblingChallengeId ?? '').trim();
+    if (siblingId && siblingId !== input.challengeId) {
+      const mirrored = await persistOcrHealth({
+        challengeId: siblingId,
+        slot,
+        urls,
+        health: snapshot,
+      });
+      wrote = wrote || mirrored;
+    }
     wrote = wrote || saved;
+    const stats = ocrCheckinStats(snapshot);
+    const postIds = [...new Set([...(input.postIds ?? []), input.postId].map((id) => String(id ?? '').trim()).filter(Boolean))];
+    if (stats && postIds.length > 0) {
+      await stampOfficialPairStats({ postIds, stats, queryClient: input.queryClient }).catch(() => undefined);
+    }
   }
   if (wrote) {
-    await patchPostFromServer(input.queryClient, input.postId);
+    const postIds = [...new Set([...(input.postIds ?? []), input.postId].map((id) => String(id ?? '').trim()).filter(Boolean))];
+    await Promise.all(postIds.map((id) => patchPostFromServer(input.queryClient, id)));
   }
 }
 

@@ -178,6 +178,15 @@ import {
 } from '@/lib/comparablePoints';
 import { allowsMultiCheckin, checkinPeriodComplete } from '@/lib/loggable';
 import { isOfficialCoinChallenge } from '@/lib/officialCoin';
+import {
+  alignOfficialPairPosts,
+  fetchOfficialPairCheckin,
+  mergeOfficialPairParts,
+  orderedCheckinSlides,
+  qualifyingSlotUrl,
+  siblingOfficialChallengeId,
+} from '@/lib/officialPairCheckin';
+import { useOfficialCoinStatus } from '@/hooks/useOfficialCoin';
 import { hasChallengeStarted, isClosedForLogs, loggingOpensHelper } from '@/lib/settlement';
 import { supabase } from '@/lib/supabase';
 import type { MentionDoc } from '@/lib/mentions';
@@ -443,6 +452,39 @@ function SubmitWorkoutInner() {
   const saveProof = useSaveCheckinProof(id);
   // One Official Check-In fans out to the Weekly and Monthly rooms server side.
   const officialCoin = isOfficialCoinChallenge(challengeQuery.data);
+  const coinRooms = useOfficialCoinStatus();
+  const siblingChallengeId = officialCoin
+    ? siblingOfficialChallengeId(id, {
+        weeklyId: coinRooms.data?.weekly?.challenge.id,
+        monthlyId: coinRooms.data?.monthly?.challenge.id,
+      })
+    : null;
+  const siblingPeriodKeys = useMemo(() => {
+    const keys = new Set<string>();
+    if (challengeQuery.data) {
+      keys.add(checkinPeriodKey(challengeQuery.data));
+    }
+    const sibling =
+      coinRooms.data?.weekly?.challenge.id === siblingChallengeId
+        ? coinRooms.data?.weekly?.challenge
+        : coinRooms.data?.monthly?.challenge.id === siblingChallengeId
+          ? coinRooms.data?.monthly?.challenge
+          : null;
+    if (sibling) {
+      keys.add(checkinPeriodKey(sibling as never));
+    }
+    return [...keys].filter(Boolean);
+  }, [challengeQuery.data, coinRooms.data?.monthly?.challenge, coinRooms.data?.weekly?.challenge, siblingChallengeId]);
+  const siblingCheckin = useQuery({
+    queryKey: ['official-pair-checkin', siblingChallengeId, subjectId, siblingPeriodKeys.join('|')],
+    enabled: Boolean(officialCoin && siblingChallengeId && subjectId && !isProxy),
+    queryFn: () =>
+      fetchOfficialPairCheckin({
+        challengeId: siblingChallengeId!,
+        userId: subjectId!,
+        periodKeys: siblingPeriodKeys,
+      }),
+  });
   const submitCheckin = useSubmitCheckin(id, isProxy ? proxyForId : undefined, { officialCoin });
   const queryClient = useQueryClient();
   const wavePublishedRef = useRef(false);
@@ -763,18 +805,24 @@ function SubmitWorkoutInner() {
     if (!checkinQuery.isFetched) {
       return;
     }
-    if (!checkinQuery.data) {
+    if (officialCoin && siblingChallengeId && !siblingCheckin.isFetched) {
+      return;
+    }
+    if (!checkinQuery.data && !siblingCheckin.data) {
       setHydrateDone(true);
       return;
     }
     const hydrateKey = [
-      checkinQuery.data.id,
-      checkinQuery.data.updated_at ?? '',
-      checkinQuery.data.notes ?? '',
-      checkinQuery.data.pre_selfie_url ?? '',
-      checkinQuery.data.post_selfie_url ?? '',
-      checkinQuery.data.hr_monitor_url ?? '',
-      JSON.stringify(checkinQuery.data.proof_parts ?? {}),
+      checkinQuery.data?.id ?? 'none',
+      checkinQuery.data?.updated_at ?? '',
+      checkinQuery.data?.notes ?? '',
+      checkinQuery.data?.pre_selfie_url ?? '',
+      checkinQuery.data?.post_selfie_url ?? '',
+      checkinQuery.data?.hr_monitor_url ?? '',
+      JSON.stringify(checkinQuery.data?.proof_parts ?? {}),
+      siblingCheckin.data?.id ?? '',
+      siblingCheckin.data?.pre_selfie_url ?? '',
+      JSON.stringify(siblingCheckin.data?.proof_parts ?? {}),
     ].join('|');
     if (hydrateServerRef.current === hydrateKey) {
       setHydrateDone(true);
@@ -783,13 +831,16 @@ function SubmitWorkoutInner() {
     hydrateServerRef.current = hydrateKey;
     setHydrateError(false);
     try {
-    const parts = checkinQuery.data.proof_parts ?? {};
+    const localSlice = checkinQuery.data;
+    const parts = officialCoin
+      ? mergeOfficialPairParts(proofSteps, localSlice, siblingCheckin.data)
+      : (localSlice?.proof_parts ?? {});
     // Reuse the rendered slots: a second resolve would key drafts to ids the UI never reads.
     const steps = proofSteps;
     const legacy = {
-      pre_selfie_url: checkinQuery.data.pre_selfie_url,
-      post_selfie_url: checkinQuery.data.post_selfie_url,
-      hr_monitor_url: checkinQuery.data.hr_monitor_url,
+      pre_selfie_url: localSlice?.pre_selfie_url || siblingCheckin.data?.pre_selfie_url,
+      post_selfie_url: localSlice?.post_selfie_url || siblingCheckin.data?.post_selfie_url,
+      hr_monitor_url: localSlice?.hr_monitor_url || siblingCheckin.data?.hr_monitor_url,
     };
     setDrafts((current) => {
       const next = { ...current };
@@ -857,9 +908,9 @@ function SubmitWorkoutInner() {
       }
       return changed ? next : current;
     });
-    if (checkinQuery.data?.notes) {
+    if (localSlice?.notes) {
       const snapshot = Object.values(parts).map((part) => part.health).find(Boolean) ?? null;
-      const text = shareFieldFromNotes(checkinQuery.data.notes, snapshot);
+      const text = shareFieldFromNotes(localSlice.notes, snapshot);
       setCaption((current) => {
         if (current.text.trim() || text === current.text) {
           return current;
@@ -908,6 +959,10 @@ function SubmitWorkoutInner() {
     checkinQuery.data?.proof_parts,
     checkinQuery.data?.updated_at,
     checkinQuery.isFetched,
+    officialCoin,
+    siblingChallengeId,
+    siblingCheckin.data,
+    siblingCheckin.isFetched,
   ]);
 
   const todayHonorTotals = useMemo(
@@ -1768,10 +1823,37 @@ function SubmitWorkoutInner() {
           }
         }
       }
+      let pairPostIds: string[] = postId ? [postId] : [];
+      if (officialCoin && uid && !isProxy) {
+        const slides = orderedCheckinSlides({
+          proofs: proofSteps,
+          parts: mergeOfficialPairParts(
+            proofSteps,
+            {
+              proof_parts: savedParts,
+              pre_selfie_url: checkinQuery.data?.pre_selfie_url,
+              post_selfie_url: checkinQuery.data?.post_selfie_url,
+              hr_monitor_url: checkinQuery.data?.hr_monitor_url,
+            },
+            siblingCheckin.data,
+          ),
+          extras: extraUrls,
+          recap: recapUriRef.current,
+        });
+        pairPostIds = await alignOfficialPairPosts({
+          userId: uid,
+          challengeIds: [id, siblingChallengeId ?? ''],
+          mediaUrls: slides,
+          content: body,
+          queryClient,
+        }).catch(() => pairPostIds);
+      }
       if (uid) {
         void runPostSendOcr({
           challengeId: id,
           postId,
+          postIds: pairPostIds,
+          siblingChallengeId,
           periodKey: checkinPeriodKey(challenge),
           timeZone: challengeClockTz(challenge),
           slots: proofSteps.map((proof) => {
@@ -2321,24 +2403,24 @@ function SubmitWorkoutInner() {
         proof.method === 'distance',
     ) ?? null;
   const firstHealth = firstEmptyMedia && proofPrefersHealthAttach(firstEmptyMedia, challenge) ? firstEmptyMedia : null;
-  const serverPart = (proofId: string) => checkinQuery.data?.proof_parts?.[proofId];
+  const pairParts = officialCoin
+    ? mergeOfficialPairParts(proofSteps, checkinQuery.data, siblingCheckin.data)
+    : (checkinQuery.data?.proof_parts ?? {});
   const serverHasProof = (proofId: string) => {
     const proof = proofSteps.find((item) => item.id === proofId);
     if (!proof) {
       return false;
     }
-    const url = existingUrlForProof(proof, checkinQuery.data?.proof_parts, {
-      pre_selfie_url: checkinQuery.data?.pre_selfie_url,
-      post_selfie_url: checkinQuery.data?.post_selfie_url,
-      hr_monitor_url: checkinQuery.data?.hr_monitor_url,
+    const url = qualifyingSlotUrl(proof, pairParts, {
+      pre_selfie_url: checkinQuery.data?.pre_selfie_url || siblingCheckin.data?.pre_selfie_url,
+      post_selfie_url: checkinQuery.data?.post_selfie_url || siblingCheckin.data?.post_selfie_url,
+      hr_monitor_url: checkinQuery.data?.hr_monitor_url || siblingCheckin.data?.hr_monitor_url,
     });
-    const part = serverPart(proofId);
-    return Boolean(
-      url ||
-        (part && partSatisfies(proof, part, { sessionDistance })),
-    );
+    const part = pairParts[proofId];
+    return Boolean(url || (part && partSatisfies(proof, part, { sessionDistance })));
   };
-  const checkinReady = checkinQuery.isFetched && !checkinQuery.isLoading;
+  const pairPending = Boolean(officialCoin && siblingChallengeId && !siblingCheckin.isFetched);
+  const checkinReady = checkinQuery.isFetched && !checkinQuery.isLoading && !pairPending;
   const shouldAutoHealth =
     checkinReady &&
     hydrateDone &&
