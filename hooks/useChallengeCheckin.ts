@@ -29,6 +29,7 @@ import {
 } from '@/lib/checkinPeriod';
 import { dateStampInZone } from '@/lib/officialDays';
 import { HOME_PULSE_KEY } from '@/lib/homePulse';
+import { isOfficialCoinChallenge } from '@/lib/officialCoin';
 import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
 import { getErrorMessage } from '@/utils/errors';
 import { reportAppError } from '@/lib/appErrors';
@@ -248,6 +249,56 @@ export function useCheckinHistory(
   });
 }
 
+function isOfficialPeriodChallenge(challenge?: PeriodChallenge | null): boolean {
+  return Boolean(
+    challenge && (isOfficialSeriesChallenge(challenge) || isOfficialCoinChallenge(challenge as never)),
+  );
+}
+
+/**
+ * Official Weekly and Monthly share one period. An empty row for today's key must not hide
+ * the check-in that already has the selfies.
+ */
+async function fetchMergedOfficialCheckin(
+  challengeId: string,
+  userId: string,
+  challenge: PeriodChallenge | null | undefined,
+  key: string,
+): Promise<ChallengeCheckin | null> {
+  const recent = await supabase
+    .from('challenge_checkins')
+    .select(CHECKIN_COLUMNS)
+    .eq('challenge_id', challengeId)
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(12);
+  if (recent.error) {
+    if (isMissingRelation(recent.error.message)) {
+      return null;
+    }
+    throw new Error(getErrorMessage(recent.error));
+  }
+  const candidates = new Set(checkinPeriodKeyCandidates(challenge).map(normalizePeriodKey));
+  if (key) {
+    candidates.add(key);
+  }
+  const rows = ((recent.data ?? []) as unknown as Record<string, unknown>[]).filter((row) =>
+    candidates.has(normalizePeriodKey(row.period_key)),
+  );
+  const merged = mergePeriodCheckinRows(rows);
+  if (!merged) {
+    return null;
+  }
+  if (allowsMultiCheckin(challenge) && isSubmittedCheckin(merged as ChallengeCheckin)) {
+    return null;
+  }
+  const feedUrls = await fetchPostsMediaForCheckins(periodCheckinIds(rows));
+  if (feedUrls.length > 0) {
+    merged.proof_parts = mergeFeedMediaIntoParts(parseProofParts(merged.proof_parts), feedUrls);
+  }
+  return hydrateCheckin(merged);
+}
+
 export async function fetchCurrentPeriodCheckin(
   challengeId: string,
   userId: string,
@@ -255,6 +306,12 @@ export async function fetchCurrentPeriodCheckin(
   date?: string,
 ): Promise<ChallengeCheckin | null> {
   const key = normalizePeriodKey(date ?? periodKeyFor(challenge));
+  if (isOfficialPeriodChallenge(challenge)) {
+    const merged = await fetchMergedOfficialCheckin(challengeId, userId, challenge, key);
+    if (merged) {
+      return merged;
+    }
+  }
   const exact = key ? await fetchPeriodCheckin(challengeId, userId, key) : null;
   if (exact && !(allowsMultiCheckin(challenge) && isSubmittedCheckin(exact))) {
     return exact;

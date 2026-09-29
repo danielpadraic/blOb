@@ -108,6 +108,7 @@ import {
   existingUrlsForProof,
   proofImageUrls,
   proofSlotNeedsRewrite,
+  proofSlotPart,
   proofsAreHonorOnly,
   uniqueProofUrls,
   partDistanceMeters,
@@ -166,7 +167,7 @@ import {
   type HeartRateSample,
   type WorkoutProofCardModel,
 } from '@/lib/health/workoutProofCard';
-import { challengeClockTz, checkinPeriodKey } from '@/lib/checkinPeriod';
+import { challengeClockTz, checkinPeriodKey, checkinPeriodKeyCandidates } from '@/lib/checkinPeriod';
 import { getHealthProvider, healthProviderAvailable } from '@/services/health';
 import { distanceProofIsSessionLog, usesComparablePointsScoring } from '@/lib/challengeExperience';
 import {
@@ -461,19 +462,23 @@ function SubmitWorkoutInner() {
     : null;
   const siblingPeriodKeys = useMemo(() => {
     const keys = new Set<string>();
-    if (challengeQuery.data) {
-      keys.add(checkinPeriodKey(challengeQuery.data));
-    }
     const sibling =
       coinRooms.data?.weekly?.challenge.id === siblingChallengeId
         ? coinRooms.data?.weekly?.challenge
         : coinRooms.data?.monthly?.challenge.id === siblingChallengeId
           ? coinRooms.data?.monthly?.challenge
           : null;
-    if (sibling) {
-      keys.add(checkinPeriodKey(sibling as never));
+    for (const row of [challengeQuery.data, sibling]) {
+      if (!row) {
+        continue;
+      }
+      for (const key of checkinPeriodKeyCandidates(row as never)) {
+        if (key) {
+          keys.add(key);
+        }
+      }
     }
-    return [...keys].filter(Boolean);
+    return [...keys];
   }, [challengeQuery.data, coinRooms.data?.monthly?.challenge, coinRooms.data?.weekly?.challenge, siblingChallengeId]);
   const siblingCheckin = useQuery({
     queryKey: ['official-pair-checkin', siblingChallengeId, subjectId, siblingPeriodKeys.join('|')],
@@ -812,7 +817,26 @@ function SubmitWorkoutInner() {
       setHydrateDone(true);
       return;
     }
+    const stepsReady = proofSteps;
+    const storedProofs = Boolean(
+      checkinQuery.data?.pre_selfie_url ||
+        checkinQuery.data?.post_selfie_url ||
+        checkinQuery.data?.hr_monitor_url ||
+        (checkinQuery.data?.proof_parts && Object.keys(checkinQuery.data.proof_parts).length > 0) ||
+        siblingCheckin.data?.pre_selfie_url ||
+        siblingCheckin.data?.post_selfie_url ||
+        (siblingCheckin.data?.proof_parts && Object.keys(siblingCheckin.data.proof_parts).length > 0),
+    );
+    // Proof ids arrive a render after the check-in row. Locking the key first would skip the fill.
+    if (stepsReady.length === 0) {
+      if (storedProofs) {
+        return;
+      }
+      setHydrateDone(true);
+      return;
+    }
     const hydrateKey = [
+      stepsReady.map((proof) => proof.id).join(','),
       checkinQuery.data?.id ?? 'none',
       checkinQuery.data?.updated_at ?? '',
       checkinQuery.data?.notes ?? '',
@@ -2390,19 +2414,6 @@ function SubmitWorkoutInner() {
     );
   }
 
-  const missing = blockingProofs.filter(
-    (proof) => !partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }),
-  );
-  const iosHealthReady = Platform.OS === 'ios' && healthProviderAvailable();
-  const firstEmptyMedia =
-    missing.find(
-      (proof) =>
-        proof.method === 'photo' ||
-        proof.method === 'video' ||
-        proof.method === 'hr' ||
-        proof.method === 'distance',
-    ) ?? null;
-  const firstHealth = firstEmptyMedia && proofPrefersHealthAttach(firstEmptyMedia, challenge) ? firstEmptyMedia : null;
   const pairParts = officialCoin
     ? mergeOfficialPairParts(proofSteps, checkinQuery.data, siblingCheckin.data)
     : (checkinQuery.data?.proof_parts ?? {});
@@ -2416,9 +2427,21 @@ function SubmitWorkoutInner() {
       post_selfie_url: checkinQuery.data?.post_selfie_url || siblingCheckin.data?.post_selfie_url,
       hr_monitor_url: checkinQuery.data?.hr_monitor_url || siblingCheckin.data?.hr_monitor_url,
     });
-    const part = pairParts[proofId];
+    const part = pairParts[proofId] ?? proofSlotPart(proof, pairParts, {
+      pre_selfie_url: checkinQuery.data?.pre_selfie_url || siblingCheckin.data?.pre_selfie_url,
+      post_selfie_url: checkinQuery.data?.post_selfie_url || siblingCheckin.data?.post_selfie_url,
+      hr_monitor_url: checkinQuery.data?.hr_monitor_url || siblingCheckin.data?.hr_monitor_url,
+    });
     return Boolean(url || (part && partSatisfies(proof, part, { sessionDistance })));
   };
+  const slotFilled = (proof: ChallengeProof) =>
+    partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }) ||
+    serverHasProof(proof.id);
+  const missing = blockingProofs.filter((proof) => !slotFilled(proof));
+  const iosHealthReady = Platform.OS === 'ios' && healthProviderAvailable();
+  const nextEmpty = nextEmptyRequiredProof(blockingProofs, slotFilled);
+  const nextPhoto = nextEmpty && isGuidedCameraProof(nextEmpty) ? nextEmpty : null;
+  const firstHealth = nextPhoto && proofPrefersHealthAttach(nextPhoto, challenge) ? nextPhoto : null;
   const pairPending = Boolean(officialCoin && siblingChallengeId && !siblingCheckin.isFetched);
   const checkinReady = checkinQuery.isFetched && !checkinQuery.isLoading && !pairPending;
   const shouldAutoHealth =
@@ -2428,12 +2451,7 @@ function SubmitWorkoutInner() {
     !preferCamera &&
     iosHealthReady &&
     Boolean(firstHealth) &&
-    !drafts[firstHealth?.id ?? '']?.uri &&
-    !serverHasProof(firstHealth?.id ?? '');
-  const slotFilled = (proof: ChallengeProof) =>
-    partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }) ||
-    serverHasProof(proof.id);
-  const nextPhoto = missing.find(isGuidedCameraProof) ?? null;
+    !slotFilled(firstHealth!);
   const hasExistingFrames =
     extras.length > 0 ||
     proofSteps.some((proof) => {
@@ -2458,18 +2476,16 @@ function SubmitWorkoutInner() {
     !skippedAuto &&
     !honorOnly &&
     !needsWrittenProof &&
+    !shouldAutoHealth &&
     Boolean(nextPhoto) &&
-    !drafts[nextPhoto?.id ?? '']?.uri &&
-    !serverHasProof(nextPhoto?.id ?? '');
+    !slotFilled(nextPhoto!);
   const activeCaptureId =
     captureId ??
-    (shouldOpenGuided
-      ? nextPhoto?.id ?? null
-      : shouldAutoHealth
-        ? firstHealth?.id ?? null
-        : shouldAutoOpen
-          ? nextPhoto?.id ?? null
-          : null);
+    (shouldAutoHealth
+      ? firstHealth?.id ?? null
+      : shouldOpenGuided || shouldAutoOpen
+        ? nextPhoto?.id ?? null
+        : null);
   const activeProof = proofSteps.find((proof) => proof.id === activeCaptureId) ?? null;
   const guided = guidedCheckinPrompt(proofSteps, slotFilled, activeProof);
   const showHealthFirst =

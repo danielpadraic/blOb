@@ -168,6 +168,24 @@ describe('Multi Check-In hub rows', () => {
     expect(partial).toEqual({ state: 'in_progress', line: OFFICIAL_PAIR_PROGRESS });
     expect(partial.line).not.toBe(OFFICIAL_PAIR_STAMPED);
 
+    const hrLeft = checkinSlotSnapshot(
+      { proofs: thirtyDayProofs },
+      {
+        pre: { method: 'photo', url: 'https://cdn.test/pre.jpg' },
+        post: { method: 'photo', url: 'https://cdn.test/post.jpg' },
+      },
+    );
+    expect(hrLeft.remaining.join(' ').toLowerCase()).not.toMatch(/selfie/);
+    expect(
+      officialPairChip(
+        { remaining: hrLeft.remaining, filled: hrLeft.filled },
+        { remaining: hrLeft.remaining, filled: hrLeft.filled },
+      ),
+    ).toEqual({
+      state: 'in_progress',
+      line: `Still needed: ${hrLeft.remaining.join(' · ')}`,
+    });
+
     const fromParts = checkinSlotSnapshot(
       { proofs: thirtyDayProofs },
       { pre: { method: 'photo', url: 'https://cdn.test/pre.jpg' } },

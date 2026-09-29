@@ -250,6 +250,19 @@ export function officialPairChip(weekly: OfficialRoomSlots, monthly: OfficialRoo
   if (filled < 1) {
     return { state: 'not_started', line: OFFICIAL_PAIR_IDLE };
   }
+  const openLabels = cleanLabels(present.flatMap((side) => cleanLabels(side.remaining)));
+  const stillOpen = openLabels.filter((label) => {
+    const lower = label.toLowerCase();
+    const pre = lower.includes('pre-workout') || lower.includes('pre-selfie');
+    const post =
+      lower.includes('post-workout') ||
+      lower.includes('post-selfie') ||
+      (lower.includes('post') && lower.includes('selfie'));
+    return !pre && !post;
+  });
+  if (stillOpen.length > 0 && stillOpen.length === openLabels.length) {
+    return { state: 'in_progress', line: `Still needed: ${stillOpen.join(' · ')}` };
+  }
   const labels = cleanLabels(
     present.filter((side) => side.filled > 0).flatMap((side) => cleanLabels(side.remaining)),
   );
