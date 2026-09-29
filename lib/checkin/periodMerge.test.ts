@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { mergeFeedMediaIntoParts, mergePeriodCheckinRows } from '@/lib/checkin/periodMerge';
+import { mergeFeedMediaIntoParts, mergePeriodCheckinRows, rowMatchesOfficialPeriod } from '@/lib/checkin/periodMerge';
 
 describe('mergePeriodCheckinRows', () => {
   it('keeps the oldest id and unions stills from later rows', () => {
@@ -56,5 +56,30 @@ describe('mergeFeedMediaIntoParts', () => {
       ['https://cdn.example/pre.jpg', 'https://cdn.example/cheer.jpg'],
     );
     expect(next.__feed?.urls).toEqual(['https://cdn.example/cheer.jpg']);
+  });
+});
+
+describe('rowMatchesOfficialPeriod', () => {
+  it('keeps a selfie saved today when the stored key is not the week stamp', () => {
+    expect(
+      rowMatchesOfficialPeriod(
+        {
+          period_key: '2026-09-29',
+          created_at: '2026-09-29T14:00:00.000Z',
+        },
+        ['2026-09-28', '2026-09-29'],
+        'America/Chicago',
+      ),
+    ).toBe(true);
+    expect(
+      rowMatchesOfficialPeriod(
+        {
+          period_key: '2026-09-01',
+          created_at: '2026-09-01T14:00:00.000Z',
+        },
+        ['2026-09-29'],
+        'America/Chicago',
+      ),
+    ).toBe(false);
   });
 });

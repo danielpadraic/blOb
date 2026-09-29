@@ -7,6 +7,7 @@ import {
 } from '@/lib/challengeProofs';
 import { checkinComposerPrefill } from '@/lib/checkin/captions';
 import { normalizePeriodKey } from '@/lib/checkinPeriod';
+import { dateStampInZone } from '@/lib/officialDays';
 
 const FEED_EXTRA_KEY = '__feed';
 
@@ -40,6 +41,36 @@ function firstUrl(...values: Array<string | null | undefined>): string | null {
     }
   }
   return null;
+}
+
+/**
+ * Official rows for this window. A selfie saved under today's Chicago date still counts when the
+ * client period key is the week stamp, and the reverse.
+ */
+export function rowMatchesOfficialPeriod(
+  row: { period_key?: unknown; submitted_at?: unknown; created_at?: unknown },
+  candidates: readonly string[],
+  timeZone: string,
+): boolean {
+  const keys = new Set(candidates.map((key) => normalizePeriodKey(key)).filter(Boolean));
+  const stored = normalizePeriodKey(row.period_key);
+  if (stored && keys.has(stored)) {
+    return true;
+  }
+  for (const stamp of [row.submitted_at, row.created_at]) {
+    if (!stamp) {
+      continue;
+    }
+    const date = new Date(String(stamp));
+    if (Number.isNaN(date.getTime())) {
+      continue;
+    }
+    const day = normalizePeriodKey(dateStampInZone(date, timeZone));
+    if (day && keys.has(day)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** Oldest period row wins. Later rows UPDATE the same check-in — never a second card. */

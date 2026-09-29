@@ -29,12 +29,12 @@ import {
 } from '@/lib/checkinPeriod';
 import { dateStampInZone } from '@/lib/officialDays';
 import { HOME_PULSE_KEY } from '@/lib/homePulse';
-import { isOfficialCoinChallenge } from '@/lib/officialCoin';
+import { isOfficialCoinChallenge, officialCoinDateStamp } from '@/lib/officialCoin';
 import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
 import { getErrorMessage } from '@/utils/errors';
 import { reportAppError } from '@/lib/appErrors';
 import { checkedInForCurrentPeriod } from '@/lib/lobbyChallenge';
-import { mergeFeedMediaIntoParts, mergePeriodCheckinRows, periodCheckinIds } from '@/lib/checkin/periodMerge';
+import { mergeFeedMediaIntoParts, mergePeriodCheckinRows, periodCheckinIds, rowMatchesOfficialPeriod } from '@/lib/checkin/periodMerge';
 import { signedProofUrl } from '@/utils/upload';
 
 const CHECKIN_COLUMNS =
@@ -282,8 +282,15 @@ async function fetchMergedOfficialCheckin(
   if (key) {
     candidates.add(key);
   }
+  if (isOfficialCoinChallenge(challenge as never)) {
+    const today = officialCoinDateStamp(new Date());
+    if (today) {
+      candidates.add(today);
+    }
+  }
+  const zone = challengeClockTz(challenge);
   const rows = ((recent.data ?? []) as unknown as Record<string, unknown>[]).filter((row) =>
-    candidates.has(normalizePeriodKey(row.period_key)),
+    rowMatchesOfficialPeriod(row, [...candidates], zone),
   );
   const merged = mergePeriodCheckinRows(rows);
   if (!merged) {
@@ -431,11 +438,17 @@ export function usePeriodCheckin(
   const { user } = useAuth();
   const userId = subjectUserId?.trim() || user?.id;
   const date = periodKeyFor(challenge);
-  const official = Boolean(challenge && isOfficialSeriesChallenge(challenge));
+  const official = isOfficialPeriodChallenge(challenge);
 
   return useQuery({
-    queryKey: [...checkinQueryKey(challengeId, userId), challengeClockTz(challenge), date],
-    enabled: Boolean(challengeId && userId),
+    queryKey: [
+      ...checkinQueryKey(challengeId, userId),
+      challengeClockTz(challenge),
+      date,
+      String((challenge as { official_kind?: string | null } | null | undefined)?.official_kind ?? ''),
+      String(challenge?.series_id ?? ''),
+    ],
+    enabled: Boolean(challengeId && userId && challenge),
     refetchInterval: official ? 30_000 : false,
     queryFn: async (): Promise<ChallengeCheckinView> => {
       const row = await fetchCurrentPeriodCheckin(challengeId!, userId!, challenge, date);

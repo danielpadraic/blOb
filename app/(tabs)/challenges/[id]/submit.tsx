@@ -813,16 +813,17 @@ function SubmitWorkoutInner() {
     if (officialCoin && siblingChallengeId && !siblingCheckin.isFetched) {
       return;
     }
-    if (!checkinQuery.data && !siblingCheckin.data) {
+    const storedCheckin = checkinQuery.data?.id ? checkinQuery.data : null;
+    if (!storedCheckin && !siblingCheckin.data) {
       setHydrateDone(true);
       return;
     }
     const stepsReady = proofSteps;
     const storedProofs = Boolean(
-      checkinQuery.data?.pre_selfie_url ||
-        checkinQuery.data?.post_selfie_url ||
-        checkinQuery.data?.hr_monitor_url ||
-        (checkinQuery.data?.proof_parts && Object.keys(checkinQuery.data.proof_parts).length > 0) ||
+      storedCheckin?.pre_selfie_url ||
+        storedCheckin?.post_selfie_url ||
+        storedCheckin?.hr_monitor_url ||
+        (storedCheckin?.proof_parts && Object.keys(storedCheckin.proof_parts).length > 0) ||
         siblingCheckin.data?.pre_selfie_url ||
         siblingCheckin.data?.post_selfie_url ||
         (siblingCheckin.data?.proof_parts && Object.keys(siblingCheckin.data.proof_parts).length > 0),
@@ -855,7 +856,7 @@ function SubmitWorkoutInner() {
     hydrateServerRef.current = hydrateKey;
     setHydrateError(false);
     try {
-    const localSlice = checkinQuery.data;
+    const localSlice = storedCheckin;
     const parts = officialCoin
       ? mergeOfficialPairParts(proofSteps, localSlice, siblingCheckin.data)
       : (localSlice?.proof_parts ?? {});
@@ -2414,23 +2415,24 @@ function SubmitWorkoutInner() {
     );
   }
 
+  const storedCheckin = checkinQuery.data?.id ? checkinQuery.data : null;
   const pairParts = officialCoin
-    ? mergeOfficialPairParts(proofSteps, checkinQuery.data, siblingCheckin.data)
-    : (checkinQuery.data?.proof_parts ?? {});
+    ? mergeOfficialPairParts(proofSteps, storedCheckin, siblingCheckin.data)
+    : (storedCheckin?.proof_parts ?? {});
   const serverHasProof = (proofId: string) => {
     const proof = proofSteps.find((item) => item.id === proofId);
     if (!proof) {
       return false;
     }
     const url = qualifyingSlotUrl(proof, pairParts, {
-      pre_selfie_url: checkinQuery.data?.pre_selfie_url || siblingCheckin.data?.pre_selfie_url,
-      post_selfie_url: checkinQuery.data?.post_selfie_url || siblingCheckin.data?.post_selfie_url,
-      hr_monitor_url: checkinQuery.data?.hr_monitor_url || siblingCheckin.data?.hr_monitor_url,
+      pre_selfie_url: storedCheckin?.pre_selfie_url || siblingCheckin.data?.pre_selfie_url,
+      post_selfie_url: storedCheckin?.post_selfie_url || siblingCheckin.data?.post_selfie_url,
+      hr_monitor_url: storedCheckin?.hr_monitor_url || siblingCheckin.data?.hr_monitor_url,
     });
     const part = pairParts[proofId] ?? proofSlotPart(proof, pairParts, {
-      pre_selfie_url: checkinQuery.data?.pre_selfie_url || siblingCheckin.data?.pre_selfie_url,
-      post_selfie_url: checkinQuery.data?.post_selfie_url || siblingCheckin.data?.post_selfie_url,
-      hr_monitor_url: checkinQuery.data?.hr_monitor_url || siblingCheckin.data?.hr_monitor_url,
+      pre_selfie_url: storedCheckin?.pre_selfie_url || siblingCheckin.data?.pre_selfie_url,
+      post_selfie_url: storedCheckin?.post_selfie_url || siblingCheckin.data?.post_selfie_url,
+      hr_monitor_url: storedCheckin?.hr_monitor_url || siblingCheckin.data?.hr_monitor_url,
     });
     return Boolean(url || (part && partSatisfies(proof, part, { sessionDistance })));
   };
