@@ -156,18 +156,24 @@ describe('moveExercise', () => {
     expect(canMoveExercise(base, base.exercises[0].key, 1)).toBe(true);
   });
 
-  it('moves a rest row up between sets', () => {
+  it('moves a rest row up within its muscle after it was appended', () => {
     let draft = addTimedRow(pushSession(), {
       kind: 'rest',
       muscleKey: 'chest',
       durationSeconds: 60,
     });
+    expect(draft.exercises.map((row) => row.name || 'Rest')).toEqual([
+      'Incline BB Bench Press',
+      'Cable Fly',
+      'DB Triceps Extension',
+      'Rest',
+    ]);
     const rest = draft.exercises.find((row) => row.kind === 'rest')!;
     draft = moveExercise(draft, rest.key, -1);
     expect(draft.exercises.map((row) => row.name || 'Rest').slice(0, 3)).toEqual([
       'Incline BB Bench Press',
       'Rest',
-      'Cable Fly',
+      'DB Triceps Extension',
     ]);
   });
 });

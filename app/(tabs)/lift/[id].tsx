@@ -13,7 +13,7 @@ import { TimedRowCard } from '@/components/lift/TimedRowCard';
 import { LiftHealthKitSheet } from '@/components/lift/LiftHealthKitSheet';
 import { LiftShareSheet, type LiftShareChoice } from '@/components/lift/LiftShareSheet';
 import { OverloadSheet } from '@/components/lift/OverloadSheet';
-import { KeyboardFormShell } from '@/components/ui/KeyboardFormShell';
+import { KeyboardFormShell, useKeyboardForm } from '@/components/ui/KeyboardFormShell';
 import { MascotState } from '@/components/mascot/MascotState';
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
@@ -52,13 +52,14 @@ import {
   useSendMessage,
 } from '@/hooks/useSocial';
 import { challengeDetailHref, checkinSubmitHref, circleDetailHref } from '@/lib/routes';
-import { MUSCLE_KEYS, isTimedMuscle, muscleLabel, muscleShortLabel, type MuscleKey } from '@/lib/lift/muscles';
+import { muscleLabel, type MuscleKey } from '@/lib/lift/muscles';
 import { recentExerciseOptions, rememberRecentExercise } from '@/lib/lift/recents';
 import {
   addExercise,
   addSet,
   addTimedRow,
   countWorkSets,
+  canMoveExercise,
   duplicateExercise,
   isTimedRow,
   moveExercise,
@@ -67,7 +68,6 @@ import {
   removeSet,
   renameSession,
   repeatSession,
-  sessionSections,
   sessionTitle,
   shortDate,
   supersetLabels,
@@ -148,6 +148,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
   const [collapsedExercises, setCollapsedExercises] = useState<Set<string>>(new Set());
   const [pulseKey, setPulseKey] = useState<string | null>(null);
   const [pulseToken, setPulseToken] = useState(0);
+  const [rosterScroll, setRosterScroll] = useState(0);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [focusExerciseKey, setFocusExerciseKey] = useState<string | null>(null);
   const [sheetMuscle, setSheetMuscle] = useState<MuscleKey | null>(null);
@@ -352,6 +353,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
               return open;
             });
             setFocusExerciseKey(added.key);
+            setRosterScroll((tick) => tick + 1);
             setTimeout(() => setFocusExerciseKey((key) => (key === added.key ? null : key)), 1200);
           } else if (swapKey) {
             setFocusExerciseKey(swapKey);
@@ -370,6 +372,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
 
   function onAddTimedRow(result: TimedRowResult) {
     setTimedSheet(null);
+    setRosterScroll((tick) => tick + 1);
     edit((current) =>
       addTimedRow(current, {
         kind: result.kind,
@@ -655,7 +658,6 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
     ),
   };
 
-  const sections = useMemo(() => (draft ? sessionSections(draft) : []), [draft]);
   const labels = useMemo(() => (draft ? supersetLabels(draft) : {}), [draft]);
   const title = draft ? sessionTitle(draft) : 'Lift';
 
@@ -749,7 +751,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
             </TourAnchor>
           )
         }>
-          <View style={{ paddingTop: 4, paddingBottom: 12 }}>
+          <View style={{ paddingTop: 4, paddingBottom: 12, flexGrow: 1 }}>
             {renaming ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <TextInput
@@ -865,304 +867,163 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
             </Pressable>
           ) : null}
 
-          {!readOnly && draft.exercises.length === 0 ? (
-            <View style={{ gap: 12, marginBottom: 18 }}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Add exercise"
-                onPress={() => {
-                  setSheetMuscle(null);
-                  setPickerOpen(true);
-                }}
-                style={({ pressed }) => ({
-                  minHeight: 56,
-                  borderRadius: 16,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: pressed ? THEME.accentSoft : THEME.accent,
-                })}>
-                <AppText style={{ fontSize: 16, fontWeight: '800', color: THEME.accentForeground }}>
-                  Add exercise
-                </AppText>
-              </Pressable>
-              <AppText style={{ fontSize: 12, fontWeight: '800', letterSpacing: 0.6, color: THEME.textMuted }}>
-                FILTER (OPTIONAL)
-              </AppText>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {MUSCLE_KEYS.map((key) => (
-                  <Pressable
-                    key={key}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Filter ${muscleLabel(key)}`}
-                    onPress={() => {
-                      setSheetMuscle(key);
-                      setPickerOpen(true);
-                    }}
-                    style={{
-                      minHeight: 36,
-                      paddingHorizontal: 14,
-                      borderRadius: 999,
-                      borderWidth: 1,
-                      borderColor: THEME.border,
-                      backgroundColor: THEME.surface,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}>
-                    <AppText style={{ fontSize: 13, fontWeight: '700', color: THEME.textPrimary }}>
-                      {muscleShortLabel(key)}
-                    </AppText>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-          ) : null}
-
-          {!readOnly && draft.exercises.length > 0 ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Add exercise"
-              onPress={() => {
-                setSheetMuscle(null);
-                setPickerOpen(true);
-              }}
-              style={({ pressed }) => ({
-                minHeight: 44,
-                marginBottom: 14,
-                borderRadius: 14,
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderWidth: 1,
-                borderColor: THEME.accent,
-                backgroundColor: pressed ? THEME.accentSoft : THEME.surface,
-              })}>
-              <AppText style={{ fontSize: 14, fontWeight: '700', color: THEME.accent }}>
-                Add exercise
-              </AppText>
-            </Pressable>
-          ) : null}
-
-          {sections.map((section) => {
-            const collapsed = collapsedMuscles.has(section.muscle);
-            return (
-              <View key={section.muscle} style={{ marginBottom: 18 }}>
-                <View
+          <View style={{ gap: 10 }}>
+            {draft.exercises.map((exercise, index) => {
+              const previous = draft.exercises[index - 1];
+              const next = draft.exercises[index + 1];
+              const grouped = exercise.supersetGroup;
+              const showHeader = !previous || previous.muscleKey !== exercise.muscleKey;
+              const collapsed = collapsedMuscles.has(exercise.muscleKey);
+              const header = showHeader ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${collapsed ? 'Expand' : 'Collapse'} ${muscleLabel(exercise.muscleKey)}`}
+                  accessibilityState={{ expanded: !collapsed }}
+                  onPress={() => toggleMuscle(exercise.muscleKey)}
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
-                    gap: 4,
-                    marginBottom: 8,
+                    gap: 8,
+                    minHeight: 44,
+                    marginTop: index === 0 ? 0 : 8,
                   }}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`${collapsed ? 'Expand' : 'Collapse'} ${muscleLabel(section.muscle)}`}
-                    accessibilityState={{ expanded: !collapsed }}
-                    onPress={() => toggleMuscle(section.muscle)}
+                  <Glyph
+                    name={collapsed ? GLYPH.chevronRight : GLYPH.chevronDown}
+                    color={THEME.accent}
+                    size={14}
+                  />
+                  <AppText
                     style={{
-                      flex: 1,
-                      minWidth: 0,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 8,
-                      minHeight: 44,
+                      fontSize: 13,
+                      fontWeight: '800',
+                      letterSpacing: 0.8,
+                      color: THEME.accent,
                     }}>
-                    <Glyph
-                      name={collapsed ? GLYPH.chevronRight : GLYPH.chevronDown}
-                      color={THEME.accent}
-                      size={14}
-                    />
-                    <AppText
-                      style={{
-                        fontSize: 13,
-                        fontWeight: '800',
-                        letterSpacing: 0.8,
-                        color: THEME.accent,
-                      }}>
-                      {muscleLabel(section.muscle).toUpperCase()}
-                    </AppText>
-                    <AppText style={{ fontSize: 12, color: THEME.textMuted }}>
-                      {section.exercises.length}
-                    </AppText>
-                  </Pressable>
-                  {readOnly ? null : (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`Add ${muscleLabel(section.muscle)}`}
-                      onPress={() => {
-                        // A Cardio or Rest section holds timed rows, so its Add goes straight to
-                        // the logger rather than searching a catalog that has nothing for it.
-                        if (isTimedMuscle(section.muscle)) {
-                          setTimedSheet({
-                            kind: section.muscle === 'rest' ? 'rest' : 'cardio',
-                            muscle: section.muscle,
-                          });
-                          return;
-                        }
-                        setSheetMuscle(section.muscle);
-                        setPickerOpen(true);
-                      }}
-                      style={({ pressed }) => ({
-                        minHeight: 44,
-                        paddingHorizontal: 12,
-                        borderRadius: 999,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexDirection: 'row',
-                        gap: 5,
-                        backgroundColor: pressed ? THEME.accentSoft : 'transparent',
-                      })}>
-                      <Glyph name={GLYPH.plus} color={THEME.accent} size={13} />
-                      <AppText style={{ fontSize: 14, fontWeight: '700', color: THEME.accent }}>
-                        Add
-                      </AppText>
-                    </Pressable>
-                  )}
-                </View>
+                    {muscleLabel(exercise.muscleKey).toUpperCase()}
+                  </AppText>
+                </Pressable>
+              ) : null;
 
-                {collapsed ? null : (
-                  <View style={{ gap: 10 }}>
-                    {section.exercises.length === 0 ? (
-                      <View
-                        style={{
-                          padding: 16,
-                          borderRadius: 16,
-                          borderWidth: 1,
-                          borderStyle: 'dashed',
-                          borderColor: THEME.border,
-                          backgroundColor: THEME.surface,
-                        }}>
-                        <AppText style={{ fontSize: 13, color: THEME.textMuted }}>
-                          {readOnly
-                            ? 'Nothing added for this one.'
-                            : isTimedMuscle(section.muscle)
-                              ? `Nothing here yet. Tap Add to log ${section.muscle === 'rest' ? 'a rest' : 'cardio'}.`
-                              : `No ${muscleLabel(section.muscle)} exercises yet. Tap Add to search the catalog.`}
-                        </AppText>
-                      </View>
-                    ) : null}
-                    {section.exercises.map((exercise, index) => {
-                      const previous = section.exercises[index - 1];
-                      const next = section.exercises[index + 1];
-                      const grouped = exercise.supersetGroup;
+              if (collapsed) {
+                return showHeader ? <View key={exercise.key}>{header}</View> : null;
+              }
 
-                      if (isTimedRow(exercise)) {
-                        return (
-                          <TimedRowCard
-                            key={exercise.key}
-                            row={exercise}
-                            pulseToken={pulseKey === exercise.key ? pulseToken : 0}
-                            readOnly={readOnly}
-                            onChangeDuration={(seconds) =>
-                              edit((current) =>
-                                updateTimedRow(current, exercise.key, { durationSeconds: seconds }),
-                              )
-                            }
-                            onChangeType={(type) =>
-                              edit((current) =>
-                                updateTimedRow(current, exercise.key, { cardioType: type }),
-                              )
-                            }
-                            onChangeIntensity={(value) =>
-                              edit((current) =>
-                                updateTimedRow(current, exercise.key, { intensity: value }),
-                              )
-                            }
-                            onChangeMethod={() =>
-                              setTimedSheet({ kind: 'cardio', muscle: section.muscle })
-                            }
-                            onChangeRounds={(rounds) =>
-                              edit((current) =>
-                                updateTimedRow(current, exercise.key, { rounds }),
-                              )
-                            }
-                            onToggleComplete={() =>
-                              edit((current) =>
-                                updateTimedRow(current, exercise.key, {
-                                  completedAt: exercise.completedAt ? null : new Date().toISOString(),
-                                }),
-                              )
-                            }
-                            onPlay={() => startPlay(rowPlaySpec(exercise))}
-                            onRemove={() => edit((current) => removeExercise(current, exercise.key))}
-                            onDuplicate={() =>
-                              edit((current) => duplicateExercise(current, exercise.key))
-                            }
-                            onMove={(direction) =>
-                              edit((current) => moveExercise(current, exercise.key, direction))
-                            }
-                            canMoveUp={index > 0}
-                            canMoveDown={index < section.exercises.length - 1}
-                          />
-                        );
+              if (isTimedRow(exercise)) {
+                return (
+                  <View key={exercise.key}>
+                    {header}
+                    <TimedRowCard
+                      row={exercise}
+                      pulseToken={pulseKey === exercise.key ? pulseToken : 0}
+                      readOnly={readOnly}
+                      onChangeDuration={(seconds) =>
+                        edit((current) =>
+                          updateTimedRow(current, exercise.key, { durationSeconds: seconds }),
+                        )
                       }
-
-                      return (
-                        <View
-                          key={exercise.key}
-                          style={{
-                            marginTop:
-                              grouped != null && previous?.supersetGroup === grouped ? -8 : 0,
-                          }}>
-                          <ExerciseCard
-                            exercise={exercise}
-                            unit={draft.unit}
-                            readOnly={readOnly}
-                            autoFocusSet={focusExerciseKey === exercise.key}
-                            pulseKey={pulseKey}
-                            pulseToken={pulseToken}
-                            collapsed={collapsedExercises.has(exercise.key)}
-                            supersetLabel={labels[exercise.key] ?? null}
-                            supersetAbove={grouped != null && previous?.supersetGroup === grouped}
-                            supersetBelow={grouped != null && next?.supersetGroup === grouped}
-                            onToggleCollapsed={() => toggleExercise(exercise.key)}
-                            onChangeSet={(setKey, patch) =>
-                              edit((current) => updateSet(current, exercise.key, setKey, patch))
-                            }
-                            onToggleSet={(setKey) =>
-                              edit((current) => toggleSetComplete(current, exercise.key, setKey))
-                            }
-                            onRemoveSet={(setKey) =>
-                              edit((current) => removeSet(current, exercise.key, setKey))
-                            }
-                            onAddSet={(kind: LiftSetKind) =>
-                              edit((current) => addSet(current, exercise.key, kind))
-                            }
-                            onRemove={() => edit((current) => removeExercise(current, exercise.key))}
-                            onDuplicate={() =>
-                              edit((current) => duplicateExercise(current, exercise.key))
-                            }
-                            onSwap={() => setSwapFor(exercise.key)}
-                            onMove={(direction) =>
-                              edit((current) => moveExercise(current, exercise.key, direction))
-                            }
-                            canMoveUp={index > 0}
-                            canMoveDown={index < section.exercises.length - 1}
-                          />
-                        </View>
-                      );
-                    })}
-
-                    {/* Cardio and rest belong in the running order, not on a screen of their own.
-                        Offering them at the foot of every section is what makes intervals possible:
-                        bench, rest, sprint, rest, bench — all inside Chest. */}
-                    {readOnly ? null : (
-                      <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <InsertButton
-                          label="Cardio"
-                          glyph={GLYPH.anyExercise}
-                          onPress={() => setTimedSheet({ kind: 'cardio', muscle: section.muscle })}
-                        />
-                        <InsertButton
-                          label="Rest"
-                          glyph={GLYPH.clock}
-                          onPress={() => setTimedSheet({ kind: 'rest', muscle: section.muscle })}
-                        />
-                      </View>
-                    )}
+                      onChangeType={(type) =>
+                        edit((current) => updateTimedRow(current, exercise.key, { cardioType: type }))
+                      }
+                      onChangeIntensity={(value) =>
+                        edit((current) => updateTimedRow(current, exercise.key, { intensity: value }))
+                      }
+                      onChangeMethod={() =>
+                        setTimedSheet({ kind: 'cardio', muscle: exercise.muscleKey })
+                      }
+                      onChangeRounds={(rounds) =>
+                        edit((current) => updateTimedRow(current, exercise.key, { rounds }))
+                      }
+                      onToggleComplete={() =>
+                        edit((current) =>
+                          updateTimedRow(current, exercise.key, {
+                            completedAt: exercise.completedAt ? null : new Date().toISOString(),
+                          }),
+                        )
+                      }
+                      onPlay={() => startPlay(rowPlaySpec(exercise))}
+                      onRemove={() => edit((current) => removeExercise(current, exercise.key))}
+                      onDuplicate={() =>
+                        edit((current) => duplicateExercise(current, exercise.key))
+                      }
+                      onMove={(direction) =>
+                        edit((current) => moveExercise(current, exercise.key, direction))
+                      }
+                      canMoveUp={canMoveExercise(draft, exercise.key, -1)}
+                      canMoveDown={canMoveExercise(draft, exercise.key, 1)}
+                    />
                   </View>
-                )}
-              </View>
-            );
-          })}
+                );
+              }
+
+              return (
+                <View
+                  key={exercise.key}
+                  style={{
+                    marginTop: grouped != null && previous?.supersetGroup === grouped ? -8 : 0,
+                  }}>
+                  {header}
+                  <ExerciseCard
+                    exercise={exercise}
+                    unit={draft.unit}
+                    readOnly={readOnly}
+                    autoFocusSet={focusExerciseKey === exercise.key}
+                    pulseKey={pulseKey}
+                    pulseToken={pulseToken}
+                    collapsed={collapsedExercises.has(exercise.key)}
+                    supersetLabel={labels[exercise.key] ?? null}
+                    supersetAbove={grouped != null && previous?.supersetGroup === grouped}
+                    supersetBelow={grouped != null && next?.supersetGroup === grouped}
+                    onToggleCollapsed={() => toggleExercise(exercise.key)}
+                    onChangeSet={(setKey, patch) =>
+                      edit((current) => updateSet(current, exercise.key, setKey, patch))
+                    }
+                    onToggleSet={(setKey) =>
+                      edit((current) => toggleSetComplete(current, exercise.key, setKey))
+                    }
+                    onRemoveSet={(setKey) =>
+                      edit((current) => removeSet(current, exercise.key, setKey))
+                    }
+                    onAddSet={(kind: LiftSetKind) =>
+                      edit((current) => addSet(current, exercise.key, kind))
+                    }
+                    onRemove={() => edit((current) => removeExercise(current, exercise.key))}
+                    onDuplicate={() =>
+                      edit((current) => duplicateExercise(current, exercise.key))
+                    }
+                    onSwap={() => setSwapFor(exercise.key)}
+                    onMove={(direction) =>
+                      edit((current) => moveExercise(current, exercise.key, direction))
+                    }
+                    canMoveUp={canMoveExercise(draft, exercise.key, -1)}
+                    canMoveDown={canMoveExercise(draft, exercise.key, 1)}
+                  />
+                </View>
+              );
+            })}
+          </View>
+
+          {readOnly ? null : (
+            <RosterAddCluster
+              empty={draft.exercises.length === 0}
+              scrollToken={rosterScroll}
+              onAddExercise={() => {
+                setSheetMuscle(null);
+                setPickerOpen(true);
+              }}
+              onCardio={() =>
+                setTimedSheet({
+                  kind: 'cardio',
+                  muscle: draft.exercises[draft.exercises.length - 1]?.muscleKey ?? 'cardio',
+                })
+              }
+              onRest={() =>
+                setTimedSheet({
+                  kind: 'rest',
+                  muscle: draft.exercises[draft.exercises.length - 1]?.muscleKey ?? 'rest',
+                })
+              }
+            />
+          )}
       </KeyboardFormShell>
 
       <AddExerciseSheet
@@ -1254,7 +1115,68 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
   );
 }
 
-/** The quiet "+ Cardio" / "+ Rest" pair at the foot of a muscle section. */
+/**
+ * Under the last card. Add Exercise opens the full catalog. Cardio and Rest insert a row.
+ * Not part of the Play / Save / Complete footer.
+ */
+function RosterAddCluster({
+  empty,
+  scrollToken,
+  onAddExercise,
+  onCardio,
+  onRest,
+}: {
+  empty: boolean;
+  scrollToken: number;
+  onAddExercise: () => void;
+  onCardio: () => void;
+  onRest: () => void;
+}) {
+  const ref = useRef<View>(null);
+  const form = useKeyboardForm();
+  useEffect(() => {
+    if (!scrollToken || !ref.current) {
+      return undefined;
+    }
+    const node = ref.current;
+    const handle = setTimeout(() => {
+      form?.scrollFieldIntoView(node);
+    }, 280);
+    return () => clearTimeout(handle);
+  }, [form, scrollToken]);
+
+  return (
+    <View
+      ref={ref}
+      collapsable={false}
+      style={{ gap: 8, marginTop: empty ? 0 : 12, flexGrow: empty ? 1 : 0, justifyContent: empty ? 'flex-end' : 'flex-start' }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Add exercise"
+        onPress={onAddExercise}
+        style={({ pressed }) => ({
+          minHeight: 52,
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: THEME.border,
+          backgroundColor: pressed ? THEME.accentSoft : THEME.surface,
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: 'row',
+          gap: 6,
+        })}>
+        <Glyph name={GLYPH.plus} color={THEME.accent} size={14} />
+        <AppText style={{ fontSize: 16, fontWeight: '800', color: THEME.accent }}>Add Exercise</AppText>
+      </Pressable>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <InsertButton label="Cardio" glyph={GLYPH.anyExercise} onPress={onCardio} />
+        <InsertButton label="Rest" glyph={GLYPH.clock} onPress={onRest} />
+      </View>
+    </View>
+  );
+}
+
+/** The quiet "+ Cardio" / "+ Rest" pair under Add Exercise. */
 function InsertButton({
   label,
   glyph,

@@ -203,10 +203,10 @@ export function newTimedDraft(input: {
 }
 
 /**
- * Drops a cardio or rest row at the end of a muscle section.
+ * Drops a cardio or rest row at the end of the roster.
  *
  * Appending is what makes the HIIT pattern work without a builder: log bench, add a rest, add a
- * sprint, add another rest, and the section reads back in the order it happened.
+ * sprint, add another rest, and the list reads back in the order it happened.
  */
 export function addTimedRow(
   draft: LiftSessionDraft,
@@ -223,8 +223,7 @@ export function addTimedRow(
 ): LiftSessionDraft {
   const added = newTimedDraft(input);
   const next = draft.exercises.slice();
-  const lastIndex = lastIndexForMuscle(next, input.muscleKey);
-  next.splice(lastIndex + 1, 0, added);
+  next.push(added);
   return refreshSessionMeta(withMuscle({ ...draft, exercises: next }, input.muscleKey));
 }
 
@@ -462,22 +461,11 @@ export function addExercise(
     supersetGroup: group,
   });
 
-  // Insert directly under the last exercise of that muscle so sections stay contiguous.
-  const lastIndex = lastIndexForMuscle(exercises, input.muscleKey);
+  // Newest last, so the logging roster reads in the order they were added.
   const next = exercises.slice();
-  next.splice(lastIndex + 1, 0, added);
+  next.push(added);
 
   return refreshSessionMeta(withMuscle({ ...draft, exercises: next }, input.muscleKey));
-}
-
-function lastIndexForMuscle(exercises: LiftExerciseDraft[], muscle: MuscleKey): number {
-  let index = -1;
-  for (let i = 0; i < exercises.length; i += 1) {
-    if (exercises[i].muscleKey === muscle) {
-      index = i;
-    }
-  }
-  return index === -1 ? exercises.length - 1 : index;
 }
 
 /** Adding to a muscle that was not picked at the start quietly adds it to the session. */
