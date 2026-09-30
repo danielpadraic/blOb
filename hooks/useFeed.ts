@@ -13,6 +13,7 @@ import { Alert } from 'react-native';
 import { clipPostsQueryKey } from '@/lib/clipPost';
 import { isHomeExcludedClipType } from '@/lib/clipPost';
 import { checkinPostBody } from '@/lib/checkin/captions';
+import { collapseDualStampHomePosts } from '@/lib/officialPairCheckin';
 import {
   circleFeedListKey,
   composerListKey,
@@ -1191,7 +1192,7 @@ async function fetchHomeFeedPage(input: {
       corporateIds: asIdSet(corporateIds),
       fofAuthors: asIdSet(fofAuthors, input.userId),
     });
-    const filtered = filterHomeFeedPosts(preview, allow);
+    const filtered = collapseDualStampHomePosts(filterHomeFeedPosts(preview, allow));
     const visible = takeHomeVisiblePage(filtered, input.seenIds);
     if (visible.length >= HOME_PAGE_SIZE || !hasMore) {
       // First 15 cards paint with author_id; names fill after first paint.
@@ -1240,7 +1241,7 @@ async function fetchHomeFeedPage(input: {
     corporateIds: asIdSet(corporateIds),
     fofAuthors: asIdSet(fofAuthors, input.userId),
   });
-  const filtered = filterHomeFeedPosts(preview, allow);
+  const filtered = collapseDualStampHomePosts(filterHomeFeedPosts(preview, allow));
   const visible = takeHomeVisiblePage(filtered, input.seenIds);
   const page = first ? visible : await hydrateAuthors(visible);
   return finishHomeFeedPage({

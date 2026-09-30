@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Platform, Pressable, View } from 'react-native';
 
 import { InAppCamera } from '@/components/capture/InAppCamera';
@@ -104,6 +104,8 @@ export function ProofUploader({
   const [webFallback, setWebFallback] = useState(false);
   const [libraryDenied, setLibraryDenied] = useState(false);
   const [healthOpen, setHealthOpen] = useState(false);
+  const [stillBroken, setStillBroken] = useState(false);
+  const healthOpenLock = useRef(false);
   const [toast, setToast] = useState<string | null>(null);
   const healthChip = Boolean(
     Platform.OS === 'ios' &&
@@ -126,16 +128,36 @@ export function ProofUploader({
   );
 
   useEffect(() => {
+    setStillBroken(false);
+  }, [uri]);
+
+  function openHealthSheet() {
+    if (healthOpenLock.current || healthOpen) {
+      return;
+    }
+    healthOpenLock.current = true;
+    setHealthOpen(true);
+  }
+
+  useEffect(() => {
     if (autoOpen && !uri && !locked) {
-      if (preferLibrary) {
+      const heart = type === 'hr_monitor';
+      if (heart && Platform.OS !== 'web' && health) {
+        openHealthSheet();
+        return;
+      }
+      if (preferLibrary || (heart && Platform.OS === 'web')) {
         void openLibrary();
+        return;
+      }
+      if (heart) {
         return;
       }
       void startCamera();
     }
-    // First empty still/video proof opens the camera immediately. Library-first skips that.
+    // First empty still opens the camera. Heart-rate opens the workout list, never the selfie camera.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoOpen, preferLibrary]);
+  }, [autoOpen, preferLibrary, type]);
 
   async function startCamera() {
     if (locked) {
@@ -238,7 +260,7 @@ export function ProofUploader({
             setWebFallback(true);
             onUnavailable?.();
           }}
-          onUseWorkout={healthChip ? () => setHealthOpen(true) : undefined}
+          onUseWorkout={healthChip ? openHealthSheet : undefined}
           onStartWatch={
             watch.visible
               ? () => {
@@ -281,8 +303,12 @@ export function ProofUploader({
             userId={health.userId}
             attaching={health.attaching}
             proof={health.proof}
-            onClose={() => setHealthOpen(false)}
+            onClose={() => {
+              healthOpenLock.current = false;
+              setHealthOpen(false);
+            }}
             onDenied={() => {
+              healthOpenLock.current = false;
               setHealthOpen(false);
               const denied = healthPermissionDeniedMessage();
               setToast(denied);
@@ -371,17 +397,37 @@ export function ProofUploader({
           </AppText>
         </Pressable>
       ) : uri ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Retake photo"
-          disabled={locked}
-          onPress={() => void startCamera()}>
-          <Image
-            source={{ uri }}
-            style={{ height: previewHeight, width: '100%' }}
-            contentFit="contain"
-          />
-        </Pressable>
+        <View>
+          {stillBroken ? (
+            <View style={{ minHeight: previewHeight, justifyContent: 'center', padding: 16 }}>
+              <AppText className="text-center text-base font-semibold text-charcoal">Photo saved</AppText>
+              <AppText className="mt-2 text-center text-sm leading-6 text-muted">
+                This still is on the check-in. Replace it if you want a new one.
+              </AppText>
+            </View>
+          ) : (
+            <Image
+              source={{ uri }}
+              style={{ height: previewHeight, width: '100%' }}
+              contentFit="contain"
+              onError={() => setStillBroken(true)}
+            />
+          )}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Replace"
+            disabled={locked}
+            onPress={() => {
+              if (type === 'hr_monitor' && Platform.OS !== 'web' && health) {
+                openHealthSheet();
+                return;
+              }
+              void startCamera();
+            }}
+            style={{ minHeight: 44, justifyContent: 'center', alignItems: 'center' }}>
+            <AppText style={{ fontSize: 14, fontWeight: '700', color: THEME.accent }}>Replace</AppText>
+          </Pressable>
+        </View>
       ) : (
         <Pressable
           accessibilityRole="button"

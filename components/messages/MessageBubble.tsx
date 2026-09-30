@@ -6,7 +6,9 @@ import { useMediaLightboxOptional } from '@/components/feed/MediaLightbox';
 import { AppText } from '@/components/ui/AppText';
 import { useChallengeShareState } from '@/hooks/useChallenge';
 import { useOpenChallengeFromTag } from '@/hooks/useOpenChallengeFromTag';
+import { LiftPostCard } from '@/components/lift/LiftPostCard';
 import { challengeIdFromShareText, textWithoutChallengeLinks } from '@/lib/challengeLink';
+import { parseLiftDmBody } from '@/lib/lift/dmCard';
 import { postIdFromShareText, textWithoutPostLink } from '@/lib/postLink';
 import { postHref } from '@/lib/postShare';
 import { storyHref } from '@/lib/routes';
@@ -25,6 +27,21 @@ export function MessageBubble({ message, mine }: MessageBubbleProps) {
   const lightbox = useMediaLightboxOptional();
   const photo = message.media_url?.trim() || null;
   const raw = message.body?.trim() || '';
+  const liftDm = raw ? parseLiftDmBody(raw) : null;
+  if (liftDm) {
+    return (
+      <View className={mine ? 'max-w-[78%] items-end self-end' : 'max-w-[78%] items-start self-start'}>
+        <LiftPostCard
+          sessionId={liftDm.sessionId}
+          authorId={liftDm.authorId || message.sender_id}
+          snapshot={liftDm.snapshot}
+          caption={liftDm.caption}
+          compact
+        />
+        <AppText className="mt-1 text-[10px] text-muted">{formatFeedTime(message.created_at)}</AppText>
+      </View>
+    );
+  }
   const challengeId = raw ? challengeIdFromShareText(raw) : null;
   const linked = challengeId ? textWithoutChallengeLinks(raw) : raw;
   const storyId = !challengeId && linked ? storyIdFromShareText(linked) : null;

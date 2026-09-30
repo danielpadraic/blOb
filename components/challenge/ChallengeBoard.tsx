@@ -64,8 +64,9 @@ import { challengeShowsMissBudget, missesAllowedCap, missesAllowedCopy, missesUs
 import { isOfficialChallenge } from '@/lib/official';
 import {
   formatOfficialCoinAmount,
+  isOfficialCoinBoardGhost,
   isOfficialCoinChallenge,
-  officialCoinAllowedDays,
+  officialCoinBoardDenominator,
   officialCoinBoardHeaderLine,
   officialCoinGuarantee,
   officialCoinScoreLabel,
@@ -116,8 +117,23 @@ export function ChallengeBoard({
   const coinDays = useOfficialCoinDays(challenge, officialCoin);
   const quantityBoard = usesQuantityScoring(challenge);
   const racingRoster = useMemo(
-    () => (roster ?? []).filter((row) => !isRosterObserver(row) && !isRosterRemoved(row)),
-    [roster],
+    () =>
+      (roster ?? []).filter((row) => {
+        if (isRosterObserver(row) || isRosterRemoved(row)) {
+          return false;
+        }
+        if (
+          officialCoin &&
+          isOfficialCoinBoardGhost({
+            displayName: row.profile?.display_name,
+            username: row.profile?.username,
+          })
+        ) {
+          return false;
+        }
+        return true;
+      }),
+    [officialCoin, roster],
   );
   const view = useMemo(
     () =>
@@ -182,19 +198,14 @@ export function ChallengeBoard({
     consistencyBoard &&
     (canAdjust || canHouseRemove || canFriendlyRemove || canEditScore || canProxy);
   const requiredDays = storedDurationDays(challenge) ?? challengeTargetCount(challenge);
-  /** Mid-window joiners can only fill the days that are left, so `of X` is per person. */
-  const coinAllowedByUser = useMemo(() => {
-    const map = new Map<string, number>();
-    if (!officialCoin) {
-      return map;
+  /** Official window: 7 this week, or the Chicago month. Not a short ends_at span. */
+  const coinDenominator = officialCoin ? officialCoinBoardDenominator(challenge) : requiredDays;
+  const provedDaysFor = (userId: string, stored: number) => {
+    if (!officialCoin || !coinDays.isSuccess) {
+      return stored;
     }
-    const now = new Date();
-    for (const row of roster ?? []) {
-      map.set(row.user_id, officialCoinAllowedDays(challenge, row, now));
-    }
-    return map;
-  }, [challenge, officialCoin, roster]);
-  const coinAllowedFor = (userId: string) => coinAllowedByUser.get(userId) ?? requiredDays;
+    return coinDays.data?.get(userId)?.length ?? 0;
+  };
   const showMissLine = challengeShowsMissBudget(challenge);
   const missCap = missesAllowedCap(challenge);
   const progressByUser = useMemo(() => {
@@ -285,7 +296,7 @@ export function ChallengeBoard({
         return progressByUser.get(row.userId)?.label?.trim() || '42.1 / 128 mi';
       }
       if (officialCoin) {
-        return officialCoinScoreLabel(Number(row.days) || 0, coinAllowedFor(row.userId));
+        return officialCoinScoreLabel(provedDaysFor(row.userId, Number(row.days) || 0), coinDenominator);
       }
       if (consistencyBoard) {
         return `${Number(row.days) || 0}/${requiredDays}`;
@@ -308,7 +319,9 @@ export function ChallengeBoard({
     }
     return BOARD_PTS_COL;
   }, [
-    coinAllowedByUser,
+    coinDays.data,
+    coinDays.isSuccess,
+    coinDenominator,
     compact,
     consistencyBoard,
     officialCoin,
@@ -374,7 +387,7 @@ export function ChallengeBoard({
               ? formatBoardNestedQty(progress.logged)
               : '0')
         : officialCoin
-          ? officialCoinScoreLabel(Number(row.days) || 0, coinAllowedFor(row.userId))
+          ? officialCoinScoreLabel(provedDaysFor(row.userId, Number(row.days) || 0), coinDenominator)
           : consistencyBoard
             ? `${Number(row.days) || 0}/${requiredDays}`
             : formatBoardPoints(row.points);

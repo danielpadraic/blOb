@@ -12,6 +12,8 @@ import {
   OFFICIAL_COIN_REJOIN_PILL,
   OFFICIAL_COIN_TITLE,
   officialCoinAllowedDays,
+  officialCoinBoardDenominator,
+  isOfficialCoinBoardGhost,
   officialCoinBoardHeaderLine,
   officialCoinDaysLeft,
   officialCoinGuarantee,
@@ -157,6 +159,28 @@ describe('officialCoinDaysLeft', () => {
   it('counts today as still open', () => {
     expect(officialCoinDaysLeft(WEEKLY, FRIDAY)).toBe(3);
     expect(officialCoinDaysLeft(MONTHLY, FRIDAY)).toBe(6);
+  });
+});
+
+describe('officialCoinBoardDenominator', () => {
+  it('uses the Chicago week and month, not a 6-day ends_at span', () => {
+    expect(officialCoinBoardDenominator(WEEKLY, FRIDAY)).toBe(7);
+    expect(officialCoinBoardDenominator(MONTHLY, FRIDAY)).toBe(30);
+    expect(
+      officialCoinBoardDenominator(
+        { ...MONTHLY, starts_at: '2026-09-25T05:00:00.000Z', ends_at: '2026-10-01T05:00:00.000Z' },
+        FRIDAY,
+      ),
+    ).toBe(30);
+  });
+});
+
+describe('official coin board ghosts', () => {
+  it('hides blobtest and the Test Rookie / Veteran names', () => {
+    expect(isOfficialCoinBoardGhost({ username: 'blobtest_dan', displayName: 'Dan' })).toBe(true);
+    expect(isOfficialCoinBoardGhost({ displayName: 'Test Rookie 01' })).toBe(true);
+    expect(isOfficialCoinBoardGhost({ displayName: 'Test Veteran 09' })).toBe(true);
+    expect(isOfficialCoinBoardGhost({ displayName: 'Daniel', username: 'daniel' })).toBe(false);
   });
 });
 

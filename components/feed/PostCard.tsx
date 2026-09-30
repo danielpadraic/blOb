@@ -35,6 +35,7 @@ import { checkinCardCaption, isCheckinPost, postLocality } from '@/lib/checkinPo
 import { COMMENT_UNAVAILABLE, commentTargetMissing, scrollCommentNodeIntoView } from '@/lib/commentHighlight';
 import { LocationVenueLine } from '@/components/challenge/LocationProofRow';
 import { useHidePostFromHome } from '@/hooks/usePostEdit';
+import { useMyProfile } from '@/hooks/useProfile';
 import { WebTapButton } from '@/components/ui/WebTapButton';
 import { useKeyboardOverlap } from '@/components/ui/KeyboardFormShell';
 import { LiftPostCard } from '@/components/lift/LiftPostCard';
@@ -124,7 +125,12 @@ function PostCardInner({
   const updateAudience = useUpdatePostAudience();
 
   const uid = safeUserId(post.author, post.author_id, (post as { user_id?: string | null }).user_id);
-  const name = authorLabel(post.author);
+  const mineProfile = useMyProfile();
+  const mine = Boolean(currentUserId && currentUserId === post.author_id);
+  const authorName = authorLabel(post.author);
+  const viewerName =
+    mineProfile.data?.display_name?.trim() || mineProfile.data?.username?.trim() || '';
+  const name = mine && authorName === 'Someone' && viewerName ? viewerName : authorName;
   const handle = post.author?.username?.trim() || uid;
   const comments = post.comments ?? [];
   const audience = asPostAudience(post.audience);
@@ -172,7 +178,6 @@ function PostCardInner({
     content.length > BODY_COLLAPSE_CHARS || content.split('\n').length > BODY_COLLAPSE_LINES;
   const checkin = isCheckinPost(post);
   const hideHome = useHidePostFromHome();
-  const mine = Boolean(currentUserId && currentUserId === post.author_id);
   const tagged = Boolean(post.challenge_id);
   const circleId = circleIdFromPost(post);
   const circleShare = post.type === 'circle_challenge_share';
@@ -184,9 +189,22 @@ function PostCardInner({
     checkin ||
     (post.source === 'challenge' && !circleShare) ||
     post.source === 'checkin';
+  const pairedIds = (post.checkin_stats?.paired_challenge_ids ?? [])
+    .map((id) => String(id ?? '').trim())
+    .filter((id) => id && id !== post.challenge_id);
+  const pairedTitles = (post.checkin_stats?.paired_titles ?? [])
+    .map((title) => String(title ?? '').trim())
+    .filter(Boolean);
+  const extraChallengeId = pairedIds[0] ?? null;
   const preview = useChallengeFeedPreview(tagged ? post.challenge_id : undefined);
+  const extraPreview = useChallengeFeedPreview(extraChallengeId ?? undefined);
   const previewRow = preview.data?.id === post.challenge_id ? preview.data : null;
-  const challengeTitle = previewRow ? challengeDisplayTitle(previewRow) : null;
+  const extraRow = extraPreview.data?.id === extraChallengeId ? extraPreview.data : null;
+  const challengeTitle = pairedTitles[0] || (previewRow ? challengeDisplayTitle(previewRow) : null);
+  const extraTitle =
+    pairedTitles[1] ||
+    pairedTitles.find((title) => title !== challengeTitle) ||
+    (extraRow ? challengeDisplayTitle(extraRow) : null);
   // Built once per post rather than per frame: a feed scroll re-renders these constantly, and a card
   // is a whole model. Posts that are not workout check-ins cost one absent-URL check.
   const workoutSlide = useMemo(
@@ -364,7 +382,11 @@ function PostCardInner({
             {post.challenge_id ? (
               <InChallengeChip
                 challengeId={post.challenge_id}
-                title={challengeTitle}
+                title={
+                  extraTitle && challengeTitle
+                    ? `${challengeTitle} · ${extraTitle}`
+                    : challengeTitle
+                }
                 titleOnly={Boolean(circleId)}
                 visibility={previewRow?.visibility}
                 challengeLane={previewRow?.challenge_lane}

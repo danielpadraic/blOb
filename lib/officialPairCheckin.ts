@@ -13,7 +13,8 @@ import type { CheckinProofStats } from '@/lib/checkin/proofStats';
 import type { CheckinHealthProof } from '@/lib/health/checkinHealthProof';
 import { isRecapCardUrl } from '@/lib/health/postWorkoutCard';
 import { patchFeedPostFields } from '@/lib/liveFeedPatch';
-import { officialCoinKind } from '@/lib/officialCoin';
+import { dateStampInZone } from '@/lib/officialDays';
+import { OFFICIAL_COIN_TZ, officialCoinDisplayTitle, officialCoinKind } from '@/lib/officialCoin';
 import { supabase } from '@/lib/supabase';
 
 /**
@@ -298,16 +299,54 @@ export async function alignOfficialPairPosts(input: {
   if (error || !data?.length) {
     return [];
   }
-  const firstByChallenge = new Map<string, { id: string; content?: string | null; checkin_stats?: unknown }>();
-  for (const row of data as Array<{ id: string; challenge_id: string; content?: string | null; checkin_stats?: unknown }>) {
+  const rows = data as Array<{
+    id: string;
+    challenge_id: string;
+    content?: string | null;
+    checkin_stats?: CheckinProofStats | null;
+    created_at?: string;
+  }>;
+  const firstByChallenge = new Map<string, (typeof rows)[number]>();
+  for (const row of rows) {
     if (!firstByChallenge.has(row.challenge_id)) {
       firstByChallenge.set(row.challenge_id, row);
     }
   }
+  const titled = await supabase
+    .from('challenges')
+    .select('id, title, official_kind')
+    .in('id', challengeIds);
+  const titleOf = new Map<string, string>();
+  for (const row of (titled.data ?? []) as Array<{ id: string; title?: string | null; official_kind?: string | null }>) {
+    titleOf.set(row.id, officialCoinDisplayTitle(row) || String(row.title ?? '').trim());
+  }
+  const pairedIds = [...firstByChallenge.keys()];
+  const pairedTitles = pairedIds.map((id) => titleOf.get(id) || '').filter(Boolean);
+  const ordered = [...firstByChallenge.values()].sort(
+    (a, b) => Date.parse(a.created_at ?? '') - Date.parse(b.created_at ?? ''),
+  );
+  const keeperId = ordered[0]?.id ?? '';
   const content = String(input.content ?? '').trim();
   const ids: string[] = [];
-  for (const row of firstByChallenge.values()) {
-    const patch: { media_urls: string[]; content?: string } = { media_urls: [...mediaUrls] };
+  for (const row of ordered) {
+    const prior =
+      row.checkin_stats && typeof row.checkin_stats === 'object' ? row.checkin_stats : {};
+    const homeKeeper = row.id === keeperId;
+    const checkin_stats: CheckinProofStats = {
+      ...prior,
+      paired_challenge_ids: pairedIds,
+      paired_titles: pairedTitles,
+    };
+    const patch: {
+      media_urls: string[];
+      content?: string;
+      hidden_from_home: boolean;
+      checkin_stats: CheckinProofStats;
+    } = {
+      media_urls: [...mediaUrls],
+      hidden_from_home: !homeKeeper,
+      checkin_stats,
+    };
     if (content) {
       patch.content = content;
     }
@@ -320,11 +359,89 @@ export async function alignOfficialPairPosts(input: {
       patchFeedPostFields(input.queryClient, row.id, {
         id: row.id,
         media_urls: [...mediaUrls],
+        hidden_from_home: !homeKeeper,
         ...(content ? { content } : null),
-        checkin_stats: row.checkin_stats,
+        checkin_stats,
       });
   }
   return ids;
+}
+
+const DUAL_STAMP_MS = 90_000;
+
+type DualStampPost = {
+  id: string;
+  author_id: string;
+  created_at: string;
+  source?: string | null;
+  challenge_id?: string | null;
+  checkin_id?: string | null;
+  media_urls?: string[] | null;
+  checkin_stats?: CheckinProofStats | null;
+  hidden_from_home?: boolean | null;
+};
+
+/**
+ * One Home card when the same morning stamped Weekly and Monthly.
+ * Keeps the oldest row, unions the stills, and names both rooms.
+ */
+export function collapseDualStampHomePosts<T extends DualStampPost>(posts: T[]): T[] {
+  const used = new Set<string>();
+  const checkins = posts.filter((post) => post.source === 'checkin' && post.challenge_id);
+  const out: T[] = [];
+  for (const post of posts) {
+    if (used.has(post.id)) {
+      continue;
+    }
+    if (post.source !== 'checkin' || !post.challenge_id) {
+      out.push(post);
+      continue;
+    }
+    const stamp = Date.parse(post.created_at);
+    const day = Number.isFinite(stamp) ? dateStampInZone(new Date(stamp), OFFICIAL_COIN_TZ) : '';
+    const group = checkins.filter((other) => {
+      if (other.author_id !== post.author_id) {
+        return false;
+      }
+      if (post.checkin_id && other.checkin_id && post.checkin_id === other.checkin_id) {
+        return true;
+      }
+      if (other.id === post.id) {
+        return true;
+      }
+      const otherStamp = Date.parse(other.created_at);
+      if (!day || !Number.isFinite(otherStamp) || other.challenge_id === post.challenge_id) {
+        return false;
+      }
+      if (dateStampInZone(new Date(otherStamp), OFFICIAL_COIN_TZ) !== day) {
+        return false;
+      }
+      return Math.abs(otherStamp - stamp) <= DUAL_STAMP_MS;
+    });
+    for (const row of group) {
+      used.add(row.id);
+    }
+    if (group.length < 2) {
+      out.push(post);
+      continue;
+    }
+    const ordered = [...group].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+    const keeper = ordered[0];
+    const media = uniqueProofUrls(ordered.flatMap((row) => row.media_urls ?? []));
+    const pairedIds = [...new Set(ordered.map((row) => String(row.challenge_id ?? '').trim()).filter(Boolean))];
+    const pairedTitles = [...new Set(ordered.flatMap((row) => row.checkin_stats?.paired_titles ?? []).filter(Boolean))];
+    out.push({
+      ...keeper,
+      media_urls: media,
+      hidden_from_home: false,
+      checkin_stats: {
+        ...(keeper.checkin_stats ?? {}),
+        paired_challenge_ids: pairedIds,
+        paired_titles: pairedTitles,
+      },
+    } as T);
+  }
+  return out;
 }
 
 /** Write OCR chips onto every Official Live post for this send. Does not replace the photo. */

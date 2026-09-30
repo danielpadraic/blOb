@@ -15,6 +15,7 @@ type FeedPostRow = {
   media_captions?: unknown;
   hidden_media_urls?: unknown;
   checkin_stats?: unknown;
+  hidden_from_home?: boolean | null;
   edited_at?: string | null;
   lift_session_id?: string | null;
   lift_snapshot?: unknown;
@@ -213,6 +214,13 @@ function mergeLiveFeedPost<T extends { id: string }>(post: T, row: FeedPostRow):
   }
   if (captions) {
     assign('media_captions', captions, sameJson((post as FeedPostRow).media_captions, captions));
+  }
+  if (row.hidden_from_home !== undefined) {
+    assign(
+      'hidden_from_home',
+      row.hidden_from_home,
+      (post as FeedPostRow).hidden_from_home === row.hidden_from_home,
+    );
   }
   if (row.checkin_stats !== undefined) {
     const picked = richestCheckinStats((post as FeedPostRow).checkin_stats, row.checkin_stats);

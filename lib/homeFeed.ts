@@ -264,6 +264,15 @@ export function homeFeedAllowsPost(post: HomeFeedPost, ctx: HomeFeedAllowContext
   } else if (post.hidden_from_home && post.author_id !== userId) {
     return false;
   }
+  // A DM lift is a card in the thread. It must not sit on Home, hidden or not.
+  if (
+    post.type === 'lift_session' &&
+    post.hidden_from_home &&
+    !post.challenge_id &&
+    !post.circle_id
+  ) {
+    return false;
+  }
   if (isHomeExcludedClipType(post.type)) {
     return false;
   }

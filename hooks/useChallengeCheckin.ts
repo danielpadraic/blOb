@@ -29,6 +29,7 @@ import {
 } from '@/lib/checkinPeriod';
 import { dateStampInZone } from '@/lib/officialDays';
 import { HOME_PULSE_KEY } from '@/lib/homePulse';
+import { OFFICIAL_COIN_DAYS_KEY, OFFICIAL_COIN_KEY, type OfficialCoinDay, type OfficialCoinStatus } from '@/hooks/useOfficialCoin';
 import { isOfficialCoinChallenge, officialCoinDateStamp } from '@/lib/officialCoin';
 import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
 import { getErrorMessage } from '@/utils/errors';
@@ -513,8 +514,8 @@ export function useSubmitCheckin(
   const officialCoin = Boolean(opts?.officialCoin);
 
   return useMutation({
-    mutationFn: () => submitCheckin(challengeId!, forUserId, { officialCoin }),
-    onSuccess: (row) => {
+    mutationFn: (vars?: { countDay?: boolean }) => submitCheckin(challengeId!, forUserId, { officialCoin }),
+    onSuccess: (row, vars) => {
       if (row?.id) {
         void cancelCheckoutReminder(row.id);
       }
@@ -529,37 +530,86 @@ export function useSubmitCheckin(
         } else {
           writeCheckinCache(queryClient, challengeId, subjectId, row);
         }
+        const countDay = vars?.countDay !== false;
         const bumpPoints =
           usesPointsBoard(cachedChallenge) && !usesComparablePointsScoring(cachedChallenge);
         const award = bumpPoints ? checkinPointValue(cachedChallenge) : 0;
-        queryClient.setQueryData<ChallengeParticipantLike[]>(
-          ['challenge-participants', challengeId],
-          (current) =>
-            (current ?? []).map((item) =>
-              item.user_id === subjectId
+        const roomIds = new Set<string>([challengeId]);
+        if (officialCoin && countDay) {
+          for (const [, status] of queryClient.getQueriesData<OfficialCoinStatus>({
+            queryKey: [OFFICIAL_COIN_KEY],
+          })) {
+            const weeklyId = status?.weekly?.challenge.id;
+            const monthlyId = status?.monthly?.challenge.id;
+            if (weeklyId) {
+              roomIds.add(weeklyId);
+            }
+            if (monthlyId) {
+              roomIds.add(monthlyId);
+            }
+          }
+        }
+        for (const roomId of roomIds) {
+          const pointsHere = roomId === challengeId && bumpPoints;
+          queryClient.setQueryData<ChallengeParticipantLike[]>(
+            ['challenge-participants', roomId],
+            (current) =>
+              (current ?? []).map((item) =>
+                item.user_id === subjectId
+                  ? {
+                      ...item,
+                      days_completed: incrementDaysCompleted(Number(item.days_completed) || 0, !countDay),
+                      points: pointsHere ? (Number(item.points) || 0) + award : item.points,
+                    }
+                  : item,
+              ),
+          );
+          queryClient.setQueryData(
+            ['my-participation', roomId, user.id],
+            (current: ChallengeParticipantLike | null | undefined) =>
+              current
                 ? {
-                    ...item,
-                    days_completed: incrementDaysCompleted(Number(item.days_completed) || 0, false),
-                    points: bumpPoints ? (Number(item.points) || 0) + award : item.points,
+                    ...current,
+                    days_completed: incrementDaysCompleted(Number(current.days_completed) || 0, !countDay),
+                    points: pointsHere ? (Number(current.points) || 0) + award : current.points,
                   }
-                : item,
-            ),
-        );
-        queryClient.setQueryData(
-          ['my-participation', challengeId, user.id],
-          (current: ChallengeParticipantLike | null | undefined) =>
-            current
-              ? {
-                  ...current,
-                  days_completed: incrementDaysCompleted(Number(current.days_completed) || 0, false),
-                  points: bumpPoints ? (Number(current.points) || 0) + award : current.points,
-                }
-              : current,
-        );
+                : current,
+          );
+        }
         queryClient.setQueriesData<number>(
           { queryKey: ['submitted-checkins', challengeId] },
-          (current) => incrementDaysCompleted(Number(current) || 0, false),
+          (current) => incrementDaysCompleted(Number(current) || 0, !countDay),
         );
+        if (officialCoin && countDay) {
+          const periodKey =
+            normalizePeriodKey(row.period_key) || officialCoinDateStamp(row.submitted_at || new Date());
+          queryClient.setQueriesData<Map<string, OfficialCoinDay[]>>(
+            { queryKey: [OFFICIAL_COIN_DAYS_KEY] },
+            (current) => {
+              if (!current || !periodKey) {
+                return current;
+              }
+              const next = new Map(current);
+              const list = [...(next.get(subjectId) ?? [])];
+              if (list.some((item) => item.periodKey === periodKey)) {
+                return current;
+              }
+              list.push({
+                day: list.length + 1,
+                periodKey,
+                userId: subjectId,
+                checkinId: row.id,
+                postId: null,
+              });
+              list.sort((a, b) => a.periodKey.localeCompare(b.periodKey));
+              next.set(
+                subjectId,
+                list.map((item, index) => ({ ...item, day: index + 1 })),
+              );
+              return next;
+            },
+          );
+        }
       }
       const cachedForFeed = queryClient.getQueryData<Challenge>(['challenge', challengeId]);
       if (usesComparablePointsScoring(cachedForFeed)) {

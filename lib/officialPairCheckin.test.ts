@@ -6,6 +6,7 @@ import {
   ocrCheckinStats,
   orderedCheckinSlides,
   qualifyingSlotUrl,
+  collapseDualStampHomePosts,
   siblingOfficialChallengeId,
 } from '@/lib/officialPairCheckin';
 
@@ -85,5 +86,39 @@ describe('official pair slots', () => {
         avgHrBpm: 150,
       }),
     ).toBeNull();
+  });
+});
+
+describe('collapseDualStampHomePosts', () => {
+  it('keeps the oldest Home row and names both Official rooms', () => {
+    const rows = collapseDualStampHomePosts([
+      {
+        id: 'newer',
+        author_id: 'dan',
+        created_at: '2026-09-30T15:00:02.000Z',
+        source: 'checkin',
+        challenge_id: 'month',
+        media_urls: ['https://cdn.example/post.jpg'],
+      },
+      {
+        id: 'older',
+        author_id: 'dan',
+        created_at: '2026-09-30T15:00:01.000Z',
+        source: 'checkin',
+        challenge_id: 'week',
+        media_urls: ['https://cdn.example/pre.jpg', 'https://cdn.example/post.jpg'],
+      },
+      {
+        id: 'other',
+        author_id: 'sam',
+        created_at: '2026-09-30T15:00:01.000Z',
+        source: 'checkin',
+        challenge_id: 'hobby',
+        media_urls: ['https://cdn.example/hobby.jpg'],
+      },
+    ]);
+    expect(rows.map((row) => row.id)).toEqual(['older', 'other']);
+    expect(rows[0]?.media_urls).toEqual(['https://cdn.example/pre.jpg', 'https://cdn.example/post.jpg']);
+    expect(rows[0]?.checkin_stats?.paired_challenge_ids).toEqual(['week', 'month']);
   });
 });

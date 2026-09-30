@@ -526,6 +526,7 @@ function SubmitWorkoutInner() {
   const [liftPickerOpen, setLiftPickerOpen] = useState(false);
   const recapWaitRef = useRef<((ready: boolean) => void) | null>(null);
   const recapUriRef = useRef<string | null>(null);
+  const healthAttachLock = useRef(false);
   const liftParam = firstRouteParam(params.lift);
   const [sendLock, setSendLock] = useState(false);
   const [logDraft, setLogDraft] = useState<ComparableLogDraft>(emptyComparableLogDraft);
@@ -1676,7 +1677,7 @@ function SubmitWorkoutInner() {
       };
       const alreadySubmitted = checkinQuery.data?.phase === 'submitted';
       const sending = (honorOnly || readyNow) && (multiSubmit || !alreadySubmitted);
-      const submitted = sending ? await submitCheckin.mutateAsync() : null;
+      const submitted = sending ? await submitCheckin.mutateAsync({ countDay: readyNow }) : null;
       // submit_checkin answers with the check-in it wrote. Getting no check-in back means the send did
       // not land even though nothing threw, so this stops short of the happy path — landing them on
       // Live with a fresh receipt would report a success that never happened.
@@ -2005,9 +2006,10 @@ function SubmitWorkoutInner() {
   }
 
   async function onAttachHealth(workout: HealthWorkout, proof?: ChallengeProof | null) {
-    if (!id || busy) {
+    if (healthAttachLock.current || !id || busy) {
       return;
     }
+    healthAttachLock.current = true;
     recapUriRef.current = null;
     setError(null);
     const target =
@@ -2068,6 +2070,8 @@ function SubmitWorkoutInner() {
       void buildWorkoutCard(target, enriched, healthWorkoutId, samples);
     } catch (caught) {
       setError(getErrorMessage(caught));
+    } finally {
+      healthAttachLock.current = false;
     }
   }
 

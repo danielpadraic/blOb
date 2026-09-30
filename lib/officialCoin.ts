@@ -118,6 +118,24 @@ export function isOfficialCoinChallenge(challenge?: OfficialCoinChallenge | null
   return officialCoinKind(challenge) != null;
 }
 
+/** Official Coin boards only. Pinnacle TEST stays on its own board. */
+export function isOfficialCoinBoardGhost(input: {
+  displayName?: string | null;
+  username?: string | null;
+}): boolean {
+  const handle = String(input.username ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/^@/, '');
+  const name = String(input.displayName ?? '')
+    .trim()
+    .toLowerCase();
+  if (handle.startsWith('blobtest_') || name.startsWith('blobtest_')) {
+    return true;
+  }
+  return name.startsWith('test rookie') || name.startsWith('test veteran');
+}
+
 export function isOfficialCoinWeekly(challenge?: OfficialCoinChallenge | null): boolean {
   return officialCoinKind(challenge) === 'coin_weekly';
 }
@@ -192,6 +210,22 @@ export function officialCoinWindowDays(
   const stored = Number(challenge?.days_required);
   if (Number.isFinite(stored) && stored > 0) {
     return Math.trunc(stored);
+  }
+  return officialCoinWindowBounds(kind, now).days;
+}
+
+/**
+ * Score denominator on the Official Board.
+ * Weekly is this Chicago week (7). Monthly is this Chicago month.
+ * A short stored `ends_at` (a Friday join that spans 6 days) is not the window.
+ */
+export function officialCoinBoardDenominator(
+  challenge?: OfficialCoinChallenge | null,
+  now: Date = new Date(),
+): number {
+  const kind = officialCoinKind(challenge);
+  if (!kind) {
+    return 0;
   }
   return officialCoinWindowBounds(kind, now).days;
 }

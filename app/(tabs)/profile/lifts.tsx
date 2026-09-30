@@ -34,11 +34,8 @@ import {
   useSendMessage,
 } from '@/hooks/useSocial';
 import { fetchLiftSession } from '@/lib/lift/api';
-import {
-  fetchChallengeShareLocks,
-  linkSessionToPost,
-  sendLiftToRecipients,
-} from '@/lib/lift/share';
+import { sendLiftCardToThreads } from '@/lib/lift/dmCard';
+import { fetchChallengeShareLocks, linkSessionToPost } from '@/lib/lift/share';
 import type { ComposeInput } from '@/lib/types';
 import { challengeDetailHref, circleDetailHref } from '@/lib/routes';
 import {
@@ -250,26 +247,30 @@ export default function LiftsHistoryScreen() {
         );
         return;
       }
-      const toMessage = choice.destination === 'message';
+      if (choice.destination === 'message') {
+        if (!user?.id) {
+          throw new Error('You need to be signed in.');
+        }
+        await sendLiftCardToThreads({
+          draft: shareFor,
+          authorId: user.id,
+          caption: choice.caption,
+          recipientIds: choice.recipientIds,
+          startChat: (friendId: string) => startChat.mutateAsync(friendId),
+          startGroup: (friendIds: string[]) => startGroup.mutateAsync(friendIds),
+          send: (message) => sendMessage.mutateAsync(message).then(() => undefined),
+        });
+        setShareFor(null);
+        return;
+      }
       const posted = await share.mutateAsync({
         draft: shareFor,
         caption: choice.caption,
         challengeId: null,
         circleId: choice.circleId,
-        home: !toMessage,
-        audience: toMessage ? 'specific' : choice.circleId ? 'friends' : choice.audience,
-        audienceUserIds: toMessage ? choice.recipientIds : undefined,
+        home: true,
+        audience: choice.circleId ? 'friends' : choice.audience,
       });
-      if (toMessage) {
-        await sendLiftToRecipients({
-          postId: posted.postId,
-          recipientIds: choice.recipientIds,
-          caption: choice.caption,
-          startChat: (friendId: string) => startChat.mutateAsync(friendId),
-          startGroup: (friendIds: string[]) => startGroup.mutateAsync(friendIds),
-          send: (message) => sendMessage.mutateAsync(message).then(() => undefined),
-        });
-      }
       if (choice.circleId) {
         setShareFor(null);
         router.push(circleDetailHref(choice.circleId, { tab: 'chat' }));

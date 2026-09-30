@@ -26,7 +26,7 @@ export function LiftFooterBtn({
   onPress,
 }: FooterBtnProps) {
   const isDisabled = Boolean(disabled || loading);
-  const grey = Boolean(dimmed && !loading);
+  const grey = Boolean(dimmed && !loading && variant === 'play');
   const fill =
     variant === 'play'
       ? THEME.accent
@@ -35,8 +35,9 @@ export function LiftFooterBtn({
         : variant === 'danger'
           ? THEME.danger
           : THEME.surface;
-  const labelColor =
-    variant === 'outline'
+  const labelColor = grey
+    ? THEME.textPrimary
+    : variant === 'outline'
       ? title === 'Delete'
         ? THEME.danger
         : THEME.textPrimary
@@ -60,10 +61,10 @@ export function LiftFooterBtn({
         justifyContent: 'center',
         flexDirection: 'row',
         gap: 4,
-        backgroundColor: fill,
+        backgroundColor: grey ? THEME.accentSoft : fill,
         borderWidth: variant === 'outline' ? 1 : 0,
         borderColor: variant === 'outline' ? THEME.border : 'transparent',
-        opacity: isDisabled || grey ? 0.4 : pressed ? 0.88 : 1,
+        opacity: pressed ? 0.88 : 1,
       })}>
       {loading ? (
         <ActivityIndicator color={labelColor} />

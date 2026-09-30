@@ -121,6 +121,7 @@ export function HealthWorkoutPicker({
   const [needsInstall, setNeedsInstall] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [attachingId, setAttachingId] = useState<string | null>(null);
+  const attachLock = useRef(false);
   const navigation = useNavigation();
 
   useEffect(() => {
@@ -298,24 +299,26 @@ export function HealthWorkoutPicker({
   }, [userId, windowDays]);
 
   async function attach(workout: HealthWorkout) {
-    if (attaching || attachingId) {
+    if (attachLock.current || attaching || attachingId) {
       return;
     }
-    if (workoutAttachBlockReason(workout, rules)) {
-      return;
-    }
-    if (offline || !(await probeOnline())) {
-      setOffline(true);
-      setError(copy('health.offline'));
-      return;
-    }
-    setAttachingId(workout.providerWorkoutId);
-    setError(null);
+    attachLock.current = true;
     try {
+      if (workoutAttachBlockReason(workout, rules)) {
+        return;
+      }
+      if (offline || !(await probeOnline())) {
+        setOffline(true);
+        setError(copy('health.offline'));
+        return;
+      }
+      setAttachingId(workout.providerWorkoutId);
+      setError(null);
       await onAttach(workout);
     } catch (caught) {
       setError(getErrorMessage(caught));
     } finally {
+      attachLock.current = false;
       setAttachingId(null);
     }
   }

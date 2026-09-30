@@ -60,6 +60,9 @@ export type CheckinProofStats = {
   lane_label?: string | null;
   challenge_title?: string | null;
   period_label?: string | null;
+  /** Official dual-stamp: both rooms named on the one Home card. */
+  paired_challenge_ids?: string[] | null;
+  paired_titles?: string[] | null;
 };
 
 export type ProofStatChip = { key: string; label: string };

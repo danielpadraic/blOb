@@ -122,6 +122,16 @@ describe('home feed pages', () => {
       }),
     );
     expect(visible.map((row) => row.id)).toEqual(['ok']);
+    expect(
+      homeFeedAllowsPost(
+        post('dm-lift', {
+          type: 'lift_session',
+          hidden_from_home: true,
+          author_id: 'me',
+        }),
+        ctx(),
+      ),
+    ).toBe(false);
     expect(visible).not.toHaveLength(raw.length);
     expect(
       filterHomeFeedPosts(raw.slice(0, 4), ctx({ friends, blocked: new Set(['blocked-user']) })),

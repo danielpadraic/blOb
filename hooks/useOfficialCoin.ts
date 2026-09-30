@@ -2,6 +2,7 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
 import { chicagoDateStamp } from '@/lib/chicagoToday';
+import { officialPeriodFullyProved } from '@/lib/checkin/officialDay';
 import { normalizePeriodKey } from '@/lib/checkinPeriod';
 import {
   canRejoinOfficialCoin,
@@ -283,7 +284,9 @@ export function useOfficialCoinDays(
       const byUser = new Map<string, OfficialCoinDay[]>();
       const checkins = await supabase
         .from('challenge_checkins')
-        .select('id, user_id, period_key, status, submitted_at')
+        .select(
+          'id, user_id, period_key, status, submitted_at, proof_parts, pre_selfie_url, post_selfie_url, hr_monitor_url, health_workout_id',
+        )
         .eq('challenge_id', challengeId)
         .eq('status', 'submitted')
         .gte('period_key', startKey)
@@ -298,8 +301,13 @@ export function useOfficialCoinDays(
         user_id: string;
         period_key: string;
         submitted_at?: string | null;
+        proof_parts?: unknown;
+        pre_selfie_url?: string | null;
+        post_selfie_url?: string | null;
+        hr_monitor_url?: string | null;
+        health_workout_id?: string | null;
       }[];
-      const live = rows.filter((row) => Boolean(row.submitted_at));
+      const live = rows.filter((row) => Boolean(row.submitted_at) && officialPeriodFullyProved(row));
       if (live.length === 0) {
         return byUser;
       }

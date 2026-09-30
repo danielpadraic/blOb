@@ -54,7 +54,7 @@ import {
 import { useOfficialCoinStatus } from '@/hooks/useOfficialCoin';
 import { officialPairChip } from '@/lib/multiCheckin';
 import { isOfficialCoinChallenge, OFFICIAL_COIN_ALREADY_TODAY } from '@/lib/officialCoin';
-import { isLiveCameraPath, stopAllLiveMedia, stopMediaUnlessCameraPath } from '@/lib/cameraSession';
+import { isLiftSessionPath, isLiveCameraPath, stopAllLiveMedia, stopMediaUnlessCameraPath } from '@/lib/cameraSession';
 import { startFreshRoundCapture, startFreshWaveCapture } from '@/lib/waveCapture';
 import { shouldResetToHomeOnLaunch } from '@/lib/appResume';
 import { THEME } from '@/lib/theme';
@@ -549,7 +549,7 @@ function TabLayoutInner() {
         </SocialSheetsHost>
         </InviteHost>
       </View>
-      {watchOpen || onOnboarding || isLiveCameraPath(pathname) ? null : (
+      {watchOpen || onOnboarding || isLiveCameraPath(pathname) || isLiftSessionPath(pathname) ? null : (
         <BlobTabBar
           composeOpen={plusOpen}
           onToggleCompose={toggleSheet}

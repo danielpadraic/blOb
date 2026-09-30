@@ -39,11 +39,8 @@ import { rankHealthKitWorkouts } from '@/lib/lift/healthkit';
 import { bumpSessionInPlace, canOverloadSession, overloadChipLabel } from '@/lib/lift/overload';
 import { hasShareableWork, sessionCardioSeconds } from '@/lib/lift/recap';
 import { canPlay } from '@/lib/lift/rounds';
-import {
-  fetchChallengeShareLocks,
-  linkSessionToPost,
-  sendLiftToRecipients,
-} from '@/lib/lift/share';
+import { sendLiftCardToThreads } from '@/lib/lift/dmCard';
+import { fetchChallengeShareLocks, linkSessionToPost } from '@/lib/lift/share';
 import type { ComposeInput } from '@/lib/types';
 import { useCreatePost } from '@/hooks/useFeed';
 import {
@@ -83,7 +80,7 @@ import type { LiftOverloadPlan, LiftSessionDraft, LiftSetKind } from '@/lib/lift
 import { firstRouteParam } from '@/lib/challengeLoad';
 import { copy } from '@/lib/copy';
 import { LIFT_START_HREF, LIFTS_HISTORY_HREF, liftSessionHref } from '@/lib/routes';
-import { tabBarLift, THEME } from '@/lib/theme';
+import { THEME } from '@/lib/theme';
 
 /**
  * The session screen.
@@ -526,29 +523,31 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
         );
         return;
       }
-      // Message addresses the card to named people and keeps it off Home, then puts the link in
-      // their DM. The card is what makes the session readable to them — a bare link would open to
-      // nothing, because a session is only visible through a post the viewer can already see.
       const toMessage = choice.destination === 'message';
+      if (toMessage) {
+        if (!user?.id) {
+          throw new Error('You need to be signed in.');
+        }
+        await sendLiftCardToThreads({
+          draft,
+          authorId: user.id,
+          caption: choice.caption,
+          recipientIds: choice.recipientIds,
+          startChat: (friendId: string) => startChat.mutateAsync(friendId),
+          startGroup: (friendIds: string[]) => startGroup.mutateAsync(friendIds),
+          send: (input) => sendMessage.mutateAsync(input).then(() => undefined),
+        });
+        setShareOpen(false);
+        return;
+      }
       const posted = await share.mutateAsync({
         draft,
         caption: choice.caption,
         challengeId: null,
         circleId: choice.circleId,
-        home: !toMessage,
-        audience: toMessage ? 'specific' : choice.circleId ? 'friends' : choice.audience,
-        audienceUserIds: toMessage ? choice.recipientIds : undefined,
+        home: true,
+        audience: choice.circleId ? 'friends' : choice.audience,
       });
-      if (toMessage) {
-        await sendLiftToRecipients({
-          postId: posted.postId,
-          recipientIds: choice.recipientIds,
-          caption: choice.caption,
-          startChat: (friendId: string) => startChat.mutateAsync(friendId),
-          startGroup: (friendIds: string[]) => startGroup.mutateAsync(friendIds),
-          send: (input) => sendMessage.mutateAsync(input).then(() => undefined),
-        });
-      }
       if (choice.circleId) {
         setShareOpen(false);
         router.replace(circleDetailHref(choice.circleId, { tab: 'chat' }));
@@ -714,7 +713,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
       <KeyboardFormShell
         padded
         protectFieldFocus
-        closedFooterPad={tabBarLift(insets.bottom, 'sticky')}
+        closedFooterPad={Math.max(insets.bottom, 12)}
         footer={
           readOnly ? (
             <LiftSavedFooter
