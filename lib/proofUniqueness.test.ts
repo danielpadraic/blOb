@@ -10,6 +10,7 @@ import {
   proofObjectKey,
   proofReuseBlocked,
   proofUniquenessFamily,
+  sameTierWorkoutBlock,
   scoreAfterHideFromHome,
 } from '@/lib/proofUniqueness';
 
@@ -27,6 +28,16 @@ describe('proof uniqueness family', () => {
         sameProof: true,
       }),
     ).toBe(true);
+  });
+
+  it('keeps a used weekly workout visible and blocks a second weekly', () => {
+    const weekly = sameTierWorkoutBlock('weekly', [
+      { family: 'weekly', challengeTitle: 'Run club' },
+    ]);
+    expect(weekly?.line).toBe('Already on Run club.');
+    expect(
+      sameTierWorkoutBlock('monthly', [{ family: 'weekly', challengeTitle: 'Weekly Fitness Challenge' }]),
+    ).toBeNull();
   });
 
   it('allows the same photo on one weekly and one monthly', () => {

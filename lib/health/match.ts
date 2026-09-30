@@ -14,10 +14,12 @@ export function rankHealthWorkouts(
     period: { from: Date; to: Date };
     minMinutes?: number | null;
     usedIds?: Set<string>;
+    /** Proof picker lists workouts even when another challenge already used them. */
+    keepUsed?: boolean;
     preferStartedAfter?: Date | string | null;
   },
 ): HealthWorkout[] {
-  const used = opts.usedIds ?? new Set<string>();
+  const used = opts.keepUsed ? new Set<string>() : (opts.usedIds ?? new Set<string>());
   const afterMs = opts.preferStartedAfter
     ? new Date(opts.preferStartedAfter).getTime()
     : Number.NaN;

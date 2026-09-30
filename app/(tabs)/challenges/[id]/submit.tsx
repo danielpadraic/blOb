@@ -516,6 +516,7 @@ function SubmitWorkoutInner() {
   const [hydrateDone, setHydrateDone] = useState(false);
   const [hydrateError, setHydrateError] = useState(false);
   const [preferCamera, setPreferCamera] = useState(false);
+  const [libraryFirst, setLibraryFirst] = useState(false);
   const [extras, setExtras] = useState<CheckinExtra[]>([]);
   const [caption, setCaption] = useState<MentionDoc>({ text: '', chips: [] });
   const [proofCaptions, setProofCaptions] = useState<Record<string, string>>({});
@@ -2451,7 +2452,8 @@ function SubmitWorkoutInner() {
     hydrateDone &&
     !skippedAuto &&
     !preferCamera &&
-    iosHealthReady &&
+    !libraryFirst &&
+    Platform.OS !== 'web' &&
     Boolean(firstHealth) &&
     !slotFilled(firstHealth!);
   const hasExistingFrames =
@@ -2479,6 +2481,7 @@ function SubmitWorkoutInner() {
     !honorOnly &&
     !needsWrittenProof &&
     !shouldAutoHealth &&
+    !firstHealth &&
     Boolean(nextPhoto) &&
     !slotFilled(nextPhoto!);
   const activeCaptureId =
@@ -2492,8 +2495,9 @@ function SubmitWorkoutInner() {
   const guided = guidedCheckinPrompt(proofSteps, slotFilled, activeProof);
   const showHealthFirst =
     Boolean(activeProof) &&
-    iosHealthReady &&
+    Platform.OS !== 'web' &&
     !preferCamera &&
+    !libraryFirst &&
     !shouldOpenGuided &&
     proofPrefersHealthAttach(activeProof, challenge);
   overlayOpenRef.current = Boolean(
@@ -2523,7 +2527,14 @@ function SubmitWorkoutInner() {
           userId={user?.id}
           attaching={saveProof.isPending}
           onAttach={(workout) => onAttachHealth(workout, activeProof)}
-          onAddPhoto={() => setPreferCamera(true)}
+          onOpenGallery={() => {
+            setLibraryFirst(true);
+            setPreferCamera(false);
+          }}
+          onAddPhoto={() => {
+            setLibraryFirst(false);
+            setPreferCamera(true);
+          }}
           onClose={() => {
             closeCameraOverlay();
           }}
@@ -2540,6 +2551,7 @@ function SubmitWorkoutInner() {
           type={legacyTypeForProof(activeProof) ?? captureTypeForMethod(activeProof.method)}
           fill
           autoOpen
+          preferLibrary={libraryFirst || (Platform.OS === 'web' && proofPrefersHealthAttach(activeProof, challenge))}
           locked={busy}
           title={guided?.title}
           instruction={guided?.helper}
@@ -2651,7 +2663,21 @@ function SubmitWorkoutInner() {
             proof.method === 'hr' ||
             proof.method === 'distance'
           ) {
-            setPreferCamera(Platform.OS !== 'ios' || !proofPrefersHealthAttach(proof, challenge));
+            const healthSlot = proofPrefersHealthAttach(proof, challenge);
+            if (healthSlot && Platform.OS === 'web') {
+              setPreferCamera(false);
+              setLibraryFirst(true);
+              setCaptureId(proof.id);
+              return;
+            }
+            if (healthSlot) {
+              setPreferCamera(false);
+              setLibraryFirst(false);
+              setCaptureId(proof.id);
+              return;
+            }
+            setLibraryFirst(false);
+            setPreferCamera(true);
             setCaptureId(proof.id);
           }
         }}

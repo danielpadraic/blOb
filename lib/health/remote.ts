@@ -1,3 +1,4 @@
+import { proofUniquenessFamily, type WorkoutPlacement } from '@/lib/proofUniqueness';
 import { supabase } from '@/lib/supabase';
 import type { HealthConnection } from '@/lib/types';
 import { getHealthSource } from '@/services/health';
@@ -216,6 +217,77 @@ export async function fetchUsedProviderWorkoutIds(userId: string): Promise<Set<s
       .filter(Boolean),
   );
   return new Set(rows.filter((row) => usedIds.has(row.id)).map((row) => row.provider_workout_id));
+}
+
+/** Where this person's Health workouts already count, so the picker can label same-tier reuse. */
+export async function fetchWorkoutPlacements(
+  userId: string,
+): Promise<Map<string, WorkoutPlacement[]>> {
+  const map = new Map<string, WorkoutPlacement[]>();
+  const source = currentProvider();
+  if (!source || !userId) {
+    return map;
+  }
+  const workouts = await supabase
+    .from('health_workouts')
+    .select('id, provider_workout_id')
+    .eq('user_id', userId)
+    .eq('provider', source);
+  if (workouts.error || !workouts.data?.length) {
+    return map;
+  }
+  const rows = workouts.data as Array<{ id: string; provider_workout_id: string }>;
+  const byHealthId = new Map(rows.map((row) => [row.id, row.provider_workout_id]));
+  const used = await supabase
+    .from('workout_submissions')
+    .select('health_workout_id, challenge_id')
+    .eq('user_id', userId)
+    .in('health_workout_id', rows.map((row) => row.id));
+  if (used.error || !used.data?.length) {
+    return map;
+  }
+  const challengeIds = [
+    ...new Set(
+      (used.data as Array<{ challenge_id?: string | null }>)
+        .map((row) => String(row.challenge_id ?? '').trim())
+        .filter(Boolean),
+    ),
+  ];
+  if (challengeIds.length === 0) {
+    return map;
+  }
+  const challenges = await supabase
+    .from('challenges')
+    .select('id, title, frequency, series_id, official_kind, days_required')
+    .in('id', challengeIds);
+  if (challenges.error) {
+    return map;
+  }
+  const byChallenge = new Map(
+    ((challenges.data ?? []) as Array<{
+      id: string;
+      title?: string | null;
+      frequency?: string | null;
+      series_id?: string | null;
+      official_kind?: string | null;
+      days_required?: number | null;
+    }>).map((row) => [row.id, row]),
+  );
+  for (const row of used.data as Array<{ health_workout_id?: string | null; challenge_id?: string | null }>) {
+    const providerId = byHealthId.get(String(row.health_workout_id ?? ''));
+    const challenge = byChallenge.get(String(row.challenge_id ?? ''));
+    if (!providerId || !challenge) {
+      continue;
+    }
+    const family = proofUniquenessFamily(challenge);
+    const list = map.get(providerId) ?? [];
+    list.push({
+      family,
+      challengeTitle: String(challenge.title ?? '').trim() || 'another challenge',
+    });
+    map.set(providerId, list);
+  }
+  return map;
 }
 
 export function workoutNotes(workout: HealthWorkout): string {

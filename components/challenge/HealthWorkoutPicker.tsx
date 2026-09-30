@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, BackHandler, Platform, Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Alert, BackHandler, Linking, Platform, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { useNavigation } from 'expo-router';
 
 import { BlobMascot } from '@/components/mascot/BlobMascot';
@@ -9,7 +9,7 @@ import { useProfile } from '@/hooks/useProfile';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { copy } from '@/lib/copy';
-import { healthEmptyMessage, healthPermissionDeniedMessage } from '@/lib/health/howTo';
+import { healthHowToIosPath, healthPermissionDeniedMessage } from '@/lib/health/howTo';
 import {
   healthAttachRulesFor,
   workoutAttachBlockReason,
@@ -17,10 +17,12 @@ import {
   type HealthAttachRules,
 } from '@/lib/health/attachProof';
 import { rankHealthWorkouts } from '@/lib/health/match';
-import { challengeHealthWindow } from '@/lib/health/period';
+import { HEALTH_PICKER_DAYS, healthPickerWindow } from '@/lib/health/period';
 import { athleteDistanceUnit, formatDistance } from '@/lib/distance';
 import { healthSourceLabel } from '@/lib/health/proofSummary';
-import { fetchUsedProviderWorkoutIds, probeOnline, upsertHealthConnection } from '@/lib/health/remote';
+import { fetchWorkoutPlacements, probeOnline, upsertHealthConnection } from '@/lib/health/remote';
+import { formatHealthDuration } from '@/lib/health/proofSummary';
+import { proofAlreadyCountsCopy, proofUniquenessFamily, sameTierWorkoutBlock, type WorkoutPlacement } from '@/lib/proofUniqueness';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { ChallengeProof } from '@/lib/challengeProofs';
 import { getHealthProvider, type HealthWorkout } from '@/services/health';
@@ -62,18 +64,15 @@ type HealthWorkoutPickerProps = {
   userId?: string;
   attaching?: boolean;
   onAttach: (workout: HealthWorkout) => Promise<void>;
+  /** Opens the camera. Explicit. Never the default for this sheet. */
   onAddPhoto: () => void;
+  /** Screenshot from the gallery. */
+  onOpenGallery?: () => void;
   onClose?: () => void;
 };
 
 function formatDuration(sec: number): string {
-  const minutes = Math.max(1, Math.round(sec / 60));
-  if (minutes < 60) {
-    return `${minutes} min`;
-  }
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return rest ? `${hours}h ${rest}m` : `${hours}h`;
+  return formatHealthDuration(sec) ?? '';
 }
 
 function formatTime(iso: string): string {
@@ -109,9 +108,12 @@ export function HealthWorkoutPicker({
   attaching = false,
   onAttach,
   onAddPhoto,
+  onOpenGallery,
   onClose,
 }: HealthWorkoutPickerProps) {
   const [workouts, setWorkouts] = useState<HealthWorkout[]>([]);
+  const [placements, setPlacements] = useState<Map<string, WorkoutPlacement[]>>(new Map());
+  const [windowDays, setWindowDays] = useState(HEALTH_PICKER_DAYS);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [offline, setOffline] = useState(false);
@@ -191,20 +193,16 @@ export function HealthWorkoutPicker({
       try {
         const online = await probeOnline();
         setOffline(!online);
-        const period = challengeHealthWindow({
-          frequency: challenge?.frequency ?? frequency,
-          starts_at: challenge?.starts_at ?? startsAt,
-          is_official: challenge?.is_official ?? isOfficial,
-          series_id: challenge?.series_id ?? seriesId,
-          timezone: challenge?.timezone ?? timezone,
-          days_required: challenge?.days_required ?? daysRequired,
-          day_windows: challenge?.day_windows ?? dayWindows,
-        });
-        const [rows, used] = await Promise.all([
-          getHealthProvider()?.fetchWorkouts(period) ?? Promise.resolve([]),
-          userId ? fetchUsedProviderWorkoutIds(userId) : Promise.resolve(new Set<string>()),
+        const period = healthPickerWindow(windowDays);
+        const provider = getHealthProvider();
+        const [rows, usedWhere] = await Promise.all([
+          provider?.fetchWorkouts(period) ?? Promise.resolve([]),
+          userId ? fetchWorkoutPlacements(userId) : Promise.resolve(new Map<string, WorkoutPlacement[]>()),
         ]);
-        setWorkouts(rankHealthWorkouts(rows, { period, minMinutes: rules.minMinutes, usedIds: used }));
+        setPlacements(usedWhere);
+        setWorkouts(
+          rankHealthWorkouts(rows, { period, minMinutes: rules.minMinutes, keepUsed: true }),
+        );
         if (userId && online) {
           await upsertHealthConnection({
             userId,
@@ -231,6 +229,7 @@ export function HealthWorkoutPicker({
       startsAt,
       timezone,
       userId,
+      windowDays,
     ],
   );
 
@@ -245,6 +244,10 @@ export function HealthWorkoutPicker({
     setLoading(true);
     let cancelled = false;
     void (async () => {
+      if (Platform.OS === 'web') {
+        setLoading(false);
+        return;
+      }
       const provider = getHealthProvider();
       if (!provider) {
         setDenied(true);
@@ -292,7 +295,7 @@ export function HealthWorkoutPicker({
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, windowDays]);
 
   async function attach(workout: HealthWorkout) {
     if (attaching || attachingId) {
@@ -328,7 +331,20 @@ export function HealthWorkoutPicker({
           <AppText className="mt-2 text-sm text-muted">{copy('health.offline')}</AppText>
         ) : null}
         {denied ? (
-          <AppText className="mt-2 text-sm text-muted">{healthPermissionDeniedMessage()}</AppText>
+          <View style={{ marginTop: 8, gap: 6 }}>
+            <AppText className="text-sm text-muted">{healthPermissionDeniedMessage()}</AppText>
+            {Platform.OS === 'ios' ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={healthHowToIosPath()}
+                onPress={() => void Linking.openSettings()}
+                style={{ minHeight: 44, justifyContent: 'center' }}>
+                <AppText style={{ fontSize: 14, fontWeight: '700', color: THEME.accent }}>
+                  {healthHowToIosPath()}
+                </AppText>
+              </Pressable>
+            ) : null}
+          </View>
         ) : null}
       </View>
 
@@ -338,13 +354,24 @@ export function HealthWorkoutPicker({
             {copy('health.install')}
           </AppText>
           <View className="mt-5 w-full gap-3">
-            <Button title={copy('health.addPhoto')} size="lg" onPress={onAddPhoto} />
+            {onOpenGallery ? <Button title="Gallery" size="lg" onPress={onOpenGallery} /> : null}
+            <Button title="Camera" size="lg" onPress={onAddPhoto} />
             {onClose ? <Button title="Close" size="lg" variant="ghost" onPress={onClose} /> : null}
           </View>
         </View>
       ) : denied ? (
-        <View className="flex-1 justify-end px-5 pb-6">
-          <Button title={copy('health.addPhoto')} size="lg" onPress={onAddPhoto} />
+        <View className="flex-1 justify-end px-5 pb-6 gap-3">
+          {onOpenGallery ? <Button title="Gallery" size="lg" onPress={onOpenGallery} /> : null}
+          <Button title="Camera" size="lg" onPress={onAddPhoto} />
+          {onClose ? <Button title="Close" size="lg" variant="ghost" onPress={onClose} /> : null}
+        </View>
+      ) : Platform.OS === 'web' ? (
+        <View className="flex-1 justify-end px-5 pb-6 gap-3">
+          <AppText className="text-center text-[15px]" style={{ color: THEME.textMuted }}>
+            Add a screenshot from your gallery. blOb will read the workout time and heart rate from it.
+          </AppText>
+          {onOpenGallery ? <Button title="Gallery" size="lg" onPress={onOpenGallery} /> : null}
+          <Button title="Camera" size="lg" variant="ghost" onPress={onAddPhoto} />
           {onClose ? <Button title="Close" size="lg" variant="ghost" onPress={onClose} /> : null}
         </View>
       ) : loading ? (
@@ -355,10 +382,17 @@ export function HealthWorkoutPicker({
         <View className="flex-1 items-center px-6 pt-8">
           <BlobMascot size={96} motion="float" />
           <AppText className="mt-3 text-center text-[15px] font-semibold text-charcoal">
-            {healthEmptyMessage()}
+            No workouts in Health for this window.
           </AppText>
           <View className="mt-5 w-full gap-3">
-            <Button title={copy('health.addPhoto')} size="lg" onPress={onAddPhoto} />
+            <Button
+              title="Load earlier"
+              size="lg"
+              variant="ghost"
+              onPress={() => setWindowDays((days) => days + HEALTH_PICKER_DAYS)}
+            />
+            {onOpenGallery ? <Button title="Gallery" size="lg" onPress={onOpenGallery} /> : null}
+            <Button title="Camera" size="lg" onPress={onAddPhoto} />
             {onClose ? <Button title="Close" size="lg" variant="ghost" onPress={onClose} /> : null}
           </View>
         </View>
@@ -376,6 +410,14 @@ export function HealthWorkoutPicker({
           showsVerticalScrollIndicator={false}>
           {workouts.map((row) => {
             const blocked = workoutAttachBlockReason(row, rules);
+            const tier = sameTierWorkoutBlock(
+              proofUniquenessFamily({
+                frequency: challenge?.frequency ?? frequency,
+                series_id: challenge?.series_id ?? seriesId,
+                days_required: challenge?.days_required ?? daysRequired,
+              }),
+              placements.get(row.providerWorkoutId) ?? [],
+            );
             // Attachable, but we could not check intensity. Reads as a hint, not a refusal.
             const note = blocked ? null : workoutAttachNote(row, rules);
             const busy = attaching || attachingId === row.providerWorkoutId;
@@ -402,6 +444,15 @@ export function HealthWorkoutPicker({
                   {` · ${healthSourceLabel(row.confidence)}`}
                   {Number(row.distanceM) > 0 ? ' · No route on this workout.' : ''}
                 </AppText>
+                {tier ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={tier.line}
+                    onPress={() => Alert.alert(tier.line, proofAlreadyCountsCopy(tier.title))}
+                    style={{ alignSelf: 'flex-start', marginTop: 6, minHeight: 28, justifyContent: 'center' }}>
+                    <AppText style={{ fontSize: 12, fontWeight: '800', color: THEME.danger }}>{tier.line}</AppText>
+                  </Pressable>
+                ) : null}
                 {blocked ? (
                   <AppText className="mt-1 text-[12px] font-semibold" style={{ color: THEME.danger }}>
                     {blocked}
@@ -419,7 +470,7 @@ export function HealthWorkoutPicker({
                   <Button
                     title={copy('health.useWorkout')}
                     size="md"
-                    disabled={Boolean(blocked) || busy}
+                    disabled={Boolean(blocked) || Boolean(tier) || busy}
                     loading={attachingId === row.providerWorkoutId}
                     onPress={() => void attach(row)}
                   />
@@ -433,7 +484,14 @@ export function HealthWorkoutPicker({
             </AppText>
           ) : null}
           <View className="mt-2 gap-3">
-            <Button title={copy('health.addPhoto')} size="lg" variant="ghost" onPress={onAddPhoto} />
+            <Button
+              title="Load earlier"
+              size="lg"
+              variant="ghost"
+              onPress={() => setWindowDays((days) => days + HEALTH_PICKER_DAYS)}
+            />
+            {onOpenGallery ? <Button title="Gallery" size="lg" variant="ghost" onPress={onOpenGallery} /> : null}
+            <Button title="Camera" size="lg" variant="ghost" onPress={onAddPhoto} />
             {onClose ? <Button title="Close" size="lg" variant="ghost" onPress={onClose} /> : null}
           </View>
         </ScrollView>

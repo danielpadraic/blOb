@@ -77,6 +77,14 @@ export function challengeHealthWindow(challenge?: {
   return { from, to };
 }
 
+/** Picker window. Newest first inside this range; Load earlier extends it. */
+export const HEALTH_PICKER_DAYS = 30;
+
+export function healthPickerWindow(days = HEALTH_PICKER_DAYS, now = new Date()): { from: Date; to: Date } {
+  const span = Math.max(1, Math.round(days));
+  return { from: new Date(now.getTime() - span * 24 * 60 * 60 * 1000), to: now };
+}
+
 /** When the check-in period cannot be resolved, query the last 24 hours. */
 export function last24Hours(now = new Date()): { from: Date; to: Date } {
   return { from: new Date(now.getTime() - 24 * 60 * 60 * 1000), to: now };

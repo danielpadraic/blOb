@@ -365,4 +365,31 @@ describe('the prompt heading', () => {
       'Run 128 Miles by January 1',
     ]);
   });
+
+  it('still offers Official when only the pre selfie is in', () => {
+    const proofs = [
+      { id: 'pre', name: 'Post a pre-workout selfie.', method: 'photo' as const },
+      { id: 'hr', name: 'Heart rate', method: 'hr' as const },
+    ];
+    const targets = workoutPromptTargets({
+      workouts: [session('run', { minutes: 32, avgHr: 140 })],
+      candidates: [
+        candidate(
+          {
+            id: 'week',
+            title: 'Weekly Fitness Challenge',
+            official_kind: 'coin_weekly',
+            is_official: true,
+            proofs,
+          },
+          {
+            status: 'in_progress',
+            proof_parts: { pre: { method: 'photo', url: 'https://cdn.example/pre.jpg' } },
+          },
+        ),
+      ],
+      now: NOW,
+    });
+    expect(targets.map((row) => row.title)).toEqual(['Weekly Fitness Challenge']);
+  });
 });

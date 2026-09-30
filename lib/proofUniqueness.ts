@@ -74,6 +74,24 @@ export function proofReuseBlocked(input: {
   return input.sameProof && input.family === input.otherFamily;
 }
 
+export type WorkoutPlacement = {
+  family: ProofUniquenessFamily;
+  challengeTitle: string;
+};
+
+/** Same-tier reuse is blocked. Official weekly and monthly are different families, so they may share. */
+export function sameTierWorkoutBlock(
+  current: ProofUniquenessFamily,
+  placements: readonly WorkoutPlacement[],
+): { title: string; line: string } | null {
+  const hit = placements.find((row) => row.family === current);
+  if (!hit) {
+    return null;
+  }
+  const title = String(hit.challengeTitle ?? '').trim() || 'another challenge';
+  return { title, line: `Already on ${title}.` };
+}
+
 export function proofAlreadyCountsCopy(otherTitle: string | null | undefined): string {
   const title = String(otherTitle ?? '').trim() || 'another challenge';
   return `That proof already counts on ${title}.`;

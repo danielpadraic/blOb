@@ -33,6 +33,8 @@ type ProofUploaderProps = {
   locked?: boolean;
   compact?: boolean;
   autoOpen?: boolean;
+  /** HR / duration on Web: open the gallery. Do not start the selfie camera. */
+  preferLibrary?: boolean;
   fill?: boolean;
   health?: {
     challengeId: string;
@@ -83,6 +85,7 @@ export function ProofUploader({
   locked = false,
   compact = false,
   autoOpen = false,
+  preferLibrary = false,
   fill = false,
   health,
   onPicked,
@@ -124,11 +127,15 @@ export function ProofUploader({
 
   useEffect(() => {
     if (autoOpen && !uri && !locked) {
+      if (preferLibrary) {
+        void openLibrary();
+        return;
+      }
       void startCamera();
     }
-    // First empty still/video proof opens the camera immediately.
+    // First empty still/video proof opens the camera immediately. Library-first skips that.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoOpen]);
+  }, [autoOpen, preferLibrary]);
 
   async function startCamera() {
     if (locked) {
