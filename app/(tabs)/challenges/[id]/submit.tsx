@@ -34,7 +34,7 @@ import {
   CheckinSafeBoundary,
 } from '@/components/challenge/CheckinSafeBoundary';
 import { LocationProofRow } from '@/components/challenge/LocationProofRow';
-import { HealthWorkoutPicker } from '@/components/challenge/HealthWorkoutPicker';
+import { HealthWorkoutGate } from '@/components/challenge/HealthWorkoutPicker';
 import {
   WorkoutProofCardRenderer,
   type WorkoutCardRequest,
@@ -2617,8 +2617,8 @@ function SubmitWorkoutInner() {
 
   if (showHealthFirst && activeProof) {
     return (
-      <Screen padded={false} edges={TAB_ROOT_EDGES}>
-        <HealthWorkoutPicker
+      <Screen padded={false} edges={['top', 'left', 'right', 'bottom']}>
+        <HealthWorkoutGate
           challengeTitle={challenge.title}
           challenge={challenge}
           proof={activeProof}

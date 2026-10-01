@@ -1,7 +1,8 @@
 import { format } from 'date-fns';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, BackHandler, Linking, Platform, Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Alert, BackHandler, Platform, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { useNavigation } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { useAuth } from '@/hooks/useAuth';
@@ -9,7 +10,7 @@ import { useProfile } from '@/hooks/useProfile';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { copy } from '@/lib/copy';
-import { healthHowToIosPath, healthPermissionDeniedMessage } from '@/lib/health/howTo';
+import { healthHowToIosPath } from '@/lib/health/howTo';
 import {
   healthAttachRulesFor,
   workoutAttachBlockReason,
@@ -69,6 +70,12 @@ type HealthWorkoutPickerProps = {
   /** Screenshot from the gallery. */
   onOpenGallery?: () => void;
   onClose?: () => void;
+  /** Parent already asked Health, outside any sheet. */
+  authorized?: boolean;
+  /** Asks again from the check-in screen, not from inside this sheet. */
+  onAllowHealth?: () => void;
+  /** Full-screen list. Keeps the title under the clock. */
+  underStatusBar?: boolean;
 };
 
 function formatDuration(sec: number): string {
@@ -110,14 +117,17 @@ export function HealthWorkoutPicker({
   onAddPhoto,
   onOpenGallery,
   onClose,
+  authorized = false,
+  onAllowHealth,
+  underStatusBar = false,
 }: HealthWorkoutPickerProps) {
+  const insets = useSafeAreaInsets();
   const [workouts, setWorkouts] = useState<HealthWorkout[]>([]);
   const [placements, setPlacements] = useState<Map<string, WorkoutPlacement[]>>(new Map());
   const [windowDays, setWindowDays] = useState(HEALTH_PICKER_DAYS);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [offline, setOffline] = useState(false);
-  const [denied, setDenied] = useState(false);
   const [needsInstall, setNeedsInstall] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [attachingId, setAttachingId] = useState<string | null>(null);
@@ -238,65 +248,23 @@ export function HealthWorkoutPicker({
   loadRef.current = load;
 
   useEffect(() => {
-    setDenied(false);
     setNeedsInstall(false);
     setError(null);
     setAttachingId(null);
-    setLoading(true);
-    let cancelled = false;
-    void (async () => {
-      if (Platform.OS === 'web') {
-        setLoading(false);
-        return;
-      }
-      const provider = getHealthProvider();
-      if (!provider) {
-        setDenied(true);
-        setLoading(false);
-        return;
-      }
-      const status = await provider.getAuthStatus();
-      if (cancelled) {
-        return;
-      }
-      if (status === 'denied') {
-        setDenied(true);
-        setLoading(false);
-        return;
-      }
-      if (status !== 'connected') {
-        const result = await provider.requestAccess();
-        if (cancelled) {
-          return;
-        }
-        if (result === 'denied') {
-          setDenied(true);
-          setLoading(false);
-          return;
-        }
-        if (result === 'unavailable') {
-          const detail = await provider.getAvailabilityDetail?.();
+    if (Platform.OS === 'web' || !authorized) {
+      setLoading(false);
+      if (!authorized && Platform.OS === 'android') {
+        const provider = getHealthProvider();
+        void provider?.getAvailabilityDetail?.().then((detail) => {
           if (detail === 'needs_install' || detail === 'needs_update') {
             setNeedsInstall(true);
-            setLoading(false);
-            return;
           }
-          setDenied(true);
-          setLoading(false);
-          return;
-        }
-        if (userId) {
-          await upsertHealthConnection({ userId, status: 'connected' });
-        }
+        });
       }
-      if (!cancelled) {
-        await loadRef.current('open');
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [userId, windowDays]);
+      return;
+    }
+    void loadRef.current('open');
+  }, [authorized, userId, windowDays]);
 
   async function attach(workout: HealthWorkout) {
     if (attachLock.current || attaching || attachingId) {
@@ -323,9 +291,12 @@ export function HealthWorkoutPicker({
     }
   }
 
+  const headerPad = underStatusBar ? Math.max(insets.top, 16) : 12;
+  const needsAccess = Platform.OS !== 'web' && !authorized;
+
   return (
     <View className="flex-1" style={{ backgroundColor: THEME.background, minHeight: 420 }}>
-      <View className="px-5 pt-3 pb-2">
+      <View className="px-5 pb-2" style={{ paddingTop: headerPad }}>
         <AppText className="text-lg font-bold text-charcoal">{copy('health.sheetTitle')}</AppText>
         {challengeTitle ? (
           <AppText className="mt-1 text-sm text-muted">{challengeTitle}</AppText>
@@ -333,21 +304,10 @@ export function HealthWorkoutPicker({
         {offline ? (
           <AppText className="mt-2 text-sm text-muted">{copy('health.offline')}</AppText>
         ) : null}
-        {denied ? (
-          <View style={{ marginTop: 8, gap: 6 }}>
-            <AppText className="text-sm text-muted">{healthPermissionDeniedMessage()}</AppText>
-            {Platform.OS === 'ios' ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={healthHowToIosPath()}
-                onPress={() => void Linking.openSettings()}
-                style={{ minHeight: 44, justifyContent: 'center' }}>
-                <AppText style={{ fontSize: 14, fontWeight: '700', color: THEME.accent }}>
-                  {healthHowToIosPath()}
-                </AppText>
-              </Pressable>
-            ) : null}
-          </View>
+        {needsAccess && Platform.OS === 'ios' ? (
+          <AppText className="mt-2 text-sm" style={{ color: THEME.textMuted }}>
+            {healthHowToIosPath()}
+          </AppText>
         ) : null}
       </View>
 
@@ -362,8 +322,9 @@ export function HealthWorkoutPicker({
             {onClose ? <Button title="Close" size="lg" variant="ghost" onPress={onClose} /> : null}
           </View>
         </View>
-      ) : denied ? (
+      ) : needsAccess ? (
         <View className="flex-1 justify-end px-5 pb-6 gap-3">
+          <Button title={copy('health.allow')} size="lg" onPress={() => onAllowHealth?.()} />
           {onOpenGallery ? <Button title="Gallery" size="lg" onPress={onOpenGallery} /> : null}
           <Button title="Camera" size="lg" onPress={onAddPhoto} />
           {onClose ? <Button title="Close" size="lg" variant="ghost" onPress={onClose} /> : null}
@@ -387,11 +348,6 @@ export function HealthWorkoutPicker({
           <AppText className="mt-3 text-center text-[15px] font-semibold text-charcoal">
             No workouts in Health for this window.
           </AppText>
-          {Platform.OS === 'ios' ? (
-            <AppText className="mt-2 text-center text-sm" style={{ color: THEME.textMuted }}>
-              {healthHowToIosPath()}
-            </AppText>
-          ) : null}
           <View className="mt-5 w-full gap-3">
             <Button
               title="Load earlier"
@@ -505,5 +461,63 @@ export function HealthWorkoutPicker({
         </ScrollView>
       )}
     </View>
+  );
+}
+
+/**
+ * Asks Health on a normal screen, then shows the list.
+ * The system prompt cannot appear over ChromeOverlay.
+ */
+export function HealthWorkoutGate(
+  props: Omit<HealthWorkoutPickerProps, 'authorized' | 'onAllowHealth' | 'underStatusBar'>,
+) {
+  const insets = useSafeAreaInsets();
+  const [authorized, setAuthorized] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancel = false;
+    void (async () => {
+      if (Platform.OS === 'web') {
+        if (!cancel) setAuthorized(false);
+        return;
+      }
+      const provider = getHealthProvider();
+      if (!provider) {
+        if (!cancel) setAuthorized(false);
+        return;
+      }
+      const result = await provider.requestAccess().catch(() => 'denied' as const);
+      if (!cancel) setAuthorized(result === 'connected');
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, []);
+
+  async function allowAgain() {
+    setAuthorized(null);
+    const provider = getHealthProvider();
+    const result = provider ? await provider.requestAccess().catch(() => 'denied' as const) : 'denied';
+    setAuthorized(result === 'connected');
+  }
+
+  if (authorized === null && Platform.OS !== 'web') {
+    return (
+      <View style={{ flex: 1, backgroundColor: THEME.background, paddingTop: Math.max(insets.top, 16), paddingHorizontal: 20 }}>
+        <AppText className="text-lg font-bold text-charcoal">{copy('health.sheetTitle')}</AppText>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator color={THEME.accent} />
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <HealthWorkoutPicker
+      {...props}
+      authorized={Boolean(authorized)}
+      underStatusBar
+      onAllowHealth={() => void allowAgain()}
+    />
   );
 }

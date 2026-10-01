@@ -24,7 +24,7 @@ import { localUriFromPickerAsset } from '@/utils/media';
 import type { ProofType } from '@/lib/types';
 import { useStartOnWatch } from '@/hooks/useStartOnWatch';
 import { challengeAcceptsWorkoutProof } from '@/lib/health/acceptsWorkout';
-import { healthProviderAvailable, type HealthWorkout } from '@/services/health';
+import { getHealthProvider, healthProviderAvailable, type HealthWorkout } from '@/services/health';
 import type { Challenge } from '@/lib/types';
 
 type ProofUploaderProps = {
@@ -104,6 +104,7 @@ export function ProofUploader({
   const [webFallback, setWebFallback] = useState(false);
   const [libraryDenied, setLibraryDenied] = useState(false);
   const [healthOpen, setHealthOpen] = useState(false);
+  const [healthAuthorized, setHealthAuthorized] = useState(false);
   const [stillBroken, setStillBroken] = useState(false);
   const healthOpenLock = useRef(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -131,12 +132,31 @@ export function ProofUploader({
     setStillBroken(false);
   }, [uri]);
 
-  function openHealthSheet() {
-    if (healthOpenLock.current || healthOpen) {
+  async function openHealthSheet() {
+    if (healthOpenLock.current) {
       return;
     }
     healthOpenLock.current = true;
+    setOpen(false);
+    let granted = false;
+    if (Platform.OS !== 'web') {
+      const provider = getHealthProvider();
+      if (provider) {
+        const result = await provider.requestAccess().catch(() => 'denied' as const);
+        granted = result === 'connected';
+      }
+    }
+    setHealthAuthorized(granted);
     setHealthOpen(true);
+  }
+
+  async function allowHealthAgain() {
+    healthOpenLock.current = false;
+    setHealthOpen(false);
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 300);
+    });
+    await openHealthSheet();
   }
 
   useEffect(() => {
@@ -313,6 +333,13 @@ export function ProofUploader({
               const denied = healthPermissionDeniedMessage();
               setToast(denied);
               setTimeout(() => setToast((current) => (current === denied ? null : current)), 2200);
+            }}
+            authorized={healthAuthorized}
+            onAllowHealth={() => void allowHealthAgain()}
+            onOpenGallery={() => {
+              healthOpenLock.current = false;
+              setHealthOpen(false);
+              void openLibrary();
             }}
             onAttach={health.onAttach}
           />

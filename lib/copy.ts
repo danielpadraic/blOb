@@ -855,6 +855,7 @@ const STRINGS = {
   'health.unavailable': 'Not available on this device',
   'health.chip': 'Use a workout',
   'health.sheetTitle': 'Use a workout',
+  'health.allow': 'Allow Health',
   'health.confirm': 'Attach this to {title}?',
   'health.prompt': 'I see a {duration} {activity}. Begin check-in?',
   'health.checkoutPush': 'After that workout, add a selfie on check-in.',

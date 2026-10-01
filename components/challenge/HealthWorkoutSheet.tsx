@@ -21,6 +21,10 @@ type HealthWorkoutSheetProps = {
   userId?: string;
   attaching?: boolean;
   proof?: ChallengeProof | null;
+  /** True only after requestAccess returned on the check-in screen. */
+  authorized?: boolean;
+  onAllowHealth?: () => void;
+  onOpenGallery?: () => void;
   onClose: () => void;
   onDenied?: () => void;
   onAttach: (workout: HealthWorkout) => Promise<void>;
@@ -40,6 +44,9 @@ export function HealthWorkoutSheet({
   userId,
   attaching = false,
   proof,
+  authorized = false,
+  onAllowHealth,
+  onOpenGallery,
   onClose,
   onDenied,
   onAttach,
@@ -56,7 +63,7 @@ export function HealthWorkoutSheet({
           minHeight: 320,
           ...themeShadow('card'),
         }}>
-        <View className="mb-1 items-center pt-2">
+        <View className="mb-1 items-center pt-3">
           <View className="h-1 w-10 rounded-full" style={{ backgroundColor: THEME.border }} />
         </View>
         <View style={{ height: 520, minHeight: 420 }}>
@@ -74,6 +81,9 @@ export function HealthWorkoutSheet({
             userId={userId}
             attaching={attaching}
             onAttach={onAttach}
+            authorized={authorized}
+            onAllowHealth={onAllowHealth}
+            onOpenGallery={onOpenGallery}
             onAddPhoto={() => {
               onDenied?.();
               onClose();
