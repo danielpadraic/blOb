@@ -369,6 +369,21 @@ export async function alignOfficialPairPosts(input: {
 
 const DUAL_STAMP_MS = 90_000;
 
+function proofPath(url: string): string {
+  const clean = String(url ?? '').split('?')[0];
+  const marker = '/challenge-proofs/';
+  const at = clean.indexOf(marker);
+  return at >= 0 ? clean.slice(at) : clean;
+}
+
+function sharesProofMedia(
+  left: { media_urls?: string[] | null },
+  right: { media_urls?: string[] | null },
+): boolean {
+  const paths = new Set((left.media_urls ?? []).map(proofPath).filter(Boolean));
+  return (right.media_urls ?? []).some((url) => paths.has(proofPath(url)));
+}
+
 type DualStampPost = {
   id: string;
   author_id: string;
@@ -416,7 +431,7 @@ export function collapseDualStampHomePosts<T extends DualStampPost>(posts: T[]):
       if (dateStampInZone(new Date(otherStamp), OFFICIAL_COIN_TZ) !== day) {
         return false;
       }
-      return Math.abs(otherStamp - stamp) <= DUAL_STAMP_MS;
+      return Math.abs(otherStamp - stamp) <= DUAL_STAMP_MS || sharesProofMedia(post, other);
     });
     for (const row of group) {
       used.add(row.id);

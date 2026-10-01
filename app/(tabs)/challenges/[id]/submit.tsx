@@ -636,6 +636,37 @@ function SubmitWorkoutInner() {
         })
     : null;
 
+  const finishReadyRef = useRef(false);
+  useEffect(() => {
+    if (!officialCoin || !id || !challenge || !checkinQuery.isFetched || isProxy || finishReadyRef.current) {
+      return;
+    }
+    if (checkinQuery.data?.phase !== 'ready') {
+      return;
+    }
+    const remaining = remainingProofLabelsOf(challenge, checkinQuery.data?.proof_parts, null, {
+      pre_selfie_url: checkinQuery.data?.pre_selfie_url,
+      post_selfie_url: checkinQuery.data?.post_selfie_url,
+      hr_monitor_url: checkinQuery.data?.hr_monitor_url,
+    });
+    if (remaining.length > 0) {
+      return;
+    }
+    // Slots are full but the row was only saved as ready, so the Board never moved.
+    finishReadyRef.current = true;
+    void submitCheckin.mutateAsync({ countDay: true }).catch(() => {
+      finishReadyRef.current = false;
+    });
+  }, [
+    challenge,
+    checkinQuery.data,
+    checkinQuery.isFetched,
+    id,
+    isProxy,
+    officialCoin,
+    submitCheckin,
+  ]);
+
   useEffect(() => {
     if (!id || !challenge || !checkinQuery.isFetched || isProxy) {
       return;
@@ -2065,7 +2096,18 @@ function SubmitWorkoutInner() {
       setCaptureId(null);
       setSkippedAuto(true);
       setPreferCamera(false);
-      await persistProof(target, { ...draft, uris: keptStills, uri: keptStills[0] ?? `health:${healthWorkoutId}` });
+      const saved = await persistProof(target, { ...draft, uris: keptStills, uri: keptStills[0] ?? `health:${healthWorkoutId}` });
+      if (officialCoin && saved) {
+        const remaining = remainingProofLabelsOf(challenge, saved.proof_parts, null, {
+          pre_selfie_url: saved.pre_selfie_url,
+          post_selfie_url: saved.post_selfie_url,
+          hr_monitor_url: saved.hr_monitor_url,
+        });
+        if (remaining.length === 0 && saved.phase !== 'submitted') {
+          finishReadyRef.current = true;
+          await submitCheckin.mutateAsync({ countDay: true });
+        }
+      }
       // Recap is an extra slide. A photo selfie slot still gets one when HK numbers exist.
       void buildWorkoutCard(target, enriched, healthWorkoutId, samples);
     } catch (caught) {
