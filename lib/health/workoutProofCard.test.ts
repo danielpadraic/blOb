@@ -60,6 +60,22 @@ describe('workout proof card formatting', () => {
     expect(workoutCardTimeRange(WORKOUT.startedAt, WORKOUT.endedAt, TZ)).toBe('7:33 – 8:14 AM');
   });
 
+  it('dates a card that crosses midnight on the day it ended', () => {
+    const card = buildWorkoutProofCard({
+      workout: {
+        ...WORKOUT,
+        startedAt: '2026-10-01T04:40:00.000Z',
+        endedAt: '2026-10-01T05:10:00.000Z',
+        durationSec: 1800,
+      },
+      samples: [],
+      timeZone: 'America/Chicago',
+      challengeTitle: 'Weekly Fitness Challenge',
+    });
+    expect(card.dateLine).toBe('Thursday, October 1, 2026');
+    expect(card.timeRange).toBe('Wed, Sep 30, 11:40 PM – Thu, Oct 1, 12:10 AM');
+  });
+
   it('keeps both halves when the workout crosses noon', () => {
     expect(workoutCardTimeRange('2026-09-05T17:45:00.000Z', '2026-09-05T18:30:00.000Z', TZ)).toBe(
       '11:45 AM – 12:30 PM',

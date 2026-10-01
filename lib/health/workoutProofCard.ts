@@ -1,4 +1,5 @@
 import { parseHrSeries } from '@/lib/health/hrSeries';
+import { formatWorkoutWhen, workoutTimeZone } from '@/lib/health/workoutWhen';
 import { routeActivityFor, type RouteActivity, type WorkoutRoute } from '@/lib/health/route';
 import type { HealthHeartRateSample, HealthWorkout } from '@/services/health/types';
 
@@ -190,16 +191,17 @@ function safeFormat(value: Date, options: Intl.DateTimeFormatOptions, timeZone: 
   }
 }
 
-/** "Saturday, September 5, 2026" in the challenge timezone. */
-export function workoutCardDateLine(startedAt: string, timeZone: string): string {
-  const start = new Date(startedAt);
-  if (Number.isNaN(start.getTime())) {
+/** "Saturday, September 5, 2026" for the day the workout ended, in the challenge timezone. */
+export function workoutCardDateLine(endedAt: string, timeZone: string): string {
+  const zone = workoutTimeZone(timeZone);
+  const end = new Date(endedAt);
+  if (!zone || Number.isNaN(end.getTime())) {
     return '';
   }
   return safeFormat(
-    start,
+    end,
     { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' },
-    timeZone,
+    zone,
   );
 }
 
@@ -209,6 +211,10 @@ export function workoutCardTimeRange(startedAt: string, endedAt: string, timeZon
   const end = new Date(endedAt);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
     return '';
+  }
+  const spanned = formatWorkoutWhen({ startedAt, endedAt, timeZone });
+  if (spanned && !spanned.includes(' · ')) {
+    return spanned;
   }
   const opts: Intl.DateTimeFormatOptions = { hour: 'numeric', minute: '2-digit' };
   const startText = safeFormat(start, opts, timeZone);
@@ -400,7 +406,7 @@ export function buildWorkoutProofCard(input: {
     headline,
     route,
     accent: workoutCardAccent(input.workout.activityType),
-    dateLine: workoutCardDateLine(input.workout.startedAt, input.timeZone),
+    dateLine: workoutCardDateLine(input.workout.endedAt, input.timeZone),
     activityLabel: input.workout.activityLabel?.trim() || 'Workout',
     timeRange: workoutCardTimeRange(input.workout.startedAt, input.workout.endedAt, input.timeZone),
     placeLine: input.placeLabel?.trim() || null,

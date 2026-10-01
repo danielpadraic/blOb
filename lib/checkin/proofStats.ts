@@ -1,5 +1,6 @@
 import { formatIncrementCount, formatMoneySentenceAmount, shortComparableBoardLabel } from '@/lib/comparablePoints';
 import { formatHealthDuration } from '@/lib/health/durationChip';
+import { formatCompletedDay } from '@/lib/health/workoutWhen';
 
 /**
  * Display-safe check-in stats carried on a post (`posts.checkin_stats`).
@@ -21,6 +22,10 @@ export type CheckinProofStats = {
   hr_avg?: number | null;
   hr_max?: number | null;
   distance_m?: number | null;
+  /** When the Health workout ended. The duration chip prints this day. OCR rows leave it empty. */
+  ended_at?: string | null;
+  /** Challenge timezone for `ended_at`. Never UTC. */
+  timezone?: string | null;
   /**
    * Subject pronoun for the check-in author, stamped server-side from their own profile.
    * The author's pronoun rides along with their own post; it is never queryable per profile.
@@ -139,7 +144,11 @@ export function proofStatChips(stats?: CheckinProofStats | null): ProofStatChip[
   const chips: ProofStatChip[] = [];
   const duration = formatHealthDuration(stats.duration_sec);
   if (duration) {
-    chips.push({ key: 'duration', label: `Workout Time ${duration}` });
+    const day = formatCompletedDay(stats.ended_at, stats.timezone);
+    chips.push({
+      key: 'duration',
+      label: day ? `${day} · Workout Time ${duration}` : `Workout Time ${duration}`,
+    });
   }
   const calories = positive(stats.active_cal) ?? positive(stats.total_cal);
   if (calories != null) {

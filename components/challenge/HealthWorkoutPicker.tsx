@@ -1,4 +1,3 @@
-import { format } from 'date-fns';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, BackHandler, Platform, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { useNavigation } from 'expo-router';
@@ -23,6 +22,7 @@ import { athleteDistanceUnit, formatDistance } from '@/lib/distance';
 import { healthSourceLabel } from '@/lib/health/proofSummary';
 import { fetchWorkoutPlacements, probeOnline, upsertHealthConnection } from '@/lib/health/remote';
 import { formatHealthDuration } from '@/lib/health/proofSummary';
+import { formatWorkoutWhen } from '@/lib/health/workoutWhen';
 import { proofAlreadyCountsCopy, proofUniquenessFamily, sameTierWorkoutBlock, type WorkoutPlacement } from '@/lib/proofUniqueness';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { ChallengeProof } from '@/lib/challengeProofs';
@@ -80,23 +80,6 @@ type HealthWorkoutPickerProps = {
 
 function formatDuration(sec: number): string {
   return formatHealthDuration(sec) ?? '';
-}
-
-function formatTime(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return '';
-  }
-  return format(date, 'h:mm a');
-}
-
-function formatRange(startedAt: string, endedAt: string): string {
-  const start = formatTime(startedAt);
-  const end = formatTime(endedAt);
-  if (start && end) {
-    return `${start}–${end}`;
-  }
-  return start || end;
 }
 
 export function HealthWorkoutPicker({
@@ -385,6 +368,11 @@ export function HealthWorkoutPicker({
             // Attachable, but we could not check intensity. Reads as a hint, not a refusal.
             const note = blocked ? null : workoutAttachNote(row, rules);
             const busy = attaching || attachingId === row.providerWorkoutId;
+            const when = formatWorkoutWhen({
+              startedAt: row.startedAt,
+              endedAt: row.endedAt,
+              timeZone: challenge?.timezone ?? timezone,
+            });
             return (
               <View
                 key={row.providerWorkoutId}
@@ -399,11 +387,15 @@ export function HealthWorkoutPicker({
                 }}>
                 <AppText className="text-[15px] font-bold text-charcoal">{row.activityLabel}</AppText>
                 <AppText className="mt-0.5 text-sm text-muted">
-                  {Number(row.distanceM) > 0
-                    ? `${formatDistance(Number(row.distanceM), athleteDistanceUnit())} · `
-                    : ''}
-                  {formatRange(row.startedAt, row.endedAt)}
-                  {` · ${formatDuration(row.durationSec)}`}
+                  {[
+                    Number(row.distanceM) > 0
+                      ? formatDistance(Number(row.distanceM), athleteDistanceUnit())
+                      : '',
+                    when,
+                    formatDuration(row.durationSec),
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                   {row.hrAvg ? ` · ${row.hrAvg} avg` : ''}
                   {` · ${healthSourceLabel(row.confidence)}`}
                   {Number(row.distanceM) > 0 ? ' · No route on this workout.' : ''}

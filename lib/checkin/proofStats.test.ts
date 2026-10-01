@@ -24,6 +24,16 @@ const RUN: CheckinProofStats = {
 };
 
 describe('proof stat chips', () => {
+  it('keeps minutes and seconds and adds the day the workout ended', () => {
+    expect(
+      proofStatChips({
+        ...STRENGTH,
+        ended_at: '2026-10-01T13:14:00.000Z',
+        timezone: 'America/Chicago',
+      }).map((chip) => chip.label)[0],
+    ).toBe('Thu, Oct 1 · Workout Time 41:10');
+  });
+
   it('builds compact chips for a strength workout', () => {
     expect(proofStatChips(STRENGTH).map((chip) => chip.label)).toEqual([
       'Workout Time 41:10',
