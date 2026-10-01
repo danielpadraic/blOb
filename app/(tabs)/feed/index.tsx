@@ -18,6 +18,7 @@ import { useCopyTone } from '@/hooks/useCopy';
 import { useFeedActiveChallenges } from '@/hooks/useChallenge';
 import { useCreateComment, useCreatePost, useHomeFeed, useToggleReaction } from '@/hooks/useFeed';
 import { useHomePulse } from '@/hooks/useHomePulse';
+import { requestWorkoutCardRedraw } from '@/lib/health/cardRedrawSignal';
 import { socialKeys, useFriends } from '@/hooks/useSocial';
 import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { clearLastOpenChallenge } from '@/lib/challengeNav';
@@ -47,6 +48,7 @@ export default function FeedScreen() {
   const refetchHome = feed.refetch;
   useFocusEffect(
     useCallback(() => {
+      requestWorkoutCardRedraw();
       stopAllLiveMedia();
       clearLastOpenChallenge();
       if ((feed.data?.length ?? 0) === 0) {

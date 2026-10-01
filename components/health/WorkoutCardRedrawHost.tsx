@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 
@@ -6,22 +7,15 @@ import {
   type WorkoutCardRequest,
 } from '@/components/challenge/WorkoutProofCardRenderer';
 import { useAuth } from '@/hooks/useAuth';
+import { isHomeSocialFeedKey, liveListKey } from '@/hooks/useFeed';
 import { parseChallengeProofs, type ChallengeProof } from '@/lib/challengeProofs';
-import { saveCheckinProof } from '@/lib/challenges/stagedCheckin';
 import { challengeClockTz } from '@/lib/checkinPeriod';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { type CardRepair } from '@/lib/health/cardRedraw';
 import { pendingCardRepairs, putRepairedCard } from '@/lib/health/cardRedrawQueue';
-import { ensureCheckinWaveForRepair } from '@/lib/checkinWave';
-import { toStoredHrSeries } from '@/lib/health/hrSeries';
-import { recordHrSignature } from '@/lib/health/hrIntegrity';
-import {
-  buildWorkoutProofCard,
-  withHeartRateFloor,
-  type HeartRateSample,
-} from '@/lib/health/workoutProofCard';
+import { onWorkoutCardRedraw } from '@/lib/health/cardRedrawSignal';
+import { buildWorkoutProofCard } from '@/lib/health/workoutProofCard';
 import { supabase } from '@/lib/supabase';
-import { getHealthProvider } from '@/services/health';
 
 /**
  * Draws a posted workout proof card again when the stored picture no longer tells the truth.
@@ -36,52 +30,81 @@ import { getHealthProvider } from '@/services/health';
  * that posted with only selfies ends up with its recap.
  *
  * Rasterizing an SVG to a file is native-only, so Web renders nothing here. Web already reads the
- * repaired numbers for its chips; only the stored JPEG waits for a phone. And because check-ins are
- * owner-scoped, each person's cards are drawn on their own device — nobody repairs anybody else's.
+ * stored numbers for its chips, and a gallery OCR card is drawn on the check-in screen. A missing
+ * Health recap is drawn on the owner's phone from the snapshot already saved — Apple is not asked
+ * for a workout that has aged out.
  */
 export function WorkoutCardRedrawHost() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [queue, setQueue] = useState<CardRepair[]>([]);
   const [request, setRequest] = useState<WorkoutCardRequest | null>(null);
   const activeRef = useRef<{
     item: CardRepair;
     proof: ChallengeProof;
-    /** Read from Health for this card, and saved alongside it so the trace stops being device-only. */
-    series: number[] | null;
   } | null>(null);
-  const loadedForRef = useRef<string | null>(null);
+  const busyRef = useRef(false);
+  const againRef = useRef(false);
+  const userIdRef = useRef<string | null>(null);
+  const loadRef = useRef<() => Promise<void>>(async () => undefined);
 
   const userId = user?.id;
+  userIdRef.current = userId ?? null;
 
-  useEffect(() => {
-    if (Platform.OS === 'web' || !userId || loadedForRef.current === userId) {
+  const noteQueue = useCallback((next: CardRepair[]) => {
+    if (next.length > 0) {
       return;
     }
-    loadedForRef.current = userId;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const work = await pendingCardRepairs(userId, {
-          traceReadable: await traceReadable(),
-        });
-        if (!cancelled && work.length > 0) {
-          setQueue(work);
-        }
-      } catch {
-        // A card that keeps its old picture is not worth an error in front of the user.
+    busyRef.current = false;
+    if (againRef.current) {
+      againRef.current = false;
+      void loadRef.current();
+    }
+  }, []);
+
+  const load = useCallback(async () => {
+    const id = userIdRef.current;
+    if (Platform.OS === 'web' || !id) {
+      return;
+    }
+    if (busyRef.current) {
+      againRef.current = true;
+      return;
+    }
+    busyRef.current = true;
+    try {
+      const work = await pendingCardRepairs(id);
+      if (work.length > 0) {
+        setQueue(work);
+        return;
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
+    } catch {
+      // A card that keeps its old picture is not worth an error in front of the user.
+    }
+    busyRef.current = false;
+  }, []);
+  loadRef.current = load;
+
+  useEffect(() => {
+    if (Platform.OS === 'web' || !userId) {
+      return;
+    }
+    void load();
+    return onWorkoutCardRedraw(() => {
+      void load();
+    });
+  }, [load, userId]);
 
   /** Drop the head of the queue without stamping it, so a skipped card is retried on a later open. */
   const skipHead = useCallback(() => {
     activeRef.current = null;
     setRequest(null);
-    setQueue((current) => current.slice(1));
-  }, []);
+    setQueue((current) => {
+      const next = current.slice(1);
+      noteQueue(next);
+      return next;
+    });
+  }, [noteQueue]);
 
   useEffect(() => {
     if (Platform.OS === 'web' || request || activeRef.current || queue.length === 0) {
@@ -106,48 +129,22 @@ export function WorkoutCardRedrawHost() {
         }
         const row = challenge.data as ChallengeCardRow;
 
-        // Health is asked for the trace on the owner's own device, because a check-in attached before
-        // the series was stored has no trace in the row to draw. What comes back is saved with the card,
-        // so the graph reaches Web and every other viewer too. A card is still drawn when nothing comes
-        // back: a workout that has aged out of Health keeps its numbers, and waiting for samples that
-        // may never arrive would mean never fixing anything else on the card.
-        const samples = await readHeartRateSeries(item);
-        if (cancelled) {
-          return;
-        }
-        const series = toStoredHrSeries(samples) ?? item.health.hrSeries ?? null;
-
-        // This card is only in the queue to collect its graph, and Health had none to give — the
-        // workout may predate this phone or have aged out. Dropped without a write, so the card keeps
-        // what it has and the next open can try again for free.
-        if (item.reason === 'trace' && !series) {
-          skipHead();
-          return;
-        }
-
-        const workout = withHeartRateFloor(item.workout, samples);
-        // The same read that gives the card its graph is also the only chance to describe an older
-        // workout's heart rate, so the baseline picks up history instead of starting from today.
-        if (userId) {
-          void recordHrSignature({ userId, workout, samples, series });
-        }
+        const series = item.health.hrSeries ?? null;
         const card = buildWorkoutProofCard({
-          workout,
-          samples,
+          workout: item.workout,
           series,
           timeZone: challengeClockTz(row),
           challengeTitle: challengeDisplayTitle(row),
           route: item.health.route ?? null,
         });
-        // Saved against the challenge's own definition of the slot rather than a shape invented here.
         const proof =
           parseChallengeProofs(row.proofs).find((entry) => entry.id === item.proofId) ??
           ({ id: item.proofId, name: '', method: item.method } satisfies ChallengeProof);
-        activeRef.current = { item: { ...item, workout }, proof, series };
+        activeRef.current = { item, proof };
         setRequest({
           key: `${item.proofId}-${item.checkinId}`,
           card,
-          activityType: workout.activityType,
+          activityType: item.workout.activityType,
         });
       } catch {
         if (!cancelled) {
@@ -171,29 +168,37 @@ export function WorkoutCardRedrawHost() {
       const { item } = active;
       void (async () => {
         try {
-          // Uploads the card and swaps it onto this one slot of this one check-in, rebuilding the
-          // post's media so Live and Home both show it. The check-in keeps its status, its caption and
-          // every number that decides whether it counts; the heart-rate trace is added to the snapshot
-          // because nothing else can put it there. The version stamp is what stops the card being
-          // picked up again on the next open.
-          const url = await putRepairedCard(item, fileUri, active.series);
-          if (userId) {
-            await ensureCheckinWaveForRepair({
-              userId,
-              challengeId: item.challengeId,
-              url,
-              previousUrl: item.previousUrl,
-            }).catch(() => undefined);
+          const saved = await putRepairedCard(item, fileUri);
+          void queryClient.invalidateQueries({
+            predicate: (query) => isHomeSocialFeedKey(query.queryKey),
+          });
+          void queryClient.invalidateQueries({ queryKey: liveListKey(item.challengeId, userId) });
+          if (saved.siblingCheckinId) {
+            void queryClient.invalidateQueries({
+              predicate: (query) => query.queryKey[0] === 'live',
+            });
           }
-        } catch {
-          // Unstamped, so it is tried again. The old card stays on the post rather than going empty.
-        } finally {
           activeRef.current = null;
-          setQueue((current) => current.slice(1));
+          setQueue((current) => {
+            const next = current.filter(
+              (entry) =>
+                entry.checkinId !== item.checkinId && entry.checkinId !== saved.siblingCheckinId,
+            );
+            noteQueue(next);
+            return next;
+          });
+        } catch {
+          // Unstamped, so the next open tries again. Chips and selfies stay.
+          activeRef.current = null;
+          setQueue((current) => {
+            const next = current.slice(1);
+            noteQueue(next);
+            return next;
+          });
         }
       })();
     },
-    [userId],
+    [noteQueue, queryClient, userId],
   );
 
   const onFailed = useCallback(
@@ -219,45 +224,3 @@ const CHALLENGE_COLUMNS =
 
 type ChallengeCardRow = Parameters<typeof challengeDisplayTitle>[0] &
   Parameters<typeof challengeClockTz>[0] & { proofs?: unknown };
-
-/**
- * Whether asking this device for a heart-rate trace could ever produce one.
- *
- * A trace repair is deliberately dropped unstamped when nothing comes back, so that it is retried
- * on a later open. That is free on a phone whose samples might yet arrive, and endless on one that
- * can never answer — those cards matched, found nothing and requeued on every single app open.
- *
- * Deliberately phrased as "not proven impossible" rather than "known to work". HealthKit does not
- * report read authorization at all, by Apple's design, so a granted iPhone answers `unknown` here;
- * demanding `connected` would switch the graph repair off on exactly the platform that has it.
- * `isAvailable` is the honest half — it is false with no health module and false when Health
- * Connect is not on the phone.
- */
-async function traceReadable(): Promise<boolean> {
-  try {
-    const provider = getHealthProvider();
-    if (!provider?.fetchHeartRateSeries || !provider.isAvailable()) {
-      return false;
-    }
-    return (await provider.getAuthStatus()) !== 'denied';
-  } catch {
-    return false;
-  }
-}
-
-async function readHeartRateSeries(item: CardRepair): Promise<HeartRateSample[]> {
-  if (!item.health.startedAt || !item.health.endedAt) {
-    return [];
-  }
-  try {
-    const provider = getHealthProvider();
-    return provider?.fetchHeartRateSeries
-      ? await provider.fetchHeartRateSeries({
-          startedAt: item.health.startedAt,
-          endedAt: item.health.endedAt,
-        })
-      : [];
-  } catch {
-    return [];
-  }
-}

@@ -26,6 +26,7 @@ import {
   slotStillUris,
   withSlotStills,
 } from '@/lib/checkin/slotStills';
+import { storeRenderedWorkoutCard } from '@/lib/health/appendWorkoutCard';
 import { saveWorkoutSession } from '@/lib/health/workoutSessions';
 import { recordHrSignature } from '@/lib/health/hrIntegrity';
 import { PeriodCheckinDue } from '@/components/challenge/PeriodCheckinDue';
@@ -516,6 +517,8 @@ function SubmitWorkoutInner() {
     healthWorkoutId: string;
     health: CheckinHealthProof;
   } | null>(null);
+  const checkinIdRef = useRef<string | null>(null);
+  checkinIdRef.current = checkinQuery.data?.id ?? null;
   const [captureId, setCaptureId] = useState<string | null>(null);
   const [skippedAuto, setSkippedAuto] = useState(false);
   const [cameraFailed, setCameraFailed] = useState(false);
@@ -2157,6 +2160,9 @@ function SubmitWorkoutInner() {
       setSkippedAuto(true);
       setPreferCamera(false);
       const saved = await persistProof(target, { ...draft, uris: keptStills, uri: keptStills[0] ?? `health:${healthWorkoutId}` });
+      if (saved?.id) {
+        checkinIdRef.current = saved.id;
+      }
       if (officialCoin && saved) {
         const remaining = remainingProofLabelsOf(challenge, saved.proof_parts, null, {
           pre_selfie_url: saved.pre_selfie_url,
@@ -2276,9 +2282,6 @@ function SubmitWorkoutInner() {
         ...current,
         [target.id]: { ...current[target.id], ...withRoute, addingRoute: false, building: true },
       }));
-      await persistProof(target, { ...withRoute, uri: `health:${healthWorkoutId}` }).catch(() => {
-        // The attach already counts; a failed re-persist must not strand the slot.
-      });
     } else {
       setDrafts((current) => ({
         ...current,
@@ -2356,12 +2359,25 @@ function SubmitWorkoutInner() {
       recapUriRef.current = fileUri;
       recapWaitRef.current?.(true);
       recapWaitRef.current = null;
-      if (!proof) {
+      const checkinId = checkinIdRef.current;
+      if (!proof || !uid || !checkinId || !id) {
         return;
       }
-      void persistProof(proof, draft).catch((caught) => {
-        setError(getErrorMessage(caught));
-      });
+      // Extra slide. A failed raster leaves the chips and the selfies already saved.
+      void storeRenderedWorkoutCard({
+        userId: uid,
+        checkinId,
+        challengeId: id,
+        proofId: proof.id,
+        fileUri,
+      })
+        .then(() => {
+          void queryClient.invalidateQueries({
+            predicate: (query) => isHomeSocialFeedKey(query.queryKey),
+          });
+          void queryClient.invalidateQueries({ queryKey: liveListKey(id, uid) });
+        })
+        .catch(() => undefined);
     },
     // persistProof and proofSteps are stable enough for this callback; drafts are set functionally.
     // eslint-disable-next-line react-hooks/exhaustive-deps

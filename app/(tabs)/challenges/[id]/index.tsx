@@ -34,6 +34,7 @@ import { HostPrizeTopUp } from '@/components/challenge/HostPrizeTopUp';
 import { FieldNoteLabel, ChallengeNotesProvider } from '@/components/challenge/FieldNote';
 import { OfficialMoneyBoard } from '@/components/challenge/OfficialMoneyBoard';
 import { isTeacher3DayChallenge } from '@/lib/teacher3day';
+import { requestWorkoutCardRedraw } from '@/lib/health/cardRedrawSignal';
 import { ChallengeDetailHeaderRight, openHouseAddPeople } from '@/components/challenge/ChallengeDetailOverflow';
 import { useInviteHost } from '@/components/challenge/InviteHost';
 import { useJoinConfirm } from '@/components/challenge/JoinConfirmHost';
@@ -433,6 +434,7 @@ export default function ChallengeDetailScreen() {
   const [screenFocused, setScreenFocused] = useState(false);
   useFocusEffect(
     useCallback(() => {
+      requestWorkoutCardRedraw();
       setScreenFocused(true);
       return () => {
         setScreenFocused(false);

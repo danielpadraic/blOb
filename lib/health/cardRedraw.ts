@@ -4,6 +4,7 @@ import {
   type ChallengeProofMethod,
   type ChallengeProofPart,
 } from '@/lib/challengeProofs';
+import { isWorkoutCardStoragePath } from '@/lib/health/postWorkoutCard';
 import { WORKOUT_CARD_VERSION } from '@/lib/health/workoutProofCard';
 import { humanizeActivityLabel } from '@/services/health/apple';
 import type {
@@ -203,32 +204,36 @@ export type CardRepairScope = {
   traceReadable?: boolean;
 };
 
+/** True when this slot already has a `workout_card-` JPEG. A screenshot or selfie does not count. */
+export function slotHasWorkoutCardFile(part: {
+  url?: string | null;
+  urls?: Array<string | null> | null;
+}): boolean {
+  const listed = Array.isArray(part.urls) ? part.urls : [];
+  return [part.url, ...listed].some((url) => isWorkoutCardStoragePath(url));
+}
+
 /**
- * The one slot on this check-in whose card needs drawing, or null when none does.
+ * The one vendor-health slot on this check-in that has no `workout_card-` JPEG, or null.
  *
- * A slot qualifies whether or not it already holds an image: a stale card is replaced, and a Health
- * attach whose card never rasterized finally gets one. Cards already drawn by the current renderer
- * are left alone, which is what stops this from running forever.
+ * Drawn from the snapshot already stored on the check-in. A screenshot, a selfie, and an OCR row
+ * are left alone. A card that already has the recap file is left alone, even when its heart-rate
+ * graph was never stored — that graph is not fetched from Apple again.
+ *
+ * `scope` is accepted so older callers still compile. A missing file is drawn either way.
  */
 export function cardRepairFor(
   checkin: StoredCheckinRow,
   labels?: StoredActivityLabels,
-  scope?: CardRepairScope,
+  _scope?: CardRepairScope,
 ): CardRepair | null {
-  const traceReadable = scope?.traceReadable ?? true;
-  const found: CardRepair[] = [];
   const parts = parseProofParts(checkin.proof_parts);
   for (const [proofId, part] of Object.entries(parts)) {
     const health = parseCheckinHealthProof(part.health);
     if (!health || !isVendorHealthProof(health, part)) {
       continue;
     }
-    const reason: CardRepairReason | null = !cardIsCurrent(part)
-      ? 'renderer'
-      : traceReadable && traceMissing(health)
-        ? 'trace'
-        : null;
-    if (!reason) {
+    if (slotHasWorkoutCardFile(part)) {
       continue;
     }
     const workout = workoutFromStoredSession(
@@ -239,21 +244,20 @@ export function cardRepairFor(
     if (!workout) {
       continue;
     }
-    found.push({
-      reason,
+    const currentUrl = String(part.url ?? '').trim();
+    return {
+      reason: 'renderer',
       checkinId: checkin.id,
       challengeId: checkin.challenge_id,
       proofId,
       method: part.method,
       healthWorkoutId: part.healthWorkoutId ?? null,
-      hadCard: /^https?:\/\//i.test(String(part.url ?? '')),
+      hadCard: /^https?:\/\//i.test(currentUrl),
       caption: part.caption ?? null,
-      previousUrl: String(part.url ?? '').trim() || null,
+      previousUrl: currentUrl || null,
       health,
       workout,
-    });
+    };
   }
-  // A stale card is drawn before one that is only chasing its graph: the graph may never arrive, and a
-  // wrong number on a proof artifact is the more urgent of the two.
-  return found.find((item) => item.reason === 'renderer') ?? found[0] ?? null;
+  return null;
 }

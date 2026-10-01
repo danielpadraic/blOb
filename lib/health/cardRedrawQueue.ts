@@ -5,7 +5,7 @@ import {
   type StoredActivityLabels,
   type StoredCheckinRow,
 } from '@/lib/health/cardRedraw';
-import { WORKOUT_CARD_VERSION } from '@/lib/health/workoutProofCard';
+import { appendWorkoutCardUrl } from '@/lib/health/appendWorkoutCard';
 import { supabase } from '@/lib/supabase';
 import { challengeProofUrl, uploadChallengeProof } from '@/utils/upload';
 
@@ -22,8 +22,9 @@ import { challengeProofUrl, uploadChallengeProof } from '@/utils/upload';
  * can fix a card for somebody else, by design.
  */
 
-/** Small on purpose: this runs on app open and must never look like a sync. */
-const BATCH = 4;
+/** One Home or Live open should catch the rows that are missing a recap, without paging the whole history. */
+const BATCH = 12;
+const SCAN = 100;
 
 /**
  * Newest first, so the card someone is most likely looking at is the first one fixed.
@@ -45,7 +46,7 @@ export async function pendingCardRepairs(
     .eq('user_id', userId)
     .not('proof_parts', 'is', null)
     .order('created_at', { ascending: false })
-    .limit(40);
+    .limit(SCAN);
   if (checkins.error || !checkins.data?.length) {
     return [];
   }
@@ -103,15 +104,7 @@ function byUrgency(items: CardRepair[]): CardRepair[] {
 export async function putRepairedCard(
   item: CardRepair,
   fileUri: string,
-  /**
-   * The heart-rate trace this pass read back from Health, when the workout still has one.
-   *
-   * The only way a trace reaches an already-posted card. Everything else the card prints was stored at
-   * attach time, but the series was not, so it has to be re-read on the owner's device and stored now —
-   * after which the post draws its graph for every viewer, including Web.
-   */
-  hrSeries?: number[] | null,
-): Promise<string> {
+): Promise<{ url: string; siblingCheckinId: string | null }> {
   const { data: session } = await supabase.auth.getUser();
   const userId = session?.user?.id;
   if (!userId) {
@@ -128,19 +121,14 @@ export async function putRepairedCard(
   if (!url) {
     throw new Error('Could not store that workout card.');
   }
-  const { error } = await supabase.rpc('repair_checkin_workout_card', {
-    p_checkin_id: item.checkinId,
-    p_proof_id: item.proofId,
-    p_url: url,
-    p_card_version: WORKOUT_CARD_VERSION,
-    // Null leaves whatever trace the snapshot already had. A workout that has aged out of Health, or
-    // never carried heart rate, must not have its stored series wiped by a redraw.
-    p_hr_series: hrSeries && hrSeries.length > 0 ? hrSeries : null,
+  // Stored numbers only. Do not ask Apple for a workout that has aged out, and do not replace a selfie.
+  const siblingCheckinId = await appendWorkoutCardUrl({
+    userId,
+    checkinId: item.checkinId,
+    proofId: item.proofId,
+    cardUrl: url,
   });
-  if (error) {
-    throw new Error(error.message || 'Could not update that workout card.');
-  }
-  return url;
+  return { url, siblingCheckinId };
 }
 
 /**

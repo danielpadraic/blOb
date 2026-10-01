@@ -102,9 +102,21 @@ export function pagerUrlsWithWorkoutCard(
 ): string[] {
   const list = uniqueProofUrls(urls).filter((url) => !isWorkoutCardSlide(url));
   const vendorCardUrl = namedVendorCardUrl(stats);
+  // A real recap file wins over a screenshot the server once named as card_url.
+  const pathCard =
+    list.find((url) => isWorkoutCardStoragePath(url)) ??
+    (isWorkoutCardStoragePath(vendorCardUrl) ? vendorCardUrl : '');
   const stills: string[] = [];
   const cards: string[] = [];
   for (const url of list) {
+    if (pathCard) {
+      if (isWorkoutCardStoragePath(url) || isWorkoutCardUrl(url, pathCard)) {
+        cards.push(url);
+      } else {
+        stills.push(url);
+      }
+      continue;
+    }
     if (isRecapCardUrl(url, vendorCardUrl)) {
       cards.push(url);
     } else {
@@ -112,7 +124,9 @@ export function pagerUrlsWithWorkoutCard(
     }
   }
   let recap = '';
-  if (vendorCardUrl) {
+  if (pathCard) {
+    recap = cards.find((url) => isWorkoutCardUrl(url, pathCard)) ?? pathCard;
+  } else if (vendorCardUrl) {
     recap = cards.find((url) => isWorkoutCardUrl(url, vendorCardUrl)) ?? vendorCardUrl;
   } else if (cards[0]) {
     recap = cards[0];

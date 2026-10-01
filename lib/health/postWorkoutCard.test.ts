@@ -340,6 +340,16 @@ describe('pager order for a workout check-in', () => {
     expect(pagerUrlsWithWorkoutCard([SHOT], WALK_STATS)).toEqual([SHOT]);
   });
 
+  it('keeps a screenshot in place when a workout_card file is also on the post', () => {
+    const shot = 'https://x.supabase.co/storage/v1/object/sign/p/hr_monitor-1.jpg?token=a';
+    const pre = 'https://x.supabase.co/storage/v1/object/sign/p/pre_selfie-1.jpg?token=a';
+    expect(pagerUrlsWithWorkoutCard([pre, shot, CARD], { ...WALK_STATS, card_url: shot })).toEqual([
+      pre,
+      shot,
+      CARD,
+    ]);
+  });
+
   it('puts a workout_card- file last even when card_url is missing', () => {
     expect(pagerUrlsWithWorkoutCard([SHOT, CARD], WALK_STATS)).toEqual([SHOT, CARD]);
   });

@@ -5,6 +5,7 @@ import {
   cardRepairFor,
   confidenceFromSourceName,
   isVendorHealthProof,
+  slotHasWorkoutCardFile,
   traceMissing,
   workoutFromStoredSession,
 } from '@/lib/health/cardRedraw';
@@ -52,6 +53,9 @@ const CARD_SLOT = {
   healthWorkoutId: WORKOUT_ID,
   health: WALK,
 };
+
+const RECAP_URL =
+  'https://example.supabase.co/storage/v1/object/sign/challenge-proofs/u/c/workout_card-1.jpg';
 
 const CHECKIN = {
   id: 'checkin-1',
@@ -161,35 +165,38 @@ describe('which posted cards get drawn again', () => {
     expect(work?.hadCard).toBe(true);
   });
 
-  // The whole point of the pass: a card the current renderer already drew is finished work.
-  it('leaves a card alone once it carries the current stamp and its graph', () => {
+  it('leaves a check-in alone once a workout_card file is stored', () => {
     const work = cardRepairFor({
       ...CHECKIN,
       proof_parts: {
         p_hr: {
           ...CARD_SLOT,
+          url: RECAP_URL,
+          urls: [RECAP_URL],
           cardVersion: WORKOUT_CARD_VERSION,
           health: { ...WALK, hrSeries: [98, 104, 111] },
         },
       },
     });
     expect(work).toBeNull();
+    expect(slotHasWorkoutCardFile({ url: RECAP_URL })).toBe(true);
+    expect(slotHasWorkoutCardFile(CARD_SLOT)).toBe(false);
   });
 
   /**
-   * The card the graph never reached. Stamping it current and walking away is what would leave it
-   * graphless for good, since only this phone can read the series.
+   * A stamp without the JPEG is not a card. The screenshot stays; the recap is still missing.
+   * The graph is not fetched from Apple — the redraw uses the numbers already stored.
    */
-  it('comes back for a current card whose heart-rate trace is still missing', () => {
+  it('redraws a stamped slot whose file is a screenshot, not a workout_card', () => {
     const work = cardRepairFor({
       ...CHECKIN,
       proof_parts: { p_hr: { ...CARD_SLOT, cardVersion: WORKOUT_CARD_VERSION } },
     });
-    expect(work?.reason).toBe('trace');
+    expect(work?.reason).toBe('renderer');
     expect(work?.proofId).toBe('p_hr');
   });
 
-  it('does not chase a trace for a workout that recorded no heart rate', () => {
+  it('still draws a card when the workout recorded no heart rate', () => {
     const work = cardRepairFor({
       ...CHECKIN,
       proof_parts: {
@@ -200,20 +207,21 @@ describe('which posted cards get drawn again', () => {
         },
       },
     });
-    expect(work).toBeNull();
+    expect(work?.proofId).toBe('p_hr');
   });
 
-  /**
-   * The endless pass. A trace repair is dropped unstamped when Health has nothing to give, so on a
-   * device that can never answer it matched, found nothing and came back on every app open.
-   */
-  it('does not queue a trace repair on a device that cannot read a series', () => {
-    const current = {
+  it('draws a missing file on a device that cannot read a heart-rate series', () => {
+    const missing = {
       ...CHECKIN,
       proof_parts: { p_hr: { ...CARD_SLOT, cardVersion: WORKOUT_CARD_VERSION } },
     };
-    expect(cardRepairFor(current, undefined, { traceReadable: true })?.reason).toBe('trace');
-    expect(cardRepairFor(current, undefined, { traceReadable: false })).toBeNull();
+    const stored = {
+      ...CHECKIN,
+      proof_parts: { p_hr: { ...CARD_SLOT, url: RECAP_URL, urls: [CARD_SLOT.url, RECAP_URL] } },
+    };
+    expect(cardRepairFor(missing, undefined, { traceReadable: false })?.reason).toBe('renderer');
+    expect(cardRepairFor(stored, undefined, { traceReadable: true })).toBeNull();
+    expect(cardRepairFor(stored, undefined, { traceReadable: false })).toBeNull();
   });
 
   it('still fixes a wrong number on a device that cannot read a series', () => {
@@ -221,13 +229,15 @@ describe('which posted cards get drawn again', () => {
     expect(cardRepairFor(CHECKIN, LABELS, { traceReadable: false })?.reason).toBe('renderer');
   });
 
-  it('chases the trace by default, so only an explicit false opts out', () => {
+  it('does not ask for a graph once the recap file is already on the slot', () => {
     const current = {
       ...CHECKIN,
-      proof_parts: { p_hr: { ...CARD_SLOT, cardVersion: WORKOUT_CARD_VERSION } },
+      proof_parts: {
+        p_hr: { ...CARD_SLOT, url: RECAP_URL, urls: [RECAP_URL], cardVersion: WORKOUT_CARD_VERSION },
+      },
     };
-    expect(cardRepairFor(current, undefined, {})?.reason).toBe('trace');
-    expect(cardRepairFor(current)?.reason).toBe('trace');
+    expect(cardRepairFor(current, undefined, {})).toBeNull();
+    expect(cardRepairFor(current)).toBeNull();
   });
 
   it('calls a stale card stale, whether or not it has a trace', () => {
@@ -240,7 +250,7 @@ describe('which posted cards get drawn again', () => {
     ).toBe('renderer');
   });
 
-  it('draws a stale card before one that is only chasing its graph', () => {
+  it('picks the first vendor slot that has no recap file', () => {
     const work = cardRepairFor({
       ...CHECKIN,
       proof_parts: {
@@ -248,7 +258,7 @@ describe('which posted cards get drawn again', () => {
         p_stale: { ...CARD_SLOT, cardVersion: WORKOUT_CARD_VERSION - 1 },
       },
     });
-    expect(work?.proofId).toBe('p_stale');
+    expect(work?.proofId).toBe('p_trace');
   });
 
   it('still picks up a card stamped by an older renderer', () => {
