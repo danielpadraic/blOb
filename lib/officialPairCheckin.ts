@@ -1,9 +1,12 @@
 import type { QueryClient } from '@tanstack/react-query';
 
+import { parseChallengeCheckin } from '@/lib/checkin/rpc';
 import {
   isPostWorkoutProof,
   isPreWorkoutProof,
+  legacyTypeForProof,
   mediaUrlKey,
+  parseProofParts,
   proofSlotPart,
   uniqueProofUrls,
   type ChallengeProof,
@@ -14,8 +17,9 @@ import type { CheckinHealthProof } from '@/lib/health/checkinHealthProof';
 import { isRecapCardUrl } from '@/lib/health/postWorkoutCard';
 import { patchFeedPostFields } from '@/lib/liveFeedPatch';
 import { dateStampInZone } from '@/lib/officialDays';
-import { OFFICIAL_COIN_TZ, officialCoinDisplayTitle, officialCoinKind } from '@/lib/officialCoin';
+import { OFFICIAL_COIN_TZ, officialCoinDateStamp, officialCoinDisplayTitle, officialCoinKind } from '@/lib/officialCoin';
 import { supabase } from '@/lib/supabase';
+import { uploadChallengeProof } from '@/utils/upload';
 
 /**
  * Official Weekly and Official Monthly share one workout.
@@ -491,4 +495,188 @@ export async function stampOfficialPairStats(input: {
         checkin_stats,
       });
   }
+}
+
+function periodInsideWindow(period: string, startsAt?: string | null, endsAt?: string | null): boolean {
+  const start = officialCoinDateStamp(startsAt);
+  const end = officialCoinDateStamp(endsAt);
+  if (start && period < start) {
+    return false;
+  }
+  if (end && period >= end) {
+    return false;
+  }
+  return true;
+}
+
+function orderedSlotUrls(parts: Record<string, ChallengeProofPart>): string[] {
+  const pick = (ids: string[]) => {
+    for (const id of ids) {
+      const url = String(parts[id]?.url ?? parts[id]?.urls?.[0] ?? '').trim();
+      if (url) {
+        return url;
+      }
+    }
+    return '';
+  };
+  return uniqueProofUrls([
+    pick(['pre', 'pre_selfie']),
+    pick(['post', 'post_selfie']),
+    pick(['hr', 'hr_monitor']),
+  ]);
+}
+
+/**
+ * Write one slot onto an existing Official day. Does not call save_checkin_proof,
+ * which always lands on today.
+ */
+export async function saveOfficialPeriodProof(input: {
+  userId: string;
+  challengeId: string;
+  periodKey: string;
+  proof: ChallengeProof;
+  uri?: string | null;
+  urls?: string[] | null;
+  mimeType?: string | null;
+  blob?: Blob | null;
+  health?: CheckinHealthProof | null;
+  healthWorkoutId?: string | null;
+  notes?: string | null;
+  caption?: string | null;
+}): Promise<ReturnType<typeof parseChallengeCheckin> | null> {
+  const period = String(input.periodKey ?? '').trim();
+  const existing = await supabase
+    .from('challenge_checkins')
+    .select('id, proof_parts, pre_selfie_url, post_selfie_url, hr_monitor_url, status, user_id, challenge_id, period_key, started_at, created_at')
+    .eq('challenge_id', input.challengeId)
+    .eq('user_id', input.userId)
+    .eq('period_key', period)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (existing.error || !existing.data?.id) {
+    throw new Error('That day is not open.');
+  }
+  const local = uniqueProofUrls([input.uri, ...(input.urls ?? [])]).filter((url) => url && !url.startsWith('health:'));
+  const remote: string[] = [];
+  for (const uri of local) {
+    if (/^https?:\/\//i.test(uri)) {
+      remote.push(uri);
+      continue;
+    }
+    const proofType = legacyTypeForProof(input.proof) ?? 'photo';
+    remote.push(
+      await uploadChallengeProof({
+        uri,
+        userId: input.userId,
+        challengeId: input.challengeId,
+        proofType,
+        mimeType: input.mimeType,
+        blob: input.blob,
+      }),
+    );
+  }
+  const parts = parseProofParts(existing.data.proof_parts);
+  const proofId = input.proof.id;
+  parts[proofId] = {
+    ...(parts[proofId] ?? { method: input.proof.method }),
+    method: input.proof.method,
+    url: remote[0] || parts[proofId]?.url || '',
+    urls: remote.length ? remote : parts[proofId]?.urls,
+    health: input.health ?? parts[proofId]?.health ?? null,
+    healthWorkoutId: input.healthWorkoutId ?? parts[proofId]?.healthWorkoutId ?? null,
+    caption: input.caption ?? parts[proofId]?.caption ?? null,
+  };
+  const legacy: Record<string, string | null> = {};
+  const first = remote[0] || null;
+  if (proofId === 'pre' || proofId === 'pre_selfie') {
+    legacy.pre_selfie_url = first;
+  }
+  if (proofId === 'post' || proofId === 'post_selfie') {
+    legacy.post_selfie_url = first;
+  }
+  if (proofId === 'hr' || proofId === 'hr_monitor') {
+    legacy.hr_monitor_url = first;
+  }
+  const write = await supabase
+    .from('challenge_checkins')
+    .update({
+      proof_parts: parts,
+      ...legacy,
+      ...(input.healthWorkoutId ? { health_workout_id: input.healthWorkoutId } : null),
+      ...(input.notes ? { notes: input.notes } : null),
+    } as never)
+    .eq('id', existing.data.id)
+    .select('*')
+    .single();
+  if (write.error || !write.data) {
+    throw new Error(write.error?.message || 'Could not save that day.');
+  }
+  const media = orderedSlotUrls(parts);
+  if (media.length) {
+    await supabase.from('posts').update({ media_urls: media }).eq('checkin_id', existing.data.id).is('deleted_at', null);
+  }
+  return parseChallengeCheckin(write.data as Record<string, unknown>);
+}
+
+/** Copy one Chicago day onto the other Official room, only if that day is inside its live window. */
+export async function mirrorOfficialCoinPeriod(input: {
+  userId: string;
+  sourceChallengeId: string;
+  siblingChallengeId: string;
+  periodKey: string;
+  siblingStartsAt?: string | null;
+  siblingEndsAt?: string | null;
+}): Promise<void> {
+  const period = String(input.periodKey ?? '').trim();
+  if (!period || !periodInsideWindow(period, input.siblingStartsAt, input.siblingEndsAt)) {
+    return;
+  }
+  const source = await supabase
+    .from('challenge_checkins')
+    .select('proof_parts, pre_selfie_url, post_selfie_url, hr_monitor_url, notes, health_workout_id, status, submitted_at, started_at')
+    .eq('challenge_id', input.sourceChallengeId)
+    .eq('user_id', input.userId)
+    .eq('period_key', period)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (source.error || !source.data) {
+    return;
+  }
+  const found = await supabase
+    .from('challenge_checkins')
+    .select('id')
+    .eq('challenge_id', input.siblingChallengeId)
+    .eq('user_id', input.userId)
+    .eq('period_key', period)
+    .limit(1)
+    .maybeSingle();
+  if (!found.data?.id) {
+    const opened = await supabase.from('challenge_checkins').insert({
+      user_id: input.userId,
+      challenge_id: input.siblingChallengeId,
+      period_key: period,
+      status: 'in_progress',
+      started_at: source.data.started_at,
+    } as never);
+    if (opened.error) {
+      return;
+    }
+  }
+  await supabase
+    .from('challenge_checkins')
+    .update({
+      proof_parts: source.data.proof_parts,
+      pre_selfie_url: source.data.pre_selfie_url,
+      post_selfie_url: source.data.post_selfie_url,
+      hr_monitor_url: source.data.hr_monitor_url,
+      notes: source.data.notes,
+      health_workout_id: source.data.health_workout_id,
+      status: source.data.status,
+      submitted_at: source.data.submitted_at,
+    } as never)
+    .eq('challenge_id', input.siblingChallengeId)
+    .eq('user_id', input.userId)
+    .eq('period_key', period);
 }

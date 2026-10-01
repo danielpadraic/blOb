@@ -13,6 +13,7 @@ import {
   OFFICIAL_COIN_TITLE,
   officialCoinAllowedDays,
   officialCoinBoardDenominator,
+  officialPastDayKey,
   isOfficialCoinBoardGhost,
   officialCoinBoardHeaderLine,
   officialCoinDaysLeft,
@@ -159,6 +160,26 @@ describe('officialCoinDaysLeft', () => {
   it('counts today as still open', () => {
     expect(officialCoinDaysLeft(WEEKLY, FRIDAY)).toBe(3);
     expect(officialCoinDaysLeft(MONTHLY, FRIDAY)).toBe(6);
+  });
+});
+
+describe('officialPastDayKey', () => {
+  it('opens a past day inside this window and refuses today or September on October', () => {
+    const october = new Date('2026-10-01T15:00:00.000Z');
+    const weekly = {
+      official_kind: 'coin_weekly',
+      starts_at: '2026-09-28T05:00:00.000Z',
+      ends_at: '2026-10-05T05:00:00.000Z',
+    };
+    const monthly = {
+      official_kind: 'coin_monthly',
+      starts_at: '2026-10-01T05:00:00.000Z',
+      ends_at: '2026-11-01T05:00:00.000Z',
+    };
+    expect(officialPastDayKey('2026-09-29', weekly, october)).toBe('2026-09-29');
+    expect(officialPastDayKey('2026-10-01', weekly, october)).toBeNull();
+    expect(officialPastDayKey('2026-09-29', monthly, october)).toBeNull();
+    expect(officialPastDayKey('2026-09-29', { id: 'private' }, october)).toBeNull();
   });
 });
 

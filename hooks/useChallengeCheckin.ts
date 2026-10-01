@@ -449,10 +449,12 @@ export function usePeriodCheckin(
   challengeId: string | undefined,
   challenge?: PeriodChallenge | null,
   subjectUserId?: string | null,
+  /** Official Coin only. A past Chicago day. Omitted means today. */
+  dateOverride?: string | null,
 ) {
   const { user } = useAuth();
   const userId = subjectUserId?.trim() || user?.id;
-  const date = periodKeyFor(challenge);
+  const date = dateOverride || periodKeyFor(challenge);
   const official = isOfficialPeriodChallenge(challenge);
 
   return useQuery({

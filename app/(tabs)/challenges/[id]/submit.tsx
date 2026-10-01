@@ -178,9 +178,11 @@ import {
   sumComparableMetricRows,
 } from '@/lib/comparablePoints';
 import { allowsMultiCheckin, checkinPeriodComplete } from '@/lib/loggable';
-import { isOfficialCoinChallenge } from '@/lib/officialCoin';
+import { isOfficialCoinChallenge, officialCoinDateStamp, officialPastDayKey } from '@/lib/officialCoin';
 import {
   alignOfficialPairPosts,
+  mirrorOfficialCoinPeriod,
+  saveOfficialPeriodProof,
   fetchOfficialPairCheckin,
   mergeOfficialPairParts,
   orderedCheckinSlides,
@@ -360,7 +362,7 @@ export default function SubmitWorkoutScreen() {
 }
 
 function SubmitWorkoutInner() {
-  const params = useLocalSearchParams<{ id: string; from?: string; done?: string; tab?: string; for?: string; lift?: string }>();
+  const params = useLocalSearchParams<{ id: string; from?: string; done?: string; tab?: string; for?: string; lift?: string; day?: string }>();
   const rawId = firstRouteParam(params.id);
   const id = isChallengeRouteId(rawId) ? rawId : '';
   const forParam = firstRouteParam(params.for);
@@ -448,7 +450,8 @@ function SubmitWorkoutInner() {
   const updateProfile = useUpdateProfile();
   const distanceUnit = athleteDistanceUnit(profile?.weight_unit);
   const sessionDistance = distanceProofIsSessionLog(challengeQuery.data);
-  const checkinQuery = usePeriodCheckin(id, challengeQuery.data, isProxy ? proxyForId : undefined);
+  const pastDay = officialPastDayKey(firstRouteParam(params.day), challengeQuery.data);
+  const checkinQuery = usePeriodCheckin(id, challengeQuery.data, isProxy ? proxyForId : undefined, pastDay);
   const historyQuery = useCheckinHistory(id, Boolean(challengeQuery.data), isProxy ? proxyForId : undefined);
   const saveProof = useSaveCheckinProof(id);
   // One Official Check-In fans out to the Weekly and Monthly rooms server side.
@@ -461,6 +464,9 @@ function SubmitWorkoutInner() {
       })
     : null;
   const siblingPeriodKeys = useMemo(() => {
+    if (pastDay) {
+      return [pastDay];
+    }
     const keys = new Set<string>();
     const sibling =
       coinRooms.data?.weekly?.challenge.id === siblingChallengeId
@@ -479,7 +485,7 @@ function SubmitWorkoutInner() {
       }
     }
     return [...keys];
-  }, [challengeQuery.data, coinRooms.data?.monthly?.challenge, coinRooms.data?.weekly?.challenge, siblingChallengeId]);
+  }, [challengeQuery.data, coinRooms.data?.monthly?.challenge, coinRooms.data?.weekly?.challenge, pastDay, siblingChallengeId]);
   const siblingCheckin = useQuery({
     queryKey: ['official-pair-checkin', siblingChallengeId, subjectId, siblingPeriodKeys.join('|')],
     enabled: Boolean(officialCoin && siblingChallengeId && subjectId && !isProxy),
@@ -638,7 +644,7 @@ function SubmitWorkoutInner() {
 
   const finishReadyRef = useRef(false);
   useEffect(() => {
-    if (!officialCoin || !id || !challenge || !checkinQuery.isFetched || isProxy || finishReadyRef.current) {
+    if (pastDay || !officialCoin || !id || !challenge || !checkinQuery.isFetched || isProxy || finishReadyRef.current) {
       return;
     }
     if (checkinQuery.data?.phase !== 'ready') {
@@ -664,6 +670,7 @@ function SubmitWorkoutInner() {
     id,
     isProxy,
     officialCoin,
+    pastDay,
     submitCheckin,
   ]);
 
@@ -1276,6 +1283,24 @@ function SubmitWorkoutInner() {
     return row;
   }
 
+  async function mirrorSavedOfficialDay(period: string) {
+    if (!officialCoin || !siblingChallengeId || !uid || !id || isProxy) {
+      return;
+    }
+    const sibling =
+      coinRooms.data?.weekly?.challenge.id === siblingChallengeId
+        ? coinRooms.data?.weekly?.challenge
+        : coinRooms.data?.monthly?.challenge;
+    await mirrorOfficialCoinPeriod({
+      userId: uid,
+      sourceChallengeId: id,
+      siblingChallengeId,
+      periodKey: period,
+      siblingStartsAt: sibling?.starts_at,
+      siblingEndsAt: sibling?.ends_at,
+    }).catch(() => undefined);
+  }
+
   async function persistProof(proof: ChallengeProof, draft?: SlotDraft, notes?: string | null) {
     if (!id) {
       return;
@@ -1311,7 +1336,29 @@ function SubmitWorkoutInner() {
       ...(isProxy ? { forUserId: proxyForId } : null),
     };
     try {
-      return await saveProof.mutateAsync(payload);
+      if (pastDay && uid && proof) {
+        const kept = await saveOfficialPeriodProof({
+          userId: uid,
+          challengeId: id,
+          periodKey: pastDay,
+          proof,
+          uri,
+          urls,
+          mimeType: draft?.mimeType,
+          blob,
+          health: draft?.health ?? null,
+          healthWorkoutId: draft?.healthWorkoutId ?? null,
+          notes,
+          caption: payload.caption,
+        });
+        await mirrorSavedOfficialDay(pastDay);
+        return kept;
+      }
+      const savedRow = await saveProof.mutateAsync(payload);
+      if (officialCoin && uid && !isProxy) {
+        await mirrorSavedOfficialDay(officialCoinDateStamp(new Date()));
+      }
+      return savedRow;
     } catch (caught) {
       const kind = classifyCheckinError(caught);
       if (kind === 'reused') {
@@ -1707,7 +1754,16 @@ function SubmitWorkoutInner() {
           .join(' ') || null;
       };
       const alreadySubmitted = checkinQuery.data?.phase === 'submitted';
-      const sending = (honorOnly || readyNow) && (multiSubmit || !alreadySubmitted);
+      if (pastDay && readyNow && saved?.id && uid && !alreadySubmitted) {
+        await supabase
+          .from('challenge_checkins')
+          .update({ status: 'submitted', submitted_at: new Date().toISOString() })
+          .eq('id', saved.id)
+          .eq('user_id', uid)
+          .eq('period_key', pastDay);
+        await mirrorSavedOfficialDay(pastDay);
+      }
+      const sending = !pastDay && (honorOnly || readyNow) && (multiSubmit || !alreadySubmitted);
       const submitted = sending ? await submitCheckin.mutateAsync({ countDay: readyNow }) : null;
       // submit_checkin answers with the check-in it wrote. Getting no check-in back means the send did
       // not land even though nothing threw, so this stops short of the happy path — landing them on
@@ -1901,7 +1957,10 @@ function SubmitWorkoutInner() {
         pairPostIds = await alignOfficialPairPosts({
           userId: uid,
           challengeIds: [id, siblingChallengeId ?? ''],
-          checkinIds: [checkinId, siblingCheckin.data?.id].filter((value): value is string => Boolean(value)),
+          checkinIds: (pastDay
+            ? [checkinId]
+            : [checkinId, siblingCheckin.data?.id]
+          ).filter((value): value is string => Boolean(value)),
           mediaUrls: slides,
           content: body,
           queryClient,
@@ -2104,7 +2163,7 @@ function SubmitWorkoutInner() {
           post_selfie_url: saved.post_selfie_url,
           hr_monitor_url: saved.hr_monitor_url,
         });
-        if (remaining.length === 0 && saved.phase !== 'submitted') {
+        if (remaining.length === 0 && saved.status !== 'submitted') {
           finishReadyRef.current = true;
           await submitCheckin.mutateAsync({ countDay: true });
         }

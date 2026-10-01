@@ -219,6 +219,37 @@ export function officialCoinWindowDays(
  * Weekly is this Chicago week (7). Monthly is this Chicago month.
  * A short stored `ends_at` (a Friday join that spans 6 days) is not the window.
  */
+/**
+ * A past Official day the person can still finish.
+ * Today and any day outside this room's live window are ignored.
+ */
+export function officialPastDayKey(
+  raw: string | null | undefined,
+  challenge?: OfficialCoinChallenge | null,
+  now: Date = new Date(),
+): string | null {
+  if (!isOfficialCoinChallenge(challenge)) {
+    return null;
+  }
+  const key = String(raw ?? '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) {
+    return null;
+  }
+  const today = officialCoinDateStamp(now);
+  const start = officialCoinDateStamp(challenge?.starts_at);
+  const end = officialCoinDateStamp(challenge?.ends_at);
+  if (!today || key >= today) {
+    return null;
+  }
+  if (start && key < start) {
+    return null;
+  }
+  if (end && key >= end) {
+    return null;
+  }
+  return key;
+}
+
 export function officialCoinBoardDenominator(
   challenge?: OfficialCoinChallenge | null,
   now: Date = new Date(),

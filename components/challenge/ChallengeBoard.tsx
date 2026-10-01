@@ -72,8 +72,8 @@ import {
   officialCoinScoreLabel,
   OFFICIAL_COIN_SPLIT_LINE,
 } from '@/lib/officialCoin';
-import { useOfficialCoinDays, type OfficialCoinDay } from '@/hooks/useOfficialCoin';
-import { challengeDetailHref } from '@/lib/routes';
+import { useOfficialCoinDays, useOfficialCoinFinishDays, type OfficialCoinDay } from '@/hooks/useOfficialCoin';
+import { challengeDetailHref, checkinSubmitHref } from '@/lib/routes';
 import { flexChildMin, THEME } from '@/lib/theme';
 import type { Challenge, ChallengeParticipantWithProfile, ChallengeSettlementView } from '@/lib/types';
 
@@ -115,6 +115,7 @@ export function ChallengeBoard({
   // Official Coin counts days in the current Chicago window. No knockout chrome.
   const officialCoin = isOfficialCoinChallenge(challenge);
   const coinDays = useOfficialCoinDays(challenge, officialCoin);
+  const finishDays = useOfficialCoinFinishDays(challenge, viewerId, officialCoin && joined);
   const quantityBoard = usesQuantityScoring(challenge);
   const racingRoster = useMemo(
     () =>
@@ -200,9 +201,13 @@ export function ChallengeBoard({
   const requiredDays = storedDurationDays(challenge) ?? challengeTargetCount(challenge);
   /** Official window: 7 this week, or the Chicago month. Not a short ends_at span. */
   const coinDenominator = officialCoin ? officialCoinBoardDenominator(challenge) : requiredDays;
-  const provedDaysFor = (userId: string, stored: number) => {
-    if (!officialCoin || !coinDays.isSuccess) {
-      return stored;
+  const provedDaysFor = (userId: string, _stored: number) => {
+    if (!officialCoin) {
+      return _stored;
+    }
+    // Never paint a previous month's stored total on the new window.
+    if (!coinDays.isSuccess) {
+      return 0;
     }
     return coinDays.data?.get(userId)?.length ?? 0;
   };
@@ -547,6 +552,37 @@ export function ChallengeBoard({
         </AppText>
       ) : (
         <StandingsBody header={columnHeader} freeze={!compact}>
+          {finishDays.data?.length ? (
+            <View style={{ gap: 8, paddingBottom: 8 }}>
+              {finishDays.data.map((entry) => {
+                const [year, month, day] = entry.periodKey.split('-').map(Number);
+                const label = new Date(Date.UTC(year, month - 1, day)).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  timeZone: 'UTC',
+                });
+                return (
+                  <Pressable
+                    key={entry.checkinId}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${label}. Add the missing workout.`}
+                    onPress={() => router.push(checkinSubmitHref(challenge.id, { day: entry.periodKey }))}
+                    style={{
+                      minHeight: 44,
+                      justifyContent: 'center',
+                      borderRadius: 999,
+                      paddingHorizontal: 14,
+                      backgroundColor: THEME.accentSoft,
+                      alignSelf: 'flex-start',
+                    }}>
+                    <AppText style={{ fontSize: 14, fontWeight: '700', color: THEME.accent }}>
+                      {`${label} · add the workout`}
+                    </AppText>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
           {standingRows}
         </StandingsBody>
       )}

@@ -8,6 +8,7 @@ import {
   canRejoinOfficialCoin,
   isOfficialCoinChallenge,
   officialCoinAllowedDays,
+  officialCoinDateStamp,
   officialCoinKind,
   type OfficialCoinChallenge,
   type OfficialCoinKind,
@@ -348,6 +349,65 @@ export function useOfficialCoinDays(
         );
       }
       return byUser;
+    },
+  });
+}
+
+/** Past days in this live window that still need a slot. Not counted. */
+export function useOfficialCoinFinishDays(
+  challenge?: OfficialCoinChallenge | null,
+  userId?: string | null,
+  enabled = true,
+) {
+  const challengeId = String(challenge?.id ?? '').trim();
+  const startKey = normalizePeriodKey(challenge?.starts_at ?? '');
+  const endKey = normalizePeriodKey(challenge?.ends_at ?? '');
+  const viewer = String(userId ?? '').trim();
+  const on = enabled && Boolean(challengeId && viewer) && isOfficialCoinChallenge(challenge);
+
+  return useQuery({
+    queryKey: ['official-coin-finish', challengeId, viewer, startKey, endKey],
+    enabled: on,
+    queryFn: async (): Promise<OfficialCoinDay[]> => {
+      const today = officialCoinDateStamp(new Date());
+      const checkins = await supabase
+        .from('challenge_checkins')
+        .select('id, user_id, period_key, proof_parts, pre_selfie_url, post_selfie_url, hr_monitor_url, health_workout_id')
+        .eq('challenge_id', challengeId)
+        .eq('user_id', viewer)
+        .gte('period_key', startKey)
+        .lt('period_key', endKey)
+        .order('period_key', { ascending: true });
+      if (checkins.error) {
+        return [];
+      }
+      return ((checkins.data ?? []) as Array<{
+        id: string;
+        user_id: string;
+        period_key: string;
+        proof_parts?: unknown;
+        pre_selfie_url?: string | null;
+        post_selfie_url?: string | null;
+        hr_monitor_url?: string | null;
+        health_workout_id?: string | null;
+      }>)
+        .filter((row) => {
+          const key = normalizePeriodKey(row.period_key);
+          if (!key || !today || key >= today) {
+            return false;
+          }
+          if (officialPeriodCounts(row)) {
+            return false;
+          }
+          return Boolean(row.pre_selfie_url || row.post_selfie_url || row.hr_monitor_url || row.health_workout_id || row.proof_parts);
+        })
+        .map((row, index) => ({
+          day: index + 1,
+          periodKey: normalizePeriodKey(row.period_key),
+          userId: viewer,
+          checkinId: String(row.id),
+          postId: null,
+        }));
     },
   });
 }
