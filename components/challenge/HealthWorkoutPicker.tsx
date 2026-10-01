@@ -324,7 +324,7 @@ export function HealthWorkoutPicker({
   }
 
   return (
-    <View className="flex-1" style={{ backgroundColor: THEME.background }}>
+    <View className="flex-1" style={{ backgroundColor: THEME.background, minHeight: 420 }}>
       <View className="px-5 pt-3 pb-2">
         <AppText className="text-lg font-bold text-charcoal">{copy('health.sheetTitle')}</AppText>
         {challengeTitle ? (
@@ -387,6 +387,11 @@ export function HealthWorkoutPicker({
           <AppText className="mt-3 text-center text-[15px] font-semibold text-charcoal">
             No workouts in Health for this window.
           </AppText>
+          {Platform.OS === 'ios' ? (
+            <AppText className="mt-2 text-center text-sm" style={{ color: THEME.textMuted }}>
+              {healthHowToIosPath()}
+            </AppText>
+          ) : null}
           <View className="mt-5 w-full gap-3">
             <Button
               title="Load earlier"

@@ -279,15 +279,24 @@ async function fetchMergedOfficialCheckin(
     }
     throw new Error(getErrorMessage(recent.error));
   }
+  if (isOfficialCoinChallenge(challenge as never)) {
+    const today = normalizePeriodKey(key) || officialCoinDateStamp(new Date());
+    const exactRows = ((recent.data ?? []) as unknown as Record<string, unknown>[]).filter(
+      (row) => normalizePeriodKey(row.period_key) === today,
+    );
+    const mergedToday = mergePeriodCheckinRows(exactRows);
+    if (!mergedToday) {
+      return null;
+    }
+    const feedUrls = await fetchPostsMediaForCheckins(periodCheckinIds(exactRows));
+    if (feedUrls.length > 0) {
+      mergedToday.proof_parts = mergeFeedMediaIntoParts(parseProofParts(mergedToday.proof_parts), feedUrls);
+    }
+    return hydrateCheckin(mergedToday);
+  }
   const candidates = new Set(checkinPeriodKeyCandidates(challenge).map(normalizePeriodKey));
   if (key) {
     candidates.add(key);
-  }
-  if (isOfficialCoinChallenge(challenge as never)) {
-    const today = officialCoinDateStamp(new Date());
-    if (today) {
-      candidates.add(today);
-    }
   }
   const zone = challengeClockTz(challenge);
   const rows = ((recent.data ?? []) as unknown as Record<string, unknown>[]).filter((row) =>
@@ -314,6 +323,11 @@ export async function fetchCurrentPeriodCheckin(
   date?: string,
 ): Promise<ChallengeCheckin | null> {
   const key = normalizePeriodKey(date ?? periodKeyFor(challenge));
+  // Official Coin: today's Chicago period only. Private / 30-Day / points stay on the lookup below.
+  if (isOfficialCoinChallenge(challenge as never)) {
+    const merged = await fetchMergedOfficialCheckin(challengeId, userId, challenge, key);
+    return merged;
+  }
   if (isOfficialPeriodChallenge(challenge)) {
     const merged = await fetchMergedOfficialCheckin(challengeId, userId, challenge, key);
     if (merged) {

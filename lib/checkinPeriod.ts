@@ -16,12 +16,14 @@ import {
   zonedWallTime,
   type OfficialDayWindowRow,
 } from '@/lib/officialDays';
+import { isOfficialCoinChallenge, officialCoinDateStamp } from '@/lib/officialCoin';
 import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type CheckinPeriodChallenge = MissDutyChallenge & {
   is_official?: boolean | null;
+  official_kind?: string | null;
   series_id?: string | null;
   status?: string | null;
   starts_at?: string | null;
@@ -145,6 +147,10 @@ export function checkinPeriodKey(
   challenge?: CheckinPeriodChallenge | null,
   now = new Date(),
 ): string {
+  if (challenge && isOfficialCoinChallenge(challenge)) {
+    // One Official check-in per Chicago calendar day. Not the week stamp, not UTC.
+    return normalizePeriodKey(officialCoinDateStamp(now));
+  }
   if (challenge && isOfficialSeriesChallenge(challenge)) {
     const windowDate = officialLogDate(challenge, now);
     if (windowDate) {
@@ -205,6 +211,10 @@ export function checkinPeriodKeyCandidates(
   now = new Date(),
 ): string[] {
   const keys = new Set<string>();
+  if (challenge && isOfficialCoinChallenge(challenge)) {
+    const today = checkinPeriodKey(challenge, now);
+    return today ? [today] : [];
+  }
   keys.add(checkinPeriodKey(challenge, now));
   if (challenge && isOfficialSeriesChallenge(challenge)) {
     const windowDate = officialLogDate(challenge, now);

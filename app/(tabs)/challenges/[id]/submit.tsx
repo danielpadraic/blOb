@@ -1901,6 +1901,7 @@ function SubmitWorkoutInner() {
         pairPostIds = await alignOfficialPairPosts({
           userId: uid,
           challengeIds: [id, siblingChallengeId ?? ''],
+          checkinIds: [checkinId, siblingCheckin.data?.id].filter((value): value is string => Boolean(value)),
           mediaUrls: slides,
           content: body,
           queryClient,

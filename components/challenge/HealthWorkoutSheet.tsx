@@ -59,7 +59,7 @@ export function HealthWorkoutSheet({
         <View className="mb-1 items-center pt-2">
           <View className="h-1 w-10 rounded-full" style={{ backgroundColor: THEME.border }} />
         </View>
-        <View style={{ maxHeight: 520 }}>
+        <View style={{ height: 520, minHeight: 420 }}>
           <HealthWorkoutPicker
             challengeTitle={challengeTitle}
             proof={proof}

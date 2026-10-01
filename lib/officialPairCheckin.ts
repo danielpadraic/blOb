@@ -277,6 +277,8 @@ export async function fetchOfficialPairCheckin(input: {
 export async function alignOfficialPairPosts(input: {
   userId: string;
   challengeIds: readonly string[];
+  /** Today's check-in ids only. Older posts in the room are left alone. */
+  checkinIds: readonly string[];
   mediaUrls: readonly string[];
   content?: string | null;
   queryClient?: Pick<QueryClient, 'setQueriesData'>;
@@ -284,14 +286,16 @@ export async function alignOfficialPairPosts(input: {
   const userId = input.userId.trim();
   const challengeIds = [...new Set(input.challengeIds.map((id) => String(id ?? '').trim()).filter(Boolean))];
   const mediaUrls = uniqueProofUrls([...input.mediaUrls]);
-  if (!userId || challengeIds.length === 0 || mediaUrls.length === 0) {
+  const checkinIds = [...new Set(input.checkinIds.map((id) => String(id ?? '').trim()).filter(Boolean))];
+  if (!userId || challengeIds.length === 0 || mediaUrls.length === 0 || checkinIds.length === 0) {
     return [];
   }
   const { data, error } = await supabase
     .from('posts')
-    .select('id, challenge_id, content, checkin_stats, media_urls, created_at')
+    .select('id, challenge_id, checkin_id, content, checkin_stats, media_urls, created_at')
     .eq('author_id', userId)
     .in('challenge_id', challengeIds)
+    .in('checkin_id', checkinIds)
     .eq('source', 'checkin')
     .is('deleted_at', null)
     .order('created_at', { ascending: true })
@@ -302,6 +306,7 @@ export async function alignOfficialPairPosts(input: {
   const rows = data as Array<{
     id: string;
     challenge_id: string;
+    checkin_id?: string | null;
     content?: string | null;
     checkin_stats?: CheckinProofStats | null;
     created_at?: string;

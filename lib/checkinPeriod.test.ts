@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   checkinPeriodCacheStamp,
   checkinPeriodKey,
+  checkinPeriodKeyCandidates,
   challengeClockTz,
   consistencyPeriodAt,
   currentRequiredPeriodWindow,
@@ -158,6 +159,47 @@ describe('consistencyPeriodAt', () => {
     );
     expect(slice?.periodKey).toBe('2026-09-02');
     expect(slice?.endsAt.toISOString()).toBe('2026-09-03T06:00:00.000Z');
+  });
+});
+
+describe('Official Coin period', () => {
+  it('is today in Chicago, not the week stamp, and a private 30-day key stays on starts_at', () => {
+    const friday = new Date('2026-09-25T17:59:00.000Z');
+    expect(
+      checkinPeriodKey(
+        {
+          official_kind: 'coin_weekly',
+          timezone: 'America/Chicago',
+          frequency: 'weekly',
+          starts_at: '2026-09-21T05:00:00.000Z',
+          status: 'live',
+        },
+        friday,
+      ),
+    ).toBe('2026-09-25');
+    expect(
+      checkinPeriodKeyCandidates(
+        {
+          official_kind: 'coin_weekly',
+          timezone: 'America/Chicago',
+          starts_at: '2026-09-21T05:00:00.000Z',
+        },
+        friday,
+      ),
+    ).toEqual(['2026-09-25']);
+    expect(
+      checkinPeriodKey(
+        {
+          challenge_type: 'consistency',
+          format: 'consistency',
+          frequency: 'daily',
+          status: 'live',
+          starts_at: '2026-09-01T06:00:00.000Z',
+          timezone: 'America/Boise',
+        },
+        new Date('2026-09-02T19:00:00-06:00'),
+      ),
+    ).toBe('2026-09-02');
   });
 });
 
