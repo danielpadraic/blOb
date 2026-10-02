@@ -313,7 +313,7 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
             ))}
           </ScrollView>
           {muscle && exercises.length > 0 ? (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingRight: 12 }}>
               <QuietFilter label="All exercises" on={!exercise} onPress={() => { setExercise(null); setBarHint(''); }} />
               {exercises.map((name) => (
                 <QuietFilter
@@ -326,7 +326,7 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
                   }}
                 />
               ))}
-            </View>
+            </ScrollView>
           ) : null}
         </Card>
       ) : null}
