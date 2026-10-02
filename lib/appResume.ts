@@ -16,8 +16,12 @@ function normalizePath(pathname: string): string {
   return (pathname.split('?')[0] ?? '').replace(/\/$/, '') || '/';
 }
 
-function isHomePath(path: string): boolean {
-  return path === '/feed' || path === '/' || path === '/home';
+function isDashboardPath(path: string): boolean {
+  return path === '/profile';
+}
+
+function isPublicProfilePath(path: string): boolean {
+  return path.startsWith('/profile/u/');
 }
 
 const EXPLICIT_LAUNCH =
@@ -53,10 +57,10 @@ export function isExplicitLaunchUrl(url?: string | null): boolean {
 }
 
 /**
- * Cold start / kill+reopen: Home unless this process was opened from a real link.
+ * Cold start / kill: leave the restored screen for the Fitness dashboard.
  *
- * A lift, History, or last-open challenge must not steal Home after a force-quit. Deep links
- * (notification, challenge View, auth callback) still land where they were pointed.
+ * Coming back from the background does not use this. A notification, a shared challenge,
+ * a public profile link, and an in-progress check-in stay where they were opened.
  */
 export function shouldResetToHomeOnLaunch(input: {
   pathname: string;
@@ -67,8 +71,8 @@ export function shouldResetToHomeOnLaunch(input: {
     return false;
   }
   const path = normalizePath(input.pathname);
-  if (isHomePath(path)) {
+  if (isDashboardPath(path) || isPublicProfilePath(path) || KEEP_ROUTE.test(path)) {
     return false;
   }
-  return !KEEP_ROUTE.test(path);
+  return true;
 }

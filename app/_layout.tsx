@@ -8,7 +8,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Platform, View } from 'react-native';
+import { Platform, useWindowDimensions, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -23,6 +23,7 @@ import { useAppOpenPing } from '@/hooks/useAppOpenPing';
 import { installMediaLifecycle, stopMediaUnlessCameraPath } from '@/lib/cameraSession';
 import { peekPendingInvite } from '@/lib/challengeInvites';
 import { challengeInviteHref, inviteHref } from '@/lib/routes';
+import { isWideDashboardWindow } from '@/lib/dashboard/wide';
 import { FEED_COLUMN_MAX, THEME } from '@/lib/theme';
 import { queryClient } from '@/lib/queryClient';
 import { paymentsProviderError } from '@/services/payments';
@@ -203,7 +204,8 @@ function BootSplash() {
 }
 
 function AppFrame({ children }: { children: ReactNode }) {
-  if (Platform.OS !== 'web') {
+  const { width } = useWindowDimensions();
+  if (Platform.OS !== 'web' || isWideDashboardWindow(width)) {
     return children;
   }
   return (

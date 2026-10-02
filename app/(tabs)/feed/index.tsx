@@ -14,6 +14,7 @@ import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { useAuth } from '@/hooks/useAuth';
+import { markHomeVisited } from '@/lib/dashboard/homePrompt';
 import { useCopyTone } from '@/hooks/useCopy';
 import { useFeedActiveChallenges } from '@/hooks/useChallenge';
 import { useCreateComment, useCreatePost, useHomeFeed, useToggleReaction } from '@/hooks/useFeed';
@@ -49,12 +50,13 @@ export default function FeedScreen() {
   useFocusEffect(
     useCallback(() => {
       requestWorkoutCardRedraw();
+      markHomeVisited(user?.id);
       stopAllLiveMedia();
       clearLastOpenChallenge();
       if ((feed.data?.length ?? 0) === 0) {
         void refetchHome();
       }
-    }, [feed.data?.length, refetchHome]),
+    }, [feed.data?.length, refetchHome, user?.id]),
   );
   const createPost = useCreatePost();
   const createComment = useCreateComment();

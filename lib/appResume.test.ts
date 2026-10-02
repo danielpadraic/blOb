@@ -44,14 +44,14 @@ describe('shouldReturnHomeOnResume', () => {
 });
 
 describe('shouldResetToHomeOnLaunch', () => {
-  it('opens Home after a force-quit on a lift, not back into the session', () => {
+  it('leaves a force-quit lift for the dashboard, not back into the session', () => {
     expect(
       shouldResetToHomeOnLaunch({ pathname: '/lift/9f1c2e0a-0000-4000-8000-000000000000' }),
     ).toBe(true);
     expect(shouldResetToHomeOnLaunch({ pathname: '/profile/lifts' })).toBe(true);
   });
 
-  it('opens Home after a force-quit on a challenge, not the last lobby', () => {
+  it('leaves a force-quit challenge for the dashboard, not the last lobby', () => {
     expect(
       shouldResetToHomeOnLaunch({
         pathname: '/challenges/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
@@ -95,7 +95,7 @@ describe('shouldResetToHomeOnLaunch', () => {
     ).toBe(false);
   });
 
-  it('opens Home on web when the address bar is not a challenge link', () => {
+  it('leaves web for the dashboard when the address bar is not a challenge link', () => {
     expect(
       shouldResetToHomeOnLaunch({
         pathname: '/challenges/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
@@ -117,5 +117,14 @@ describe('shouldResetToHomeOnLaunch', () => {
     expect(shouldResetToHomeOnLaunch({ pathname: '/capture' })).toBe(false);
     expect(shouldResetToHomeOnLaunch({ pathname: '/checkin' })).toBe(false);
     expect(shouldResetToHomeOnLaunch({ pathname: '/auth/callback' })).toBe(false);
+  });
+
+  it('stays on the dashboard and on a public profile', () => {
+    expect(shouldResetToHomeOnLaunch({ pathname: '/profile' })).toBe(false);
+    expect(shouldResetToHomeOnLaunch({ pathname: '/profile/u/danielharder' })).toBe(false);
+  });
+
+  it('sends a killed Home visit to the dashboard', () => {
+    expect(shouldResetToHomeOnLaunch({ pathname: '/feed' })).toBe(true);
   });
 });

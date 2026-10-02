@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Tabs, usePathname, useRouter, useSegments, type Href } from 'expo-router';
-import { AppState, Platform, StyleSheet, View } from 'react-native';
+import { AppState, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { BlobTabBar } from '@/components/navigation/BlobTabBar';
+import { DashboardRail } from '@/components/dashboard/DashboardRail';
+import { isWideDashboardWindow } from '@/lib/dashboard/wide';
 import { PlusActionBar, type QuickActionId } from '@/components/navigation/PlusActionBar';
 import { AlertsOverlay } from '@/components/notifications/AlertsOverlay';
 import { SearchOverlay } from '@/components/search/SearchOverlay';
@@ -63,7 +65,7 @@ import * as Linking from 'expo-linking';
 export { AppErrorBoundary as ErrorBoundary };
 
 export const unstable_settings = {
-  initialRouteName: 'feed',
+  initialRouteName: 'profile',
 };
 
 export default function TabLayout() {
@@ -323,16 +325,17 @@ function TabLayoutInner() {
             typeof Linking.getLinkingURL === 'function' ? Linking.getLinkingURL() : null;
           const addressBar =
             Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.href : null;
-          if (
-            pathRef.current !== '/feed' &&
-            shouldResetToHomeOnLaunch({
-              pathname: launchPath.current,
-              initialUrl: addressBar || linkingUrl || initialUrl,
-              platform: Platform.OS,
-            })
-          ) {
+          const launch = launchPath.current;
+          const reset = shouldResetToHomeOnLaunch({
+            pathname: launch,
+            initialUrl: addressBar || linkingUrl || initialUrl,
+            platform: Platform.OS,
+          });
+          if (reset && pathRef.current !== '/profile') {
             clearLastOpenChallenge();
-            router.replace('/feed');
+            router.replace('/profile');
+          } else if (launch === '/profile' || launch === '/profile/') {
+            clearLastOpenChallenge();
           }
         });
     }, 280);
@@ -458,6 +461,8 @@ function TabLayoutInner() {
     }
   }
 
+  const { width } = useWindowDimensions();
+  const wide = isWideDashboardWindow(width, Platform.OS);
   const friendsTabRoot = pathname === '/friends';
   const watchOpen = isWatchSurfacePath(pathname);
   const tourLogoMenu = Boolean(tour?.active && tour.logoMenu);
@@ -471,7 +476,9 @@ function TabLayoutInner() {
     {/* Outside the header and the tab bar on purpose: the Lift Play timer has to cover both, and
         the tab navigator below clips anything absolutely positioned inside a screen. */}
     <LiftPlayHost>
-    <View className="flex-1" style={{ backgroundColor: THEME.background }}>
+    <View className="flex-1" style={{ flexDirection: wide ? 'row' : 'column', backgroundColor: THEME.background }}>
+      {wide ? <DashboardRail /> : null}
+      <View className="flex-1" style={{ minWidth: 0 }}>
       {watchOpen || isChallengeIdRoute(segments as string[]) || isCircleIdRoute(segments as string[]) || pathname.includes('/capture') ? null : (
         <TabChromeHeader
           alertsOpen={alertsOpen}
@@ -549,7 +556,7 @@ function TabLayoutInner() {
         </SocialSheetsHost>
         </InviteHost>
       </View>
-      {watchOpen || onOnboarding || isLiveCameraPath(pathname) || isLiftSessionPath(pathname) ? null : (
+      {wide || watchOpen || onOnboarding || isLiveCameraPath(pathname) || isLiftSessionPath(pathname) ? null : (
         <BlobTabBar
           composeOpen={plusOpen}
           onToggleCompose={toggleSheet}
@@ -594,6 +601,7 @@ function TabLayoutInner() {
           </View>
         </>
       )}
+      </View>
     </View>
     </LiftPlayHost>
     </MediaLightboxHost>
