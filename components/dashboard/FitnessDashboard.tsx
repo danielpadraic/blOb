@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Platform, Pressable, ScrollView, TextInput, useWindowDimensions, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
@@ -21,6 +22,9 @@ import {
 import { readDashboardRange, writeDashboardRange } from '@/lib/dashboard/rangeChoice';
 import type { DashboardRange } from '@/lib/dashboard/range';
 import { isWideDashboardWindow } from '@/lib/dashboard/wide';
+import { copy } from '@/lib/copy';
+import { healthHowToLine } from '@/lib/health/howTo';
+import { getHealthProvider } from '@/services/health';
 import { TAB_BAR_PEEK, tabBarLift, THEME, themeShadow } from '@/lib/theme';
 import type { Profile } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
@@ -111,7 +115,10 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
   const showFitness = chip === 'fitness' || chip === 'all';
   const showChallenges = chip === 'challenges' || chip === 'all' || chip === 'fitness';
   const model = dash.model;
-  const activities = source ? model.activities.filter((row) => row.source === source) : model.activities;
+  const activities = model.activities.filter((row) => !source || row.sources.includes(source));
+  const sleepCard = model.bodyCards.find((card) => card.key === 'sleep') ?? null;
+  const bodyCards = model.bodyCards.filter((card) => card.key !== 'sleep');
+  const queryClient = useQueryClient();
   const friendCount = friends.data ?? 0;
   const liveCount = model.challenges.length;
   const meta = [
@@ -246,9 +253,8 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
         </View>
       ) : null}
 
-      {chip === 'sleep' || chip === 'nutrition' ? (
-        <AppText style={{ color: THEME.textMuted }}>Later</AppText>
-      ) : null}
+      {chip === 'nutrition' ? <AppText style={{ color: THEME.textMuted }}>Later</AppText> : null}
+      {chip === 'sleep' && !sleepCard ? <AppText style={{ color: THEME.textMuted }}>Later</AppText> : null}
 
       {showFitness && model.liftVolumeLabel ? (
         <Card title="Lift">
@@ -263,9 +269,11 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
         </Card>
       ) : null}
 
-      {showFitness && model.minuteBars.length > 0 ? (
-        <Card title="Active minutes">
-          <DayChart days={model.minuteBars} />
+      {showFitness && model.checkinLabel ? (
+        <Card title="Check-in days">
+          <AppText style={{ fontSize: 28, fontWeight: '800', color: THEME.textPrimary }}>{model.checkinLabel}</AppText>
+          <DayChart days={model.checkinBars} />
+          <Source label="Check-in" />
         </Card>
       ) : null}
 
@@ -277,9 +285,10 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
         </Card>
       ) : null}
 
-      {showFitness && model.calorieLabel ? (
-        <Card title="Calories">
-          <AppText style={{ fontSize: 28, fontWeight: '800', color: THEME.textPrimary }}>{model.calorieLabel}</AppText>
+      {showFitness && model.mileLabel ? (
+        <Card title="Miles">
+          <AppText style={{ fontSize: 28, fontWeight: '800', color: THEME.textPrimary }}>{model.mileLabel}</AppText>
+          <DayChart days={model.mileBars} />
           <Source label="Check-in" />
         </Card>
       ) : null}
@@ -287,8 +296,39 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
       {showFitness && model.stepLabel ? (
         <Card title="Steps">
           <AppText style={{ fontSize: 28, fontWeight: '800', color: THEME.textPrimary }}>{model.stepLabel}</AppText>
+          <DayChart days={model.stepBars} />
           <Source label="Check-in" />
         </Card>
+      ) : null}
+
+      {showFitness && model.syncedLabel ? (
+        <AppText style={{ color: THEME.textMuted }}>{model.syncedLabel}</AppText>
+      ) : null}
+
+      {showFitness
+        ? bodyCards.map((card) => (
+            <Card key={card.key} title={card.title}>
+              <AppText style={{ fontSize: 28, fontWeight: '800', color: THEME.textPrimary }}>{card.valueLabel}</AppText>
+              <DayChart days={card.bars} />
+              {card.source ? <Source label={sourceChipLabel(card.source)} /> : null}
+            </Card>
+          ))
+        : null}
+
+      {(chip === 'sleep' || chip === 'all') && sleepCard ? (
+        <Card title="Sleep">
+          <AppText style={{ fontSize: 28, fontWeight: '800', color: THEME.textPrimary }}>{sleepCard.valueLabel}</AppText>
+          <DayChart days={sleepCard.bars} />
+          {sleepCard.source ? <Source label={sourceChipLabel(sleepCard.source)} /> : null}
+        </Card>
+      ) : null}
+
+      {showFitness && !dash.loading && bodyCards.length === 0 && !sleepCard && Platform.OS !== 'web' ? (
+        <AllowHealth
+          onAllowed={() => {
+            void queryClient.invalidateQueries({ queryKey: ['fitness-dashboard'] });
+          }}
+        />
       ) : null}
 
       {showChallenges && model.challenges.length > 0 ? (
@@ -349,12 +389,16 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
             <Pressable
               key={row.id}
               accessibilityRole="button"
-              onPress={() => router.push(row.href as never)}
+              onPress={() => {
+                if (row.href) {
+                  router.push(row.href as never);
+                }
+              }}
               style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
               <AppText style={columnCell} numberOfLines={2}>{row.title}</AppText>
               <AppText style={columnCell}>{row.when}</AppText>
               <AppText style={columnCell}>{row.proof}</AppText>
-              <AppText style={columnCell}>{sourceChipLabel(row.source)}</AppText>
+              <AppText style={columnCell}>{row.sources.map((item) => sourceChipLabel(item)).join(' · ')}</AppText>
             </Pressable>
           ))}
         </Card>
@@ -442,6 +486,39 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
       }}>
       <AppText style={{ fontSize: 12, fontWeight: '700', letterSpacing: 0.4, color: THEME.textMuted }}>{title}</AppText>
       {children}
+    </View>
+  );
+}
+
+function AllowHealth({ onAllowed }: { onAllowed: () => void }) {
+  const [asking, setAsking] = useState(false);
+  const howTo = healthHowToLine();
+  return (
+    <View style={{ gap: 6 }}>
+      <Pressable
+        accessibilityRole="button"
+        disabled={asking}
+        onPress={() => {
+          const provider = getHealthProvider();
+          if (!provider) {
+            return;
+          }
+          setAsking(true);
+          void provider
+            .requestAccess()
+            .then(() => onAllowed())
+            .finally(() => setAsking(false));
+        }}
+        style={{
+          alignSelf: 'flex-start',
+          backgroundColor: THEME.primary,
+          borderRadius: 999,
+          paddingHorizontal: 16,
+          paddingVertical: 10,
+        }}>
+        <AppText style={{ color: THEME.primaryForeground, fontWeight: '700' }}>{copy('health.allow')}</AppText>
+      </Pressable>
+      {howTo ? <AppText style={{ color: THEME.textMuted }}>{howTo}</AppText> : null}
     </View>
   );
 }

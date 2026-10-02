@@ -1,5 +1,6 @@
 import { Linking, Platform } from 'react-native';
 
+import { bucketBodyPoints, sleepMinutesFromSamples, type BodyDay, type BodyPoint } from '@/lib/health/bodyDays';
 import { overlapsWindow, samplesWithin } from '@/lib/health/hrSamples';
 import { usableBpm } from '@/lib/health/hrSeries';
 import { readLocalHealthStatus, writeLocalHealthStatus } from '@/services/health/local';
@@ -69,8 +70,11 @@ type IntervalRecord = {
 const READ_PERMS: Permission[] = [
   { accessType: 'read', recordType: 'ExerciseSession' },
   { accessType: 'read', recordType: 'HeartRate' },
+  { accessType: 'read', recordType: 'RestingHeartRate' },
   { accessType: 'read', recordType: 'ActiveCaloriesBurned' },
   { accessType: 'read', recordType: 'Distance' },
+  { accessType: 'read', recordType: 'Steps' },
+  { accessType: 'read', recordType: 'SleepSession' },
 ];
 
 const RUNNING = new Set([56, 57]);
@@ -450,6 +454,92 @@ class HealthConnectProvider implements HealthProvider {
         }),
       );
       return samplesWithin(records, from, to);
+    } catch {
+      return [];
+    }
+  }
+
+  async fetchBodyDays(params: { from: Date; to: Date; timeZone: string }): Promise<BodyDay[]> {
+    const hc = await this.ensureClient();
+    if (!hc) {
+      return [];
+    }
+    if ((await readLocalHealthStatus('health_connect')) === 'denied') {
+      return [];
+    }
+    const window = {
+      timeRangeFilter: {
+        operator: 'between' as const,
+        startTime: params.from.toISOString(),
+        endTime: params.to.toISOString(),
+      },
+    };
+    try {
+      const granted = await hc.getGrantedPermissions();
+      const points: BodyPoint[] = [];
+      if (hasRecord(granted, 'Steps')) {
+        for (const row of asRecords<{ startTime?: string; count?: number }>(await hc.readRecords('Steps', window))) {
+          const count = Number(row.count);
+          if (row.startTime && count > 0) {
+            points.push({ at: row.startTime, value: count, kind: 'steps' });
+          }
+        }
+      }
+      if (hasRecord(granted, 'ActiveCaloriesBurned')) {
+        for (const row of asRecords<IntervalRecord>(await hc.readRecords('ActiveCaloriesBurned', window))) {
+          const kcal = Number(row.energy?.inKilocalories ?? row.energy?.value);
+          if (row.startTime && kcal > 0) {
+            points.push({ at: row.startTime, value: kcal, kind: 'calories' });
+          }
+        }
+      }
+      if (hasRecord(granted, 'ExerciseSession')) {
+        for (const row of asRecords<SessionRecord>(await hc.readRecords('ExerciseSession', window))) {
+          const start = Date.parse(String(row.startTime ?? ''));
+          const end = Date.parse(String(row.endTime ?? ''));
+          if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
+            points.push({ at: String(row.startTime), value: (end - start) / 60000, kind: 'exerciseMin' });
+          }
+        }
+      }
+      if (hasRecord(granted, 'SleepSession')) {
+        const nights = asRecords<{
+          startTime?: string;
+          endTime?: string;
+          stages?: Array<{ startTime?: string; endTime?: string; stage?: number }>;
+        }>(await hc.readRecords('SleepSession', window));
+        for (const night of nights) {
+          const stages = night.stages ?? [];
+          const asleep = stages.filter((stage) => {
+            const code = Number(stage.stage);
+            return code === 3 || code === 5 || code === 6 || code === 7;
+          });
+          const spans =
+            asleep.length > 0
+              ? asleep.map((stage) => ({ start: stage.startTime, end: stage.endTime, value: 'ASLEEP' }))
+              : [{ start: night.startTime, end: night.endTime, value: 'ASLEEP' }];
+          for (const span of sleepMinutesFromSamples(spans)) {
+            points.push({ at: span.at, value: span.minutes, kind: 'sleepMin' });
+          }
+        }
+      }
+      const heartType = hasRecord(granted, 'RestingHeartRate')
+        ? 'RestingHeartRate'
+        : hasRecord(granted, 'HeartRate')
+          ? 'HeartRate'
+          : '';
+      if (heartType) {
+        for (const row of asRecords<{ startTime?: string; time?: string; beatsPerMinute?: number }>(
+          await hc.readRecords(heartType, window),
+        )) {
+          const bpm = Number(row.beatsPerMinute);
+          const at = String(row.time ?? row.startTime ?? '');
+          if (at && bpm > 0) {
+            points.push({ at, value: bpm, kind: 'heart' });
+          }
+        }
+      }
+      return bucketBodyPoints(points, params.timeZone, 'health_connect');
     } catch {
       return [];
     }

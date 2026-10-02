@@ -1,3 +1,4 @@
+import type { BodyDay } from '@/lib/health/bodyDays';
 import type { WorkoutRoute } from '@/lib/health/route';
 
 export type HealthSource = 'apple_health' | 'health_connect';
@@ -48,6 +49,8 @@ export interface HealthProvider {
   requestWorkoutWrite?(): Promise<HealthAccessResult>;
   disconnectLocal(): Promise<void>;
   fetchWorkouts(params: { from: Date; to: Date }): Promise<HealthWorkout[]>;
+  /** Daily steps, energy, stand, exercise, sleep, and heart rate. Empty fields mean nothing came back. */
+  fetchBodyDays?(params: { from: Date; to: Date; timeZone: string }): Promise<BodyDay[]>;
   /** Incremental HealthKit sync. Optional — Android Health Connect ignores this. */
   syncNewWorkouts?(anchor?: string | null): Promise<HealthSyncResult>;
   enrichHeartRate?(workout: HealthWorkout): Promise<HealthWorkout>;

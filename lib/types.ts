@@ -633,6 +633,20 @@ export interface HealthConnection {
   updated_at: string;
 }
 
+export interface HealthBodyDayRecord {
+  user_id: string;
+  day: string;
+  provider: 'apple_health' | 'health_connect' | string;
+  steps: number | null;
+  calories: number | null;
+  stand_hours: number | null;
+  move_kcal: number | null;
+  exercise_min: number | null;
+  sleep_min: number | null;
+  heart_rate: number | null;
+  synced_at: string;
+}
+
 export interface HealthWorkoutRecord {
   id: string;
   user_id: string;
@@ -1312,6 +1326,11 @@ export type Database = {
         Partial<HealthConnection>,
         Partial<HealthConnection>,
         [Relationship<'health_connections_user_id_fkey', 'user_id', 'profiles', 'id'>]
+      >;
+      health_body_days: TableDef<
+        HealthBodyDayRecord,
+        Partial<HealthBodyDayRecord>,
+        Partial<HealthBodyDayRecord>
       >;
       challenge_scoring_audit: TableDef<
         {

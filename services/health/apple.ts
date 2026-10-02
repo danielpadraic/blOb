@@ -1,6 +1,8 @@
 import { NativeModules, Platform } from 'react-native';
 
+import { readAppleBodyDays, type AppleBodyKit } from '@/services/health/appleBody';
 import { buildWorkoutRoute, type WorkoutRoute } from '@/lib/health/route';
+import type { BodyDay } from '@/lib/health/bodyDays';
 
 import {
   clearLocalHealthStatus,
@@ -55,6 +57,13 @@ type NativeKit = {
       results: { data?: { locations?: unknown[] } } | null,
     ) => void,
   ) => void;
+  getDailyStepCountSamples?: AppleBodyKit['getDailyStepCountSamples'];
+  getActiveEnergyBurned?: AppleBodyKit['getActiveEnergyBurned'];
+  getAppleExerciseTime?: AppleBodyKit['getAppleExerciseTime'];
+  getAppleStandTime?: AppleBodyKit['getAppleStandTime'];
+  getSleepSamples?: AppleBodyKit['getSleepSamples'];
+  getRestingHeartRateSamples?: AppleBodyKit['getRestingHeartRateSamples'];
+  getRestingHeartRate?: AppleBodyKit['getRestingHeartRate'];
   getDailyDistanceWalkingRunningSamples?: DistanceSampleReader;
   getDailyDistanceCyclingSamples?: DistanceSampleReader;
   getDailyDistanceSwimmingSamples?: DistanceSampleReader;
@@ -150,6 +159,23 @@ function loadKit(): NativeKit | null {
         typeof native.getWorkoutRouteSamples === 'function'
           ? native.getWorkoutRouteSamples.bind(native)
           : undefined,
+      getDailyStepCountSamples:
+        typeof native.getDailyStepCountSamples === 'function'
+          ? native.getDailyStepCountSamples.bind(native)
+          : undefined,
+      getActiveEnergyBurned:
+        typeof native.getActiveEnergyBurned === 'function' ? native.getActiveEnergyBurned.bind(native) : undefined,
+      getAppleExerciseTime:
+        typeof native.getAppleExerciseTime === 'function' ? native.getAppleExerciseTime.bind(native) : undefined,
+      getAppleStandTime:
+        typeof native.getAppleStandTime === 'function' ? native.getAppleStandTime.bind(native) : undefined,
+      getSleepSamples: typeof native.getSleepSamples === 'function' ? native.getSleepSamples.bind(native) : undefined,
+      getRestingHeartRateSamples:
+        typeof native.getRestingHeartRateSamples === 'function'
+          ? native.getRestingHeartRateSamples.bind(native)
+          : undefined,
+      getRestingHeartRate:
+        typeof native.getRestingHeartRate === 'function' ? native.getRestingHeartRate.bind(native) : undefined,
       getDailyDistanceWalkingRunningSamples:
         typeof native.getDailyDistanceWalkingRunningSamples === 'function'
           ? native.getDailyDistanceWalkingRunningSamples.bind(native)
@@ -174,7 +200,13 @@ function readPermissions(kit: NativeKit): string[] {
   return [
     p.Workout,
     p.HeartRate,
+    p.RestingHeartRate,
+    p.Steps,
+    p.StepCount,
     p.ActiveEnergyBurned,
+    p.AppleExerciseTime,
+    p.AppleStandTime,
+    p.SleepAnalysis,
     p.DistanceWalkingRunning,
     // The per-workout total can be absent even when the ride or swim recorded one, and these are
     // what the fallback quantity read needs.
@@ -744,6 +776,21 @@ class AppleHealthProvider implements HealthProvider {
       kit.setObserver({ type: 'Workout' });
     } catch {
       // Observer is optional. Foreground sync on AppState 'active' is the reliable path.
+    }
+  }
+
+  async fetchBodyDays(params: { from: Date; to: Date; timeZone: string }): Promise<BodyDay[]> {
+    const kit = loadKit();
+    if (!kit) {
+      return [];
+    }
+    if ((await readLocalHealthStatus()) === 'denied') {
+      return [];
+    }
+    try {
+      return await readAppleBodyDays(kit, params);
+    } catch {
+      return [];
     }
   }
 

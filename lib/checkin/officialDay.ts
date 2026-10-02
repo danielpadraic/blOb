@@ -72,7 +72,7 @@ export function officialPeriodCounts(row: {
 
 type OfficialProofChallenge = {
   proofs?: unknown;
-  proof_type?: unknown;
+  proof_type?: string | null;
   proof_requirements?: Array<{ type?: string; required?: boolean }> | null;
   taskLabel?: string | null;
   task?: string | null;
