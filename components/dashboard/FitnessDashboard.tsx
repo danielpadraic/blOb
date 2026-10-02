@@ -1,10 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Platform, Pressable, ScrollView, TextInput, useWindowDimensions, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
-import { CurrencyMark } from '@/components/currency/CurrencyMark';
 import { useFriendCount } from '@/hooks/useSocial';
 import {
   sourceChipLabel,
@@ -18,20 +18,21 @@ import {
   hydrateHomePrompt,
   markHomeVisited,
 } from '@/lib/dashboard/homePrompt';
+import { readDashboardRange, writeDashboardRange } from '@/lib/dashboard/rangeChoice';
 import type { DashboardRange } from '@/lib/dashboard/range';
-import { formatCash } from '@/lib/currency';
-import { useWalletOptional } from '@/hooks/useWallet';
-import { THEME, themeShadow } from '@/lib/theme';
+import { isWideDashboardWindow } from '@/lib/dashboard/wide';
+import { TAB_BAR_PEEK, tabBarLift, THEME, themeShadow } from '@/lib/theme';
 import type { Profile } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { useQuery } from '@tanstack/react-query';
 
-const RANGES: DashboardRange[] = ['today', 'week', 'month', 'year'];
+const RANGES: DashboardRange[] = ['today', 'week', 'month', 'year', 'custom'];
 const RANGE_LABEL: Record<DashboardRange, string> = {
   today: 'Today',
   week: 'Week',
   month: 'Month',
   year: 'Year',
+  custom: 'Custom',
 };
 
 const PHONE_CHIPS: DashboardChip[] = ['fitness', 'challenges', 'sleep', 'nutrition', 'all'];
@@ -45,13 +46,18 @@ const CHIP_LABEL: Record<DashboardChip, string> = {
 
 export function FitnessDashboard({ profile }: { profile: Profile }) {
   const router = useRouter();
-  const wallet = useWalletOptional();
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const wide = isWideDashboardWindow(width, Platform.OS);
   const friends = useFriendCount(profile.id);
   const [range, setRange] = useState<DashboardRange>('week');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
   const [chip, setChip] = useState<DashboardChip>('fitness');
   const [source, setSource] = useState<DashboardSource | null>(null);
   const [promptTick, setPromptTick] = useState(0);
-  const dash = useFitnessDashboard(range);
+  const custom = range === 'custom' && customStart && customEnd ? { start: customStart, end: customEnd } : null;
+  const dash = useFitnessDashboard(range, custom);
   const prompt = useQuery({
     queryKey: ['home-prompt', profile.id, promptTick],
     queryFn: async () => {
@@ -81,7 +87,26 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
 
   useEffect(() => {
     void hydrateHomePrompt(profile.id).then(() => setPromptTick((n) => n + 1));
+    void readDashboardRange().then((stored) => {
+      setRange(stored.range);
+      setCustomStart(stored.custom?.start ?? '');
+      setCustomEnd(stored.custom?.end ?? '');
+    });
   }, [profile.id]);
+
+  function chooseRange(next: DashboardRange) {
+    setRange(next);
+    writeDashboardRange({
+      range: next,
+      custom: customStart && customEnd ? { start: customStart, end: customEnd } : null,
+    });
+  }
+
+  function chooseCustom(start: string, end: string) {
+    setCustomStart(start);
+    setCustomEnd(end);
+    writeDashboardRange({ range: 'custom', custom: start && end ? { start, end } : null });
+  }
 
   const showFitness = chip === 'fitness' || chip === 'all';
   const showChallenges = chip === 'challenges' || chip === 'all' || chip === 'fitness';
@@ -100,11 +125,10 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
   }
 
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 128, gap: 12 }}>
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={{ paddingBottom: wide ? 32 : tabBarLift(insets.bottom) + TAB_BAR_PEEK, gap: 12 }}>
       <AppText style={{ fontSize: 28, fontWeight: '800', color: THEME.textPrimary }}>You</AppText>
-      <AppText style={{ color: THEME.textMuted, marginTop: -8 }}>
-        Profile stays first. The dashboard is the effort under it.
-      </AppText>
       <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
         {RANGES.map((item) => {
           const on = item === range;
@@ -113,7 +137,7 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
               key={item}
               accessibilityRole="button"
               accessibilityState={{ selected: on }}
-              onPress={() => setRange(item)}
+              onPress={() => chooseRange(item)}
               style={{
                 borderRadius: 999,
                 paddingHorizontal: 12,
@@ -130,15 +154,26 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
         })}
       </View>
 
-      <Pressable accessibilityRole="button" onPress={() => wallet?.openWallet()} style={{ alignSelf: 'flex-end' }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <CurrencyMark currency="coins" size={18} />
-          <AppText style={{ fontWeight: '800', color: THEME.textPrimary }}>
-            {Math.round(Number(profile.coins ?? profile.credits ?? 0)).toLocaleString('en-US')}
-          </AppText>
-          <AppText style={{ fontWeight: '800', color: THEME.accent }}>{formatCash(Number(profile.bucks ?? 0))}</AppText>
+      {range === 'custom' ? (
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TextInput
+            value={customStart}
+            onChangeText={(value) => chooseCustom(value, customEnd)}
+            placeholder="Start YYYY-MM-DD"
+            placeholderTextColor={THEME.textMuted}
+            autoCapitalize="none"
+            style={dateField}
+          />
+          <TextInput
+            value={customEnd}
+            onChangeText={(value) => chooseCustom(customStart, value)}
+            placeholder="End YYYY-MM-DD"
+            placeholderTextColor={THEME.textMuted}
+            autoCapitalize="none"
+            style={dateField}
+          />
         </View>
-      </Pressable>
+      ) : null}
 
       <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
         <Avatar uri={profile.avatar_url} name={profile.display_name ?? profile.username} size={64} />
@@ -193,19 +228,12 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
       </View>
 
       {prompt.data ? (
-        <View
-          style={{
-            backgroundColor: THEME.surface,
-            borderRadius: THEME.radius,
-            borderWidth: 1,
-            borderColor: THEME.border,
-            padding: 12,
-            gap: 8,
-            ...themeShadow('card'),
-          }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 36 }}>
+          <AppText style={{ flex: 1, fontWeight: '700', color: THEME.textPrimary }} numberOfLines={1}>
+            {prompt.data.name}
+          </AppText>
           <Pressable accessibilityRole="button" onPress={openHome}>
-            <AppText style={{ fontWeight: '700', color: THEME.textPrimary }}>{prompt.data.name} posted</AppText>
-            <AppText style={{ color: THEME.accent, marginTop: 2 }}>Open Home</AppText>
+            <AppText style={{ fontWeight: '700', color: THEME.accent }}>Open Home</AppText>
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -223,48 +251,43 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
       ) : null}
 
       {showFitness && model.liftVolumeLabel ? (
-        <Card title="Lift volume">
+        <Card title="Lift">
           <AppText style={{ fontSize: 28, fontWeight: '800', color: THEME.textPrimary }}>{model.liftVolumeLabel}</AppText>
           {model.liftSessionCount > 0 ? (
             <AppText style={{ color: THEME.textMuted }}>
               {model.liftSessionCount} {model.liftSessionCount === 1 ? 'session' : 'sessions'}
             </AppText>
           ) : null}
+          <DayChart days={model.liftBars} />
           <Source label="Lift" />
+        </Card>
+      ) : null}
+
+      {showFitness && model.minuteBars.length > 0 ? (
+        <Card title="Active minutes">
+          <DayChart days={model.minuteBars} />
         </Card>
       ) : null}
 
       {showFitness && model.cardioLabel ? (
-        <Card title="Cardio">
+        <Card title="Duration">
           <AppText style={{ fontSize: 28, fontWeight: '800', color: THEME.textPrimary }}>{model.cardioLabel}</AppText>
+          <DayChart days={model.cardioBars} />
           <Source label="Lift" />
         </Card>
       ) : null}
 
-      {showFitness && model.checkinCount > 0 ? (
-        <Card title="Check-ins">
-          <AppText style={{ fontSize: 28, fontWeight: '800', color: THEME.textPrimary }}>{model.checkinCount}</AppText>
+      {showFitness && model.calorieLabel ? (
+        <Card title="Calories">
+          <AppText style={{ fontSize: 28, fontWeight: '800', color: THEME.textPrimary }}>{model.calorieLabel}</AppText>
           <Source label="Check-in" />
         </Card>
       ) : null}
 
-      {showFitness && model.days.length > 0 ? (
-        <Card title="Active minutes">
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, height: 88 }}>
-            {model.days.map((day) => (
-              <View key={day.key} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end' }}>
-                <View
-                  style={{
-                    width: '70%',
-                    height: Math.max(8, Math.round((day.minutes / Math.max(...model.days.map((item) => item.minutes))) * 72)),
-                    backgroundColor: THEME.accent,
-                    borderRadius: 6,
-                  }}
-                />
-                <AppText style={{ color: THEME.textMuted, marginTop: 4, fontSize: 11 }}>{day.label}</AppText>
-              </View>
-            ))}
-          </View>
+      {showFitness && model.stepLabel ? (
+        <Card title="Steps">
+          <AppText style={{ fontSize: 28, fontWeight: '800', color: THEME.textPrimary }}>{model.stepLabel}</AppText>
+          <Source label="Check-in" />
         </Card>
       ) : null}
 
@@ -316,12 +339,22 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
 
       {showFitness && activities.length > 0 ? (
         <Card title="Recent">
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+            <AppText style={columnHead}>Session</AppText>
+            <AppText style={columnHead}>When</AppText>
+            <AppText style={columnHead}>Proof</AppText>
+            <AppText style={columnHead}>Source</AppText>
+          </View>
           {activities.map((row) => (
-            <Pressable key={row.id} accessibilityRole="button" onPress={() => router.push(row.href as never)} style={{ marginBottom: 10 }}>
-              <AppText style={{ fontWeight: '700', color: THEME.textPrimary }}>{row.title}</AppText>
-              <AppText style={{ color: THEME.textMuted }}>
-                {[row.when, row.proof, sourceChipLabel(row.source)].filter(Boolean).join(' · ')}
-              </AppText>
+            <Pressable
+              key={row.id}
+              accessibilityRole="button"
+              onPress={() => router.push(row.href as never)}
+              style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+              <AppText style={columnCell} numberOfLines={2}>{row.title}</AppText>
+              <AppText style={columnCell}>{row.when}</AppText>
+              <AppText style={columnCell}>{row.proof}</AppText>
+              <AppText style={columnCell}>{sourceChipLabel(row.source)}</AppText>
             </Pressable>
           ))}
         </Card>
@@ -354,6 +387,43 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
       ) : null}
 
       {dash.loading ? <AppText style={{ color: THEME.textMuted }}>Loading your effort…</AppText> : null}
+    </ScrollView>
+  );
+}
+
+const dateField = {
+  flex: 1,
+  borderWidth: 1,
+  borderColor: THEME.border,
+  borderRadius: 12,
+  paddingHorizontal: 10,
+  paddingVertical: 8,
+  color: THEME.textPrimary,
+  backgroundColor: THEME.surface,
+};
+
+const columnHead = { flex: 1, fontSize: 11, fontWeight: '800' as const, color: THEME.textMuted };
+const columnCell = { flex: 1, fontSize: 13, color: THEME.textPrimary };
+
+function DayChart({ days }: { days: Array<{ key: string; label: string; value: number }> }) {
+  const max = Math.max(...days.map((day) => day.value), 1);
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: 96, paddingTop: 8 }}>
+        {days.map((day) => (
+          <View key={day.key} style={{ width: 28, alignItems: 'center', justifyContent: 'flex-end' }}>
+            <View
+              style={{
+                width: 16,
+                height: day.value > 0 ? Math.max(6, Math.round((day.value / max) * 72)) : 2,
+                backgroundColor: day.value > 0 ? THEME.accent : THEME.border,
+                borderRadius: 4,
+              }}
+            />
+            <AppText style={{ color: THEME.textMuted, marginTop: 4, fontSize: 10 }}>{day.label}</AppText>
+          </View>
+        ))}
+      </View>
     </ScrollView>
   );
 }

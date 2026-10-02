@@ -1,6 +1,8 @@
 import { dateStampInZone } from '@/lib/officialDays';
 
-export type DashboardRange = 'today' | 'week' | 'month' | 'year';
+export type DashboardRange = 'today' | 'week' | 'month' | 'year' | 'custom';
+
+export type CustomRange = { start: string; end: string };
 
 function pad(n: number): string {
   return String(n).padStart(2, '0');
@@ -31,13 +33,34 @@ export function dashboardZone(preferred?: string | null): string {
   }
 }
 
+const YMD = /^\d{4}-\d{2}-\d{2}$/;
+
 /** Inclusive calendar days for the range, ending today in `timeZone`. Newest last. */
-export function rangeDayKeys(range: DashboardRange, now: Date, timeZone: string): string[] {
+export function rangeDayKeys(
+  range: DashboardRange,
+  now: Date,
+  timeZone: string,
+  custom?: CustomRange | null,
+): string[] {
   const zone = dashboardZone(timeZone);
   if (!zone) {
     return [];
   }
   const today = dateStampInZone(now, zone);
+  if (range === 'custom') {
+    const start = String(custom?.start ?? '');
+    const end = String(custom?.end ?? '');
+    if (!YMD.test(start) || !YMD.test(end) || start > end) {
+      return [];
+    }
+    const keys: string[] = [];
+    let cursor = start;
+    while (cursor <= end && keys.length < 366) {
+      keys.push(cursor);
+      cursor = addDaysYmd(cursor, 1);
+    }
+    return keys;
+  }
   if (range === 'today') {
     return [today];
   }

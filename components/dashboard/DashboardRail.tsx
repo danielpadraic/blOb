@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { Pressable, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 
@@ -7,6 +8,8 @@ import { useMyProfile } from '@/hooks/useProfile';
 import { useWalletOptional } from '@/hooks/useWallet';
 import { LOBBY_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
+
+const LOGO = require('@/assets/mascot/blob-logo.png');
 
 const LINKS = [
   { label: 'Home', href: '/feed' },
@@ -35,7 +38,7 @@ export function DashboardRail() {
         justifyContent: 'space-between',
       }}>
       <View style={{ gap: 6 }}>
-        <AppText style={{ fontSize: 22, fontWeight: '800', color: THEME.textPrimary, marginBottom: 16 }}>blOb</AppText>
+        <Image source={LOGO} style={{ width: 88, height: 32, marginBottom: 16 }} contentFit="contain" accessibilityLabel="blOb" />
         {LINKS.map((link) => {
           const on =
             link.label === 'Dashboard'
