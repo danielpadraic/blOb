@@ -14,6 +14,8 @@ import {
   type CalendarDuty,
   type DayMark,
 } from '@/lib/dashboard/calendar';
+import { checkinWorkoutTitle, submittedProofNames, type CheckinPeek } from '@/lib/dashboard/checkinPeek';
+import { effortFromLiftRows, type EffortSession, type LiftEffortRow } from '@/lib/dashboard/effort';
 import { collapseCheckinRows, durationLabel } from '@/lib/dashboard/model';
 import { dashboardZone, dayInRange, rangeDayKeys, type CustomRange, type DashboardRange } from '@/lib/dashboard/range';
 import {
@@ -82,6 +84,9 @@ export type FitnessDashboardModel = {
   checkinMarks: Record<string, DayMark>;
   checkinHeader: boolean;
   checkinLabel: string | null;
+  checkinPeeks: Record<string, CheckinPeek[]>;
+  effortSessions: EffortSession[];
+  dayKeys: string[];
   mileBars: DashboardDayBar[];
   mileLabel: string | null;
   stepBars: DashboardDayBar[];
@@ -106,6 +111,9 @@ const EMPTY: FitnessDashboardModel = {
   checkinMarks: {},
   checkinHeader: false,
   checkinLabel: null,
+  checkinPeeks: {},
+  effortSessions: [],
+  dayKeys: [],
   mileBars: [],
   mileLabel: null,
   stepBars: [],
@@ -166,6 +174,8 @@ function buildModel(input: {
   syncedAt: string | null;
   showSyncLabel: boolean;
   duties: CalendarDuty[];
+  effortRows: LiftEffortRow[];
+  peeks: Record<string, CheckinPeek[]>;
   challenges: DashboardChallengeBar[];
   trophies: string[];
   earnedLabel: string | null;
@@ -351,6 +361,9 @@ function buildModel(input: {
     checkinMarks: showCalendar ? checkinMarks : {},
     checkinHeader: showCalendar && grid.showHeader,
     checkinLabel: checkinDone > 0 ? `${checkinDone} ${checkinDone === 1 ? 'day' : 'days'}` : null,
+    checkinPeeks: input.peeks,
+    effortSessions: zone ? effortFromLiftRows(input.effortRows, (iso) => dateDay(iso, zone)) : [],
+    dayKeys: keys,
     mileBars: dayBars(keys, miles, label),
     mileLabel: mileTotal > 0 ? `${Math.round(mileTotal * 10) / 10} mi` : null,
     stepBars: dayBars(keys, steps, label),
@@ -414,7 +427,7 @@ export function useFitnessDashboard(range: DashboardRange, custom: CustomRange |
       const zone = dashboardZone(null) || OFFICIAL_COIN_TZ;
       const keys = rangeDayKeys(range, new Date(), zone, custom);
       const start = keys[0] ?? '';
-      const [checkins, badges, names, ledger, progress, workouts, body] = await Promise.all([
+      const [checkins, badges, names, ledger, progress, workouts, body, liftRows] = await Promise.all([
         supabase
           .from('challenge_checkins')
           .select('id, challenge_id, period_key, proof_parts')
@@ -444,6 +457,15 @@ export function useFitnessDashboard(range: DashboardRange, custom: CustomRange |
               .limit(200)
           : Promise.resolve({ data: [], error: null }),
         start ? loadStoredBodyDays(userId, start, keys[keys.length - 1] ?? start) : Promise.resolve({ days: [], syncedAt: null }),
+        supabase
+          .from('lift_sessions')
+          .select(
+            'id, performed_at, completed_at, status, unit, muscle_keys, lift_session_exercises(name, muscle_key, kind, cardio_method, cardio_custom_name, cardio_type, duration_seconds, rounds, lift_sets(kind, weight, reps, completed_at))',
+          )
+          .eq('user_id', userId)
+          .not('completed_at', 'is', null)
+          .order('completed_at', { ascending: false })
+          .limit(120),
       ]);
       const trophyNames = new Map(
         ((names.data ?? []) as Array<{ key?: string; name?: string }>).map((row) => [
@@ -557,6 +579,7 @@ export function useFitnessDashboard(range: DashboardRange, custom: CustomRange |
         syncedAt,
         distanceByChallenge,
         membership,
+        effortRows: (liftRows.error ? [] : (liftRows.data ?? [])) as LiftEffortRow[],
         trophies,
         earnedLabel: ledgerRows.length > 0 && earnedBits.length > 0 ? earnedBits.join(' · ') : null,
       };
@@ -616,12 +639,14 @@ export function useFitnessDashboard(range: DashboardRange, custom: CustomRange |
     });
   }
 
+  const checkinPeeks: Record<string, CheckinPeek[]> = {};
   const calendarDuties: CalendarDuty[] = [];
   if (extra.data) {
     const seen = new Set<string>();
     const pushDuty = (
       row: {
         id: string;
+        title?: string | null;
         proofs?: unknown;
         starts_at?: string | null;
         ends_at?: string | null;
@@ -650,6 +675,22 @@ export function useFitnessDashboard(range: DashboardRange, custom: CustomRange |
         .map((item) => item.period_key);
       seen.add(row.id);
       calendarDuties.push({ ...bounds, complete });
+      for (const item of extra.data.checkins) {
+        if (item.challenge_id !== row.id) {
+          continue;
+        }
+        const proofs = submittedProofNames(row as never, item.proof_parts, null);
+        if (proofs.length === 0) {
+          continue;
+        }
+        const title = checkinWorkoutTitle(String(row.title ?? 'Check-in'), item.proof_parts);
+        if (!title) {
+          continue;
+        }
+        const list = checkinPeeks[item.period_key] ?? [];
+        list.push({ title, proofs });
+        checkinPeeks[item.period_key] = list;
+      }
     };
     for (const row of loggable.data ?? []) {
       if (!challengeHasDailyCheckinDuty(row) && !isOfficialCoinChallenge(row)) {
@@ -681,6 +722,8 @@ export function useFitnessDashboard(range: DashboardRange, custom: CustomRange |
         syncedAt: extra.data.syncedAt,
         showSyncLabel: Platform.OS === 'web',
         duties: calendarDuties,
+        effortRows: extra.data.effortRows,
+        peeks: checkinPeeks,
         challenges,
         trophies: extra.data.trophies,
         earnedLabel: extra.data.earnedLabel,

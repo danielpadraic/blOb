@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Platform, Pressable, ScrollView, TextInput, useWindowDimensions, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,12 +8,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
 import { ProgressRing } from '@/components/ui/ProgressRing';
 import { useFriendCount } from '@/hooks/useSocial';
-import {
-  sourceChipLabel,
-  useFitnessDashboard,
-  type DashboardChip,
-  type DashboardSource,
-} from '@/hooks/useFitnessDashboard';
+import { sourceChipLabel, useFitnessDashboard, type DashboardChip } from '@/hooks/useFitnessDashboard';
 import {
   dismissHomePrompt,
   homePromptVisible,
@@ -22,6 +17,7 @@ import {
 } from '@/lib/dashboard/homePrompt';
 import { readDashboardRange, writeDashboardRange } from '@/lib/dashboard/rangeChoice';
 import type { DayMark } from '@/lib/dashboard/calendar';
+import { cardioLines, exerciseChipNames, muscleChipKeys, muscleLabel, poundChart } from '@/lib/dashboard/effort';
 import type { DashboardRange } from '@/lib/dashboard/range';
 import { isWideDashboardWindow } from '@/lib/dashboard/wide';
 import { copy } from '@/lib/copy';
@@ -60,7 +56,11 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   const [chip, setChip] = useState<DashboardChip>('fitness');
-  const [source, setSource] = useState<DashboardSource | null>(null);
+  const [muscle, setMuscle] = useState<string | null>(null);
+  const [exercise, setExercise] = useState<string | null>(null);
+  const [cardioType, setCardioType] = useState<string | null>(null);
+  const [barHint, setBarHint] = useState('');
+  const [openDay, setOpenDay] = useState<string | null>(null);
   const [promptTick, setPromptTick] = useState(0);
   const custom = range === 'custom' && customStart && customEnd ? { start: customStart, end: customEnd } : null;
   const dash = useFitnessDashboard(range, custom);
@@ -117,7 +117,16 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
   const showFitness = chip === 'fitness' || chip === 'all';
   const showChallenges = chip === 'challenges' || chip === 'all' || chip === 'fitness';
   const model = dash.model;
-  const activities = model.activities.filter((row) => !source || row.sources.includes(source));
+  const muscles = muscleChipKeys(model.effortSessions);
+  const exercises = muscle ? exerciseChipNames(model.effortSessions, muscle) : [];
+  const pounds = useMemo(
+    () => poundChart(model.effortSessions, model.dayKeys, { muscle, exercise }, (day) => day.slice(8, 10)),
+    [exercise, model.dayKeys, model.effortSessions, muscle],
+  );
+  const cardio = useMemo(
+    () => cardioLines(model.effortSessions, model.dayKeys, cardioType),
+    [cardioType, model.dayKeys, model.effortSessions],
+  );
   const sleepCard = model.bodyCards.find((card) => card.key === 'sleep') ?? null;
   const ringCards = model.bodyCards.filter((card) => card.key === 'move' || card.key === 'exercise' || card.key === 'stand');
   const bodyCards = model.bodyCards.filter(
@@ -141,29 +150,10 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
       style={{ flex: 1 }}
       contentContainerStyle={{ paddingBottom: wide ? 32 : tabBarLift(insets.bottom) + TAB_BAR_PEEK, gap: 12 }}>
       <AppText style={{ fontSize: 28, fontWeight: '800', color: THEME.textPrimary }}>You</AppText>
-      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
-        {RANGES.map((item) => {
-          const on = item === range;
-          return (
-            <Pressable
-              key={item}
-              accessibilityRole="button"
-              accessibilityState={{ selected: on }}
-              onPress={() => chooseRange(item)}
-              style={{
-                borderRadius: 999,
-                paddingHorizontal: 12,
-                paddingVertical: 6,
-                backgroundColor: on ? THEME.accent : THEME.surface,
-                borderWidth: 1,
-                borderColor: on ? THEME.accent : THEME.border,
-              }}>
-              <AppText style={{ fontSize: 13, fontWeight: '700', color: on ? THEME.primaryForeground : THEME.textPrimary }}>
-                {RANGE_LABEL[item]}
-              </AppText>
-            </Pressable>
-          );
-        })}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+        {RANGES.map((item) => (
+          <QuietFilter key={item} label={RANGE_LABEL[item]} on={item === range} onPress={() => chooseRange(item)} />
+        ))}
       </View>
 
       {range === 'custom' ? (
@@ -213,30 +203,15 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
         <TextButton title="Settings" onPress={() => router.push('/profile/account')} />
       </View>
 
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {PHONE_CHIPS.map((item) => {
-          const on = item === chip;
-          return (
-            <Pressable
-              key={item}
-              accessibilityRole="button"
-              accessibilityState={{ selected: on }}
-              onPress={() => setChip(item)}
-              style={{
-                borderRadius: 999,
-                paddingHorizontal: 14,
-                paddingVertical: 8,
-                backgroundColor: on ? THEME.accent : THEME.surface,
-                borderWidth: 1,
-                borderColor: on ? THEME.accent : THEME.border,
-              }}>
-              <AppText style={{ fontWeight: '700', color: on ? THEME.primaryForeground : THEME.textPrimary }}>
-                {CHIP_LABEL[item]}
-                {item === 'nutrition' ? ' · soon' : ''}
-              </AppText>
-            </Pressable>
-          );
-        })}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
+        {PHONE_CHIPS.map((item) => (
+          <QuietFilter
+            key={item}
+            label={item === 'nutrition' ? 'Nutrition · soon' : CHIP_LABEL[item]}
+            on={item === chip}
+            onPress={() => setChip(item)}
+          />
+        ))}
       </View>
 
       {prompt.data ? (
@@ -265,37 +240,100 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
         <Card
           title={model.checkinLabel ? `Check-ins · ${model.checkinLabel}` : 'Check-ins'}
           chip="Check-in">
-          <CheckinCalendar cells={model.checkinCells} marks={model.checkinMarks} header={model.checkinHeader} />
+          <CheckinCalendar
+            cells={model.checkinCells}
+            marks={model.checkinMarks}
+            header={model.checkinHeader}
+            onOpen={(day) => {
+              const peeks = model.checkinPeeks[day] ?? [];
+              if (peeks.length === 0) {
+                return;
+              }
+              setOpenDay(day);
+            }}
+          />
+          {openDay && (model.checkinPeeks[openDay]?.length ?? 0) > 0 ? (
+            <View style={{ gap: 6, marginTop: 4 }}>
+              {model.checkinPeeks[openDay]?.map((item) => (
+                <View key={`${openDay}-${item.title}`} style={{ gap: 4 }}>
+                  <AppText style={{ fontWeight: '700', color: THEME.textPrimary }}>{item.title}</AppText>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                    {item.proofs.map((proof) => (
+                      <AppText key={proof} style={{ fontSize: 12, fontWeight: '700', color: THEME.accent }}>
+                        {proof}
+                      </AppText>
+                    ))}
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : null}
         </Card>
       ) : null}
 
-      {showFitness && model.liftVolumeLabel ? (
-        <Card title={`Pounds · ${model.liftVolumeLabel}`} chip="Lift">
-          <DayChart days={model.liftBars} color={THEME.accent} />
+      {showFitness && pounds.totalLabel ? (
+        <Card title={`Pounds · ${pounds.totalLabel}`} chip="Lift">
+          {barHint ? <AppText style={{ color: THEME.textMuted, fontSize: 13 }}>{barHint}</AppText> : null}
+          <DayChart
+            days={pounds.bars}
+            color={THEME.accent}
+            onHint={setBarHint}
+          />
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+            <QuietFilter
+              label="All"
+              on={!muscle}
+              onPress={() => {
+                setMuscle(null);
+                setExercise(null);
+                setBarHint('');
+              }}
+            />
+            {muscles.map((key) => (
+              <QuietFilter
+                key={key}
+                label={muscleLabel(key)}
+                on={muscle === key}
+                onPress={() => {
+                  setMuscle(key);
+                  setExercise(null);
+                  setBarHint('');
+                }}
+              />
+            ))}
+          </View>
+          {muscle && exercises.length > 0 ? (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+              <QuietFilter label="All exercises" on={!exercise} onPress={() => { setExercise(null); setBarHint(''); }} />
+              {exercises.map((name) => (
+                <QuietFilter
+                  key={name}
+                  label={name}
+                  on={exercise === name}
+                  onPress={() => {
+                    setExercise(name);
+                    setBarHint('');
+                  }}
+                />
+              ))}
+            </View>
+          ) : null}
         </Card>
       ) : null}
 
-      {showFitness && model.liftTimeLabel ? (
-        <Card title={`Lift time · ${model.liftTimeLabel}`} chip="Lift">
-          <DayChart days={model.liftTimeBars} color={THEME.circle} />
-        </Card>
-      ) : null}
-
-      {showFitness && model.cardioTimeLabel ? (
-        <Card title={`Cardio time · ${model.cardioTimeLabel}`} chip="Lift">
-          <DayLines days={model.cardioTimeBars} color={THEME.circle} />
-        </Card>
-      ) : null}
-
-      {showFitness && model.mileLabel ? (
-        <Card title={`Miles · ${model.mileLabel}`} chip="Check-in">
-          <DayChart days={model.mileBars} color={THEME.accentBright} />
-        </Card>
-      ) : null}
-
-      {showFitness && model.stepLabel ? (
-        <Card title={`Steps · ${model.stepLabel}`} chip="Check-in">
-          <DayChart days={model.stepBars} color={THEME.accentBright} />
+      {showFitness && cardio.lines.length > 0 ? (
+        <Card title="Cardio" chip="Lift">
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+            <QuietFilter label="All" on={!cardioType} onPress={() => setCardioType(null)} />
+            {cardio.types.map((item) => (
+              <QuietFilter key={item.key} label={item.label} on={cardioType === item.key} onPress={() => setCardioType(item.key)} />
+            ))}
+          </View>
+          {cardio.lines.map((line) => (
+            <AppText key={line.id} style={{ color: THEME.textPrimary, fontSize: 14 }}>
+              {line.text}
+            </AppText>
+          ))}
         </Card>
       ) : null}
 
@@ -337,9 +375,8 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
       {(chip === 'sleep' || chip === 'all') && sleepCard ? (
         <Card
           title={`Sleep · ${sleepCard.valueLabel}`}
-          chip={sleepCard.source ? sourceChipLabel(sleepCard.source) : undefined}>
-          <DayLines days={sleepCard.bars} color={THEME.gold} />
-        </Card>
+          chip={sleepCard.source ? sourceChipLabel(sleepCard.source) : undefined}
+        />
       ) : null}
 
       {showFitness && !dash.loading && bodyCards.length === 0 && !sleepCard && Platform.OS !== 'web' ? (
@@ -366,58 +403,6 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
                   }}
                 />
               </View>
-            </Pressable>
-          ))}
-        </Card>
-      ) : null}
-
-      {showFitness ? (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {([null, 'healthkit', 'health_connect', 'lift', 'checkin'] as const).map((item) => {
-            const on = source === item;
-            const label = item ? sourceChipLabel(item) : 'All sources';
-            return (
-              <Pressable
-                key={label}
-                accessibilityRole="button"
-                onPress={() => setSource(item)}
-                style={{
-                  borderRadius: 999,
-                  paddingHorizontal: 10,
-                  paddingVertical: 6,
-                  backgroundColor: on ? THEME.accentSoft : THEME.surface,
-                  borderWidth: 1,
-                  borderColor: THEME.border,
-                }}>
-                <AppText style={{ fontSize: 12, fontWeight: '700', color: THEME.accent }}>{label}</AppText>
-              </Pressable>
-            );
-          })}
-        </View>
-      ) : null}
-
-      {showFitness && activities.length > 0 ? (
-        <Card title="Recent">
-          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
-            <AppText style={columnHead}>Session</AppText>
-            <AppText style={columnHead}>When</AppText>
-            <AppText style={columnHead}>Proof</AppText>
-            <AppText style={columnHead}>Source</AppText>
-          </View>
-          {activities.map((row) => (
-            <Pressable
-              key={row.id}
-              accessibilityRole="button"
-              onPress={() => {
-                if (row.href) {
-                  router.push(row.href as never);
-                }
-              }}
-              style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
-              <AppText style={columnCell} numberOfLines={2}>{row.title}</AppText>
-              <AppText style={columnCell}>{row.when}</AppText>
-              <AppText style={columnCell}>{row.proof}</AppText>
-              <AppText style={columnCell}>{row.sources.map((item) => sourceChipLabel(item)).join(' · ')}</AppText>
             </Pressable>
           ))}
         </Card>
@@ -460,22 +445,27 @@ const dateField = {
   backgroundColor: THEME.surface,
 };
 
-const columnHead = { flex: 1, fontSize: 11, fontWeight: '800' as const, color: THEME.textMuted };
-const columnCell = { flex: 1, fontSize: 13, color: THEME.textPrimary };
-
 function DayChart({
   days,
   color,
+  onHint,
 }: {
-  days: Array<{ key: string; label: string; value: number }>;
+  days: Array<{ key: string; label: string; value: number; hint?: string }>;
   color: string;
+  onHint?: (hint: string) => void;
 }) {
   const max = Math.max(...days.map((day) => day.value), 1);
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: 56 }}>
         {days.map((day) => (
-          <View key={day.key} style={{ width: 22, alignItems: 'center', justifyContent: 'flex-end' }}>
+          <Pressable
+            key={day.key}
+            accessibilityRole="button"
+            accessibilityLabel={day.hint || day.label}
+            onPress={() => onHint?.(day.hint || '')}
+            {...(Platform.OS === 'web' ? { onHoverIn: () => onHint?.(day.hint || '') } : {})}
+            style={{ width: 22, alignItems: 'center', justifyContent: 'flex-end' }}>
             <View
               style={{
                 width: 12,
@@ -485,39 +475,10 @@ function DayChart({
               }}
             />
             <AppText style={{ color: THEME.textMuted, marginTop: 2, fontSize: 10 }}>{day.label}</AppText>
-          </View>
+          </Pressable>
         ))}
       </View>
     </ScrollView>
-  );
-}
-
-function DayLines({
-  days,
-  color,
-}: {
-  days: Array<{ key: string; label: string; value: number }>;
-  color: string;
-}) {
-  const max = Math.max(...days.map((day) => day.value), 1);
-  return (
-    <View style={{ gap: 3 }}>
-      {days.map((day) => (
-        <View key={day.key} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <AppText style={{ width: 14, fontSize: 10, color: THEME.textMuted }}>{day.label}</AppText>
-          <View style={{ flex: 1, height: 6, borderRadius: 99, backgroundColor: THEME.border }}>
-            <View
-              style={{
-                width: `${Math.max(day.value > 0 ? 4 : 0, Math.round((day.value / max) * 100))}%`,
-                height: 6,
-                borderRadius: 99,
-                backgroundColor: day.value > 0 ? color : 'transparent',
-              }}
-            />
-          </View>
-        </View>
-      ))}
-    </View>
   );
 }
 
@@ -527,10 +488,12 @@ function CheckinCalendar({
   cells,
   marks,
   header,
+  onOpen,
 }: {
   cells: Array<{ key: string | null; numeral: string; weekday: string }>;
   marks: Record<string, DayMark>;
   header: boolean;
+  onOpen?: (day: string) => void;
 }) {
   return (
     <View>
@@ -548,7 +511,17 @@ function CheckinCalendar({
           const mark = cell.key ? (marks[cell.key] ?? 'empty') : 'empty';
           const label = !cell.key ? '' : mark === 'done' ? 'Complete' : mark === 'miss' ? 'Missed' : mark === 'due' ? 'Due' : 'Nothing due';
           return (
-            <View key={cell.key ?? `pad-${index}`} accessibilityLabel={label} style={calendarCell}>
+            <Pressable
+              key={cell.key ?? `pad-${index}`}
+              accessibilityRole="button"
+              accessibilityLabel={label}
+              disabled={!cell.key}
+              onPress={() => {
+                if (cell.key) {
+                  onOpen?.(cell.key);
+                }
+              }}
+              style={calendarCell}>
               {cell.key ? (
                 <View style={calendarMark(mark)}>
                   {!header && cell.weekday ? (
@@ -566,7 +539,7 @@ function CheckinCalendar({
                   </AppText>
                 </View>
               ) : null}
-            </View>
+            </Pressable>
           );
         })}
       </View>
@@ -642,6 +615,24 @@ function AllowHealth({ onAllowed }: { onAllowed: () => void }) {
       </Pressable>
       {howTo ? <AppText style={{ color: THEME.textMuted }}>{howTo}</AppText> : null}
     </View>
+  );
+}
+
+function QuietFilter({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected: on }}
+      onPress={onPress}
+      style={{
+        paddingVertical: 4,
+        borderBottomWidth: on ? 2 : 0,
+        borderBottomColor: THEME.accent,
+      }}>
+      <AppText style={{ fontSize: 14, fontWeight: on ? '700' : '500', color: on ? THEME.textPrimary : THEME.textMuted }}>
+        {label}
+      </AppText>
+    </Pressable>
   );
 }
 
