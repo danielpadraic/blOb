@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { cardioLines, effortFromLiftRows, exerciseChipNames, muscleChipKeys, poundChart, workSetPounds } from '@/lib/dashboard/effort';
+import { cardioLines, effortFromLiftRows, exerciseChipNames, muscleChipKeys, poundChart, poundEmptyCopy, workSetPounds } from '@/lib/dashboard/effort';
 import type { EffortSession } from '@/lib/dashboard/effort';
 
 const sessions: EffortSession[] = [
@@ -41,8 +41,17 @@ describe('completed lift pounds', () => {
     expect(chart.totalLabel).toBe('4,800 lb');
     expect(chart.bars.map((bar) => bar.value)).toEqual([0, 4800]);
     expect(chart.bars[1]?.hint).toBe('Thu · 4,800 lb');
+    expect(chart.bars[0]?.hint).toBe('Wed · 0 lb');
     expect(muscleChipKeys(sessions)).toEqual(['chest', 'back']);
     expect(exerciseChipNames(sessions, 'chest')).toEqual(['Bench Press', 'Fly']);
+  });
+
+  it('keeps a zero axis when the selected group has no sets in the range', () => {
+    const chart = poundChart(sessions, ['2026-09-30', '2026-10-01'], { muscle: 'biceps', exercise: null }, () => 'W');
+    expect(chart.total).toBe(0);
+    expect(chart.totalLabel).toBe('0 lb');
+    expect(chart.bars.map((bar) => bar.value)).toEqual([0, 0]);
+    expect(poundEmptyCopy('Biceps', 'week')).toBe('No completed Biceps this week.');
   });
 
   it('drops a draft and keeps the stored exercise name', () => {

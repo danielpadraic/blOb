@@ -17,7 +17,8 @@ import {
 } from '@/lib/dashboard/homePrompt';
 import { readDashboardRange, writeDashboardRange } from '@/lib/dashboard/rangeChoice';
 import type { DayMark } from '@/lib/dashboard/calendar';
-import { cardioLines, exerciseChipNames, muscleChipKeys, muscleLabel, poundChart } from '@/lib/dashboard/effort';
+import { cardioLines, exerciseChipNames, muscleChipKeys, muscleLabel, poundChart, poundEmptyCopy } from '@/lib/dashboard/effort';
+import { isMuscleKey } from '@/lib/lift/muscles';
 import type { DashboardRange } from '@/lib/dashboard/range';
 import { isWideDashboardWindow } from '@/lib/dashboard/wide';
 import { copy } from '@/lib/copy';
@@ -123,6 +124,9 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
     () => poundChart(model.effortSessions, model.dayKeys, { muscle, exercise }, (day) => day.slice(8, 10)),
     [exercise, model.dayKeys, model.effortSessions, muscle],
   );
+  const poundChip = Boolean(muscle || exercise);
+  const showPounds = pounds.total > 0 || poundChip;
+  const poundEmptyName = exercise ? exercise : muscle && isMuscleKey(muscle) ? muscleLabel(muscle) : muscle;
   const cardio = useMemo(
     () => cardioLines(model.effortSessions, model.dayKeys, cardioType),
     [cardioType, model.dayKeys, model.effortSessions],
@@ -271,8 +275,11 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
         </Card>
       ) : null}
 
-      {showFitness && pounds.totalLabel ? (
+      {showFitness && showPounds ? (
         <Card title={`Pounds · ${pounds.totalLabel}`} chip="Lift">
+          {pounds.total === 0 && poundEmptyName ? (
+            <AppText style={{ color: THEME.textMuted, fontSize: 14 }}>{poundEmptyCopy(poundEmptyName, range)}</AppText>
+          ) : null}
           {barHint ? <AppText style={{ color: THEME.textMuted, fontSize: 13 }}>{barHint}</AppText> : null}
           <DayChart
             days={pounds.bars}

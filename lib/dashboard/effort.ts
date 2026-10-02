@@ -1,4 +1,5 @@
 import { durationLabel } from '@/lib/dashboard/model';
+import type { DashboardRange } from '@/lib/dashboard/range';
 import { clampDuration } from '@/lib/lift/duration';
 import { isMuscleKey, muscleLabel, orderMuscles, type MuscleKey } from '@/lib/lift/muscles';
 import { parseRounds, roundsTotalSeconds } from '@/lib/lift/rounds';
@@ -145,10 +146,8 @@ export function poundChart(
     }
   }
   const total = [...byDay.values()].reduce((sum, value) => sum + value, 0);
-  if (total <= 0) {
-    return { totalLabel: null, bars: [] };
-  }
   return {
+    total,
     totalLabel: mass(total, unit),
     bars: keys.map((key) => {
       const value = byDay.get(key) ?? 0;
@@ -157,10 +156,25 @@ export function poundChart(
         key,
         label: axisLabel(key),
         value,
-        hint: value > 0 && name ? `${name} · ${mass(value, unit)}` : '',
+        hint: name ? `${name} · ${mass(value, unit)}` : '',
       };
     }),
   };
+}
+
+/** “No completed Biceps this week.” */
+export function poundEmptyCopy(name: string, range: DashboardRange): string {
+  const when =
+    range === 'today'
+      ? 'today'
+      : range === 'week'
+        ? 'this week'
+        : range === 'month'
+          ? 'this month'
+          : range === 'year'
+            ? 'this year'
+            : 'in this range';
+  return `No completed ${name} ${when}.`;
 }
 
 export type CardioLine = {
