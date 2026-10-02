@@ -24,7 +24,7 @@ import { isWideDashboardWindow } from '@/lib/dashboard/wide';
 import { copy } from '@/lib/copy';
 import { healthHowToLine } from '@/lib/health/howTo';
 import { getHealthProvider } from '@/services/health';
-import { TAB_BAR_PEEK, tabBarLift, THEME, themeShadow } from '@/lib/theme';
+import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
 import type { Profile } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { useQuery } from '@tanstack/react-query';
@@ -152,8 +152,34 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
   return (
     <ScrollView
       style={{ flex: 1 }}
-      contentContainerStyle={{ paddingBottom: wide ? 32 : tabBarLift(insets.bottom) + TAB_BAR_PEEK, gap: 12 }}>
+      contentContainerStyle={{ paddingBottom: wide ? 32 : tabBarLift(insets.bottom) + 88, gap: 12 }}>
       <AppText style={{ fontSize: 28, fontWeight: '800', color: THEME.textPrimary }}>You</AppText>
+      <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+        <Avatar uri={profile.avatar_url} name={profile.display_name ?? profile.username} size={64} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <AppText style={{ fontSize: 22, fontWeight: '800', color: THEME.textPrimary }} numberOfLines={1}>
+            {profile.display_name ?? profile.username}
+          </AppText>
+          <Pressable accessibilityRole="button" onPress={() => router.push('/profile/edit')}>
+            <AppText style={{ color: THEME.textMuted }}>@{profile.username} · Edit profile</AppText>
+          </Pressable>
+          {meta.length > 0 ? (
+            <AppText style={{ color: THEME.textMuted, marginTop: 2 }}>{meta.join(' · ')}</AppText>
+          ) : null}
+        </View>
+      </View>
+
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        <TextButton title="Edit profile" onPress={() => router.push('/profile/edit')} filled />
+        <TextButton
+          title="View public"
+          onPress={() =>
+            router.push({ pathname: '/profile/u/[username]', params: { username: profile.username } })
+          }
+        />
+        <TextButton title="Settings" onPress={() => router.push('/profile/account')} />
+      </View>
+
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
         {RANGES.map((item) => (
           <QuietFilter key={item} label={RANGE_LABEL[item]} on={item === range} onPress={() => chooseRange(item)} />
@@ -180,32 +206,6 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
           />
         </View>
       ) : null}
-
-      <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-        <Avatar uri={profile.avatar_url} name={profile.display_name ?? profile.username} size={64} />
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <AppText style={{ fontSize: 22, fontWeight: '800', color: THEME.textPrimary }} numberOfLines={1}>
-            {profile.display_name ?? profile.username}
-          </AppText>
-          <Pressable accessibilityRole="button" onPress={() => router.push('/profile/edit')}>
-            <AppText style={{ color: THEME.textMuted }}>@{profile.username} · Edit profile</AppText>
-          </Pressable>
-          {meta.length > 0 ? (
-            <AppText style={{ color: THEME.textMuted, marginTop: 2 }}>{meta.join(' · ')}</AppText>
-          ) : null}
-        </View>
-      </View>
-
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        <TextButton title="Edit profile" onPress={() => router.push('/profile/edit')} filled />
-        <TextButton
-          title="View public"
-          onPress={() =>
-            router.push({ pathname: '/profile/u/[username]', params: { username: profile.username } })
-          }
-        />
-        <TextButton title="Settings" onPress={() => router.push('/profile/account')} />
-      </View>
 
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
         {PHONE_CHIPS.map((item) => (
@@ -286,7 +286,10 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
             color={THEME.accent}
             onHint={setBarHint}
           />
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 14, paddingRight: 12 }}>
             <QuietFilter
               label="All"
               on={!muscle}
@@ -308,7 +311,7 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
                 }}
               />
             ))}
-          </View>
+          </ScrollView>
           {muscle && exercises.length > 0 ? (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
               <QuietFilter label="All exercises" on={!exercise} onPress={() => { setExercise(null); setBarHint(''); }} />
