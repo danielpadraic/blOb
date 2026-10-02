@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
+import { ProgressRing } from '@/components/ui/ProgressRing';
 import { useFriendCount } from '@/hooks/useSocial';
 import {
   sourceChipLabel,
@@ -20,6 +21,7 @@ import {
   markHomeVisited,
 } from '@/lib/dashboard/homePrompt';
 import { readDashboardRange, writeDashboardRange } from '@/lib/dashboard/rangeChoice';
+import type { DayMark } from '@/lib/dashboard/calendar';
 import type { DashboardRange } from '@/lib/dashboard/range';
 import { isWideDashboardWindow } from '@/lib/dashboard/wide';
 import { copy } from '@/lib/copy';
@@ -117,7 +119,10 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
   const model = dash.model;
   const activities = model.activities.filter((row) => !source || row.sources.includes(source));
   const sleepCard = model.bodyCards.find((card) => card.key === 'sleep') ?? null;
-  const bodyCards = model.bodyCards.filter((card) => card.key !== 'sleep');
+  const ringCards = model.bodyCards.filter((card) => card.key === 'move' || card.key === 'exercise' || card.key === 'stand');
+  const bodyCards = model.bodyCards.filter(
+    (card) => card.key !== 'sleep' && card.key !== 'move' && card.key !== 'exercise' && card.key !== 'stand',
+  );
   const queryClient = useQueryClient();
   const friendCount = friends.data ?? 0;
   const liveCount = model.challenges.length;
@@ -256,48 +261,61 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
       {chip === 'nutrition' ? <AppText style={{ color: THEME.textMuted }}>Later</AppText> : null}
       {chip === 'sleep' && !sleepCard ? <AppText style={{ color: THEME.textMuted }}>Later</AppText> : null}
 
+      {showFitness && model.checkinCells.length > 0 ? (
+        <Card
+          title={model.checkinLabel ? `Check-ins · ${model.checkinLabel}` : 'Check-ins'}
+          chip="Check-in">
+          <CheckinCalendar cells={model.checkinCells} marks={model.checkinMarks} header={model.checkinHeader} />
+        </Card>
+      ) : null}
+
       {showFitness && model.liftVolumeLabel ? (
-        <Card title="Lift">
-          <AppText style={{ fontSize: 28, fontWeight: '800', color: THEME.textPrimary }}>{model.liftVolumeLabel}</AppText>
-          {model.liftSessionCount > 0 ? (
-            <AppText style={{ color: THEME.textMuted }}>
-              {model.liftSessionCount} {model.liftSessionCount === 1 ? 'session' : 'sessions'}
-            </AppText>
-          ) : null}
-          <DayChart days={model.liftBars} />
-          <Source label="Lift" />
+        <Card title={`Pounds · ${model.liftVolumeLabel}`} chip="Lift">
+          <DayChart days={model.liftBars} color={THEME.accent} />
         </Card>
       ) : null}
 
-      {showFitness && model.checkinLabel ? (
-        <Card title="Check-in days">
-          <AppText style={{ fontSize: 28, fontWeight: '800', color: THEME.textPrimary }}>{model.checkinLabel}</AppText>
-          <DayChart days={model.checkinBars} />
-          <Source label="Check-in" />
+      {showFitness && model.liftTimeLabel ? (
+        <Card title={`Lift time · ${model.liftTimeLabel}`} chip="Lift">
+          <DayChart days={model.liftTimeBars} color={THEME.circle} />
         </Card>
       ) : null}
 
-      {showFitness && model.cardioLabel ? (
-        <Card title="Duration">
-          <AppText style={{ fontSize: 28, fontWeight: '800', color: THEME.textPrimary }}>{model.cardioLabel}</AppText>
-          <DayChart days={model.cardioBars} />
-          <Source label="Lift" />
+      {showFitness && model.cardioTimeLabel ? (
+        <Card title={`Cardio time · ${model.cardioTimeLabel}`} chip="Lift">
+          <DayLines days={model.cardioTimeBars} color={THEME.circle} />
         </Card>
       ) : null}
 
       {showFitness && model.mileLabel ? (
-        <Card title="Miles">
-          <AppText style={{ fontSize: 28, fontWeight: '800', color: THEME.textPrimary }}>{model.mileLabel}</AppText>
-          <DayChart days={model.mileBars} />
-          <Source label="Check-in" />
+        <Card title={`Miles · ${model.mileLabel}`} chip="Check-in">
+          <DayChart days={model.mileBars} color={THEME.accentBright} />
         </Card>
       ) : null}
 
       {showFitness && model.stepLabel ? (
-        <Card title="Steps">
-          <AppText style={{ fontSize: 28, fontWeight: '800', color: THEME.textPrimary }}>{model.stepLabel}</AppText>
-          <DayChart days={model.stepBars} />
-          <Source label="Check-in" />
+        <Card title={`Steps · ${model.stepLabel}`} chip="Check-in">
+          <DayChart days={model.stepBars} color={THEME.accentBright} />
+        </Card>
+      ) : null}
+
+      {showFitness && ringCards.length > 0 ? (
+        <Card title="Rings" chip={ringCards.find((card) => card.source) ? sourceChipLabel(ringCards.find((card) => card.source)?.source ?? 'checkin') : undefined}>
+          <View style={{ flexDirection: 'row', gap: 16, alignItems: 'center' }}>
+            {ringCards.map((card) => (
+              <View key={card.key} style={{ alignItems: 'center', gap: 4 }}>
+                <ProgressRing
+                  progress={1}
+                  size={72}
+                  strokeWidth={7}
+                  color={card.key === 'stand' ? THEME.gold : card.key === 'exercise' ? THEME.circle : THEME.accent}
+                  label={card.valueLabel}
+                  labelClassName="text-[11px] font-bold text-center"
+                  caption={card.title}
+                />
+              </View>
+            ))}
+          </View>
         </Card>
       ) : null}
 
@@ -307,19 +325,20 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
 
       {showFitness
         ? bodyCards.map((card) => (
-            <Card key={card.key} title={card.title}>
-              <AppText style={{ fontSize: 28, fontWeight: '800', color: THEME.textPrimary }}>{card.valueLabel}</AppText>
-              <DayChart days={card.bars} />
-              {card.source ? <Source label={sourceChipLabel(card.source)} /> : null}
+            <Card
+              key={card.key}
+              title={`${card.title} · ${card.valueLabel}`}
+              chip={card.source ? sourceChipLabel(card.source) : undefined}>
+              <DayChart days={card.bars} color={THEME.accentBright} />
             </Card>
           ))
         : null}
 
       {(chip === 'sleep' || chip === 'all') && sleepCard ? (
-        <Card title="Sleep">
-          <AppText style={{ fontSize: 28, fontWeight: '800', color: THEME.textPrimary }}>{sleepCard.valueLabel}</AppText>
-          <DayChart days={sleepCard.bars} />
-          {sleepCard.source ? <Source label={sourceChipLabel(sleepCard.source)} /> : null}
+        <Card
+          title={`Sleep · ${sleepCard.valueLabel}`}
+          chip={sleepCard.source ? sourceChipLabel(sleepCard.source) : undefined}>
+          <DayLines days={sleepCard.bars} color={THEME.gold} />
         </Card>
       ) : null}
 
@@ -423,12 +442,7 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
         </Card>
       ) : null}
 
-      {model.earnedLabel ? (
-        <Card title="Earned">
-          <AppText style={{ fontSize: 28, fontWeight: '800', color: THEME.accent }}>{model.earnedLabel}</AppText>
-          <Source label="Wallet · in-app only" />
-        </Card>
-      ) : null}
+      {model.earnedLabel ? <Card title={`Earned · ${model.earnedLabel}`} chip="Wallet" /> : null}
 
       {dash.loading ? <AppText style={{ color: THEME.textMuted }}>Loading your effort…</AppText> : null}
     </ScrollView>
@@ -449,22 +463,28 @@ const dateField = {
 const columnHead = { flex: 1, fontSize: 11, fontWeight: '800' as const, color: THEME.textMuted };
 const columnCell = { flex: 1, fontSize: 13, color: THEME.textPrimary };
 
-function DayChart({ days }: { days: Array<{ key: string; label: string; value: number }> }) {
+function DayChart({
+  days,
+  color,
+}: {
+  days: Array<{ key: string; label: string; value: number }>;
+  color: string;
+}) {
   const max = Math.max(...days.map((day) => day.value), 1);
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: 96, paddingTop: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: 56 }}>
         {days.map((day) => (
-          <View key={day.key} style={{ width: 28, alignItems: 'center', justifyContent: 'flex-end' }}>
+          <View key={day.key} style={{ width: 22, alignItems: 'center', justifyContent: 'flex-end' }}>
             <View
               style={{
-                width: 16,
-                height: day.value > 0 ? Math.max(6, Math.round((day.value / max) * 72)) : 2,
-                backgroundColor: day.value > 0 ? THEME.accent : THEME.border,
+                width: 12,
+                height: day.value > 0 ? Math.max(4, Math.round((day.value / max) * 40)) : 2,
+                backgroundColor: day.value > 0 ? color : THEME.border,
                 borderRadius: 4,
               }}
             />
-            <AppText style={{ color: THEME.textMuted, marginTop: 4, fontSize: 10 }}>{day.label}</AppText>
+            <AppText style={{ color: THEME.textMuted, marginTop: 2, fontSize: 10 }}>{day.label}</AppText>
           </View>
         ))}
       </View>
@@ -472,7 +492,105 @@ function DayChart({ days }: { days: Array<{ key: string; label: string; value: n
   );
 }
 
-function Card({ title, children }: { title: string; children: ReactNode }) {
+function DayLines({
+  days,
+  color,
+}: {
+  days: Array<{ key: string; label: string; value: number }>;
+  color: string;
+}) {
+  const max = Math.max(...days.map((day) => day.value), 1);
+  return (
+    <View style={{ gap: 3 }}>
+      {days.map((day) => (
+        <View key={day.key} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <AppText style={{ width: 14, fontSize: 10, color: THEME.textMuted }}>{day.label}</AppText>
+          <View style={{ flex: 1, height: 6, borderRadius: 99, backgroundColor: THEME.border }}>
+            <View
+              style={{
+                width: `${Math.max(day.value > 0 ? 4 : 0, Math.round((day.value / max) * 100))}%`,
+                height: 6,
+                borderRadius: 99,
+                backgroundColor: day.value > 0 ? color : 'transparent',
+              }}
+            />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const WEEKDAY_HEAD = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+function CheckinCalendar({
+  cells,
+  marks,
+  header,
+}: {
+  cells: Array<{ key: string | null; numeral: string; weekday: string }>;
+  marks: Record<string, DayMark>;
+  header: boolean;
+}) {
+  return (
+    <View>
+      {header ? (
+        <View style={{ flexDirection: 'row' }}>
+          {WEEKDAY_HEAD.map((letter, index) => (
+            <AppText key={`${letter}-${index}`} style={calendarHead}>
+              {letter}
+            </AppText>
+          ))}
+        </View>
+      ) : null}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        {cells.map((cell, index) => {
+          const mark = cell.key ? (marks[cell.key] ?? 'empty') : 'empty';
+          const label = !cell.key ? '' : mark === 'done' ? 'Complete' : mark === 'miss' ? 'Missed' : mark === 'due' ? 'Due' : 'Nothing due';
+          return (
+            <View key={cell.key ?? `pad-${index}`} accessibilityLabel={label} style={calendarCell}>
+              {cell.key ? (
+                <View style={calendarMark(mark)}>
+                  {!header && cell.weekday ? (
+                    <AppText style={{ fontSize: 9, color: mark === 'done' ? THEME.primaryForeground : THEME.textMuted }}>
+                      {cell.weekday}
+                    </AppText>
+                  ) : null}
+                  <AppText
+                    style={{
+                      fontSize: 12,
+                      fontWeight: '700',
+                      color: mark === 'done' ? THEME.primaryForeground : mark === 'miss' ? THEME.circle : THEME.textMuted,
+                    }}>
+                    {cell.numeral}
+                  </AppText>
+                </View>
+              ) : null}
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function calendarMark(mark: DayMark) {
+  if (mark === 'done') {
+    return { backgroundColor: THEME.accent, borderRadius: 10, minWidth: 28, minHeight: 28, alignItems: 'center' as const, justifyContent: 'center' as const };
+  }
+  if (mark === 'miss') {
+    return { borderWidth: 1.5, borderColor: THEME.circle, borderRadius: 10, minWidth: 28, minHeight: 28, alignItems: 'center' as const, justifyContent: 'center' as const };
+  }
+  if (mark === 'due') {
+    return { borderWidth: 1, borderColor: THEME.accent, borderRadius: 10, minWidth: 28, minHeight: 28, alignItems: 'center' as const, justifyContent: 'center' as const };
+  }
+  return { minWidth: 28, minHeight: 28, alignItems: 'center' as const, justifyContent: 'center' as const };
+}
+
+const calendarCell = { width: '14.28%' as const, alignItems: 'center' as const, paddingVertical: 2 };
+const calendarHead = { width: '14.28%' as const, textAlign: 'center' as const, fontSize: 10, fontWeight: '800' as const, color: THEME.textMuted };
+
+function Card({ title, chip, children }: { title: string; chip?: string; children?: ReactNode }) {
   return (
     <View
       style={{
@@ -480,11 +598,15 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
         borderRadius: THEME.radius,
         borderWidth: 1,
         borderColor: THEME.border,
-        padding: 14,
-        gap: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        gap: 4,
         ...themeShadow('card'),
       }}>
-      <AppText style={{ fontSize: 12, fontWeight: '700', letterSpacing: 0.4, color: THEME.textMuted }}>{title}</AppText>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <AppText style={{ flex: 1, fontSize: 15, fontWeight: '800', color: THEME.textPrimary }}>{title}</AppText>
+        {chip ? <Source label={chip} /> : null}
+      </View>
       {children}
     </View>
   );
@@ -524,9 +646,7 @@ function AllowHealth({ onAllowed }: { onAllowed: () => void }) {
 }
 
 function Source({ label }: { label: string }) {
-  return (
-    <AppText style={{ fontSize: 11, fontWeight: '800', color: THEME.accent, marginTop: 4 }}>{label}</AppText>
-  );
+  return <AppText style={{ fontSize: 11, fontWeight: '800', color: THEME.accent }}>{label}</AppText>;
 }
 
 function TextButton({ title, onPress, filled }: { title: string; onPress: () => void; filled?: boolean }) {

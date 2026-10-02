@@ -41,6 +41,21 @@ export function dayBars(
   return series.some((day) => day.value > 0) ? series : [];
 }
 
+/** Wall-clock time that is not a cardio block, plus cardio on its own. A watch workout is not an input. */
+export function liftAndCardioSeconds(input: {
+  performedAt?: string | null;
+  completedAt?: string | null;
+  cardioSeconds?: number | null;
+}): { lift: number; cardio: number } {
+  const cardio = Math.max(0, Math.round(Number(input.cardioSeconds) || 0));
+  const start = Date.parse(String(input.performedAt ?? ''));
+  const end = Date.parse(String(input.completedAt ?? ''));
+  const wall =
+    Number.isFinite(start) && Number.isFinite(end) && end > start ? Math.round((end - start) / 1000) : 0;
+  const lift = wall > cardio ? wall - cardio : cardio === 0 ? wall : 0;
+  return { lift, cardio };
+}
+
 /** Lift pounds only. A watch workout is not an input. */
 export function poundsByDay(rows: readonly { day: string; pounds: number }[]): Map<string, number> {
   const map = new Map<string, number>();

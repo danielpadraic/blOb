@@ -6,14 +6,22 @@ import { useLoggableChallenges } from '@/hooks/useLoggableChallenge';
 import { useOfficialCoinStatus } from '@/hooks/useOfficialCoin';
 import { useLiftHistory } from '@/hooks/useLift';
 import { loadStoredBodyDays, saveBodyDays } from '@/lib/dashboard/bodyStore';
+import {
+  calendarCells,
+  dutyBounds,
+  markCalendarDay,
+  type CalendarCell,
+  type CalendarDuty,
+  type DayMark,
+} from '@/lib/dashboard/calendar';
 import { collapseCheckinRows, durationLabel } from '@/lib/dashboard/model';
 import { dashboardZone, dayInRange, rangeDayKeys, type CustomRange, type DashboardRange } from '@/lib/dashboard/range';
 import {
   bodyCards,
-  checkinDayMarks,
   dayBars,
   dedupeHealthSessions,
   enteredFromParts,
+  liftAndCardioSeconds,
   mergeLiftHealthSessions,
   poundsByDay,
   syncDayLabel,
@@ -30,8 +38,10 @@ import { getHealthProvider } from '@/services/health';
 import type { HealthWorkout } from '@/services/health/types';
 import { boardQuantityProgress } from '@/lib/board/quantity';
 import { usesQuantityScoring } from '@/lib/challengeExperience';
-import { isOfficialCoinChallenge } from '@/lib/officialCoin';
-import { OFFICIAL_COIN_TZ } from '@/lib/officialCoin';
+import { isOfficialCoinChallenge, OFFICIAL_COIN_TZ } from '@/lib/officialCoin';
+import { officialBoardDayComplete } from '@/lib/checkin/officialDay';
+import { parseChallengeProofs } from '@/lib/challengeProofs';
+import { challengeHasDailyCheckinDuty } from '@/lib/missDuty';
 import { supabase } from '@/lib/supabase';
 import type { LiftSessionSummary } from '@/lib/lift/types';
 
@@ -64,10 +74,14 @@ export type FitnessDashboardModel = {
   liftBars: DashboardDayBar[];
   liftVolumeLabel: string | null;
   liftSessionCount: number;
-  checkinBars: DashboardDayBar[];
+  liftTimeBars: DashboardDayBar[];
+  liftTimeLabel: string | null;
+  cardioTimeBars: DashboardDayBar[];
+  cardioTimeLabel: string | null;
+  checkinCells: CalendarCell[];
+  checkinMarks: Record<string, DayMark>;
+  checkinHeader: boolean;
   checkinLabel: string | null;
-  cardioBars: DashboardDayBar[];
-  cardioLabel: string | null;
   mileBars: DashboardDayBar[];
   mileLabel: string | null;
   stepBars: DashboardDayBar[];
@@ -84,10 +98,14 @@ const EMPTY: FitnessDashboardModel = {
   liftBars: [],
   liftVolumeLabel: null,
   liftSessionCount: 0,
-  checkinBars: [],
+  liftTimeBars: [],
+  liftTimeLabel: null,
+  cardioTimeBars: [],
+  cardioTimeLabel: null,
+  checkinCells: [],
+  checkinMarks: {},
+  checkinHeader: false,
   checkinLabel: null,
-  cardioBars: [],
-  cardioLabel: null,
   mileBars: [],
   mileLabel: null,
   stepBars: [],
@@ -147,6 +165,7 @@ function buildModel(input: {
   bodyDays: BodyDay[];
   syncedAt: string | null;
   showSyncLabel: boolean;
+  duties: CalendarDuty[];
   challenges: DashboardChallengeBar[];
   trophies: string[];
   earnedLabel: string | null;
@@ -166,7 +185,9 @@ function buildModel(input: {
   let volume = 0;
   let volumeUnit: LiftSessionSummary['unit'] = 'lb';
   let cardioSec = 0;
+  let liftSec = 0;
   const cardio = new Map<string, number>();
+  const liftTime = new Map<string, number>();
   const liftPounds: { day: string; pounds: number }[] = [];
   const sessions: SessionRow[] = [];
   for (const row of lifts) {
@@ -177,15 +198,23 @@ function buildModel(input: {
       volume += moved;
       liftPounds.push({ day, pounds: moved });
     }
-    const seconds = Math.max(Number(row.durationSeconds) || 0, 0);
-    if (seconds > 0 && day) {
-      cardioSec += seconds;
-      cardio.set(day, (cardio.get(day) ?? 0) + seconds);
+    const split = liftAndCardioSeconds({
+      performedAt: row.performedAt,
+      completedAt: row.completedAt,
+      cardioSeconds: row.durationSeconds,
+    });
+    if (split.cardio > 0 && day) {
+      cardioSec += split.cardio;
+      cardio.set(day, (cardio.get(day) ?? 0) + split.cardio);
+    }
+    if (split.lift > 0 && day) {
+      liftSec += split.lift;
+      liftTime.set(day, (liftTime.get(day) ?? 0) + split.lift);
     }
     const start = row.performedAt;
     const end =
       row.completedAt ||
-      (seconds > 0 ? new Date(Date.parse(start) + seconds * 1000).toISOString() : '');
+      (split.cardio > 0 ? new Date(Date.parse(start) + split.cardio * 1000).toISOString() : '');
     if (!start || !end) {
       continue;
     }
@@ -204,12 +233,10 @@ function buildModel(input: {
 
   const miles = new Map<string, number>();
   const steps = new Map<string, number>();
-  const checkinDays: string[] = [];
   for (const row of collapseCheckinRows(input.checkins)) {
     if (!dayInRange(row.period_key, keys)) {
       continue;
     }
-    checkinDays.push(row.period_key);
     const entered = enteredFromParts(row.proof_parts);
     if (entered.miles > 0) {
       miles.set(row.period_key, (miles.get(row.period_key) ?? 0) + entered.miles);
@@ -296,17 +323,34 @@ function buildModel(input: {
 
   const mileTotal = [...miles.values()].reduce((sum, value) => sum + value, 0);
   const stepTotal = [...steps.values()].reduce((sum, value) => sum + value, 0);
-  const checkinCount = checkinDayMarks(checkinDays).size;
+  const grid = zone ? calendarCells(input.range, input.now, zone, input.custom) : { cells: [], showHeader: false };
+  const checkinMarks: Record<string, DayMark> = {};
+  let checkinDone = 0;
+  for (const cell of grid.cells) {
+    if (!cell.key) {
+      continue;
+    }
+    const mark = markCalendarDay(cell.key, input.duties);
+    checkinMarks[cell.key] = mark;
+    if (mark === 'done') {
+      checkinDone += 1;
+    }
+  }
+  const showCalendar = input.duties.length > 0 || checkinDone > 0;
   const cards = bodyCards(input.bodyDays, keys, label);
 
   return {
     liftBars: dayBars(keys, poundsByDay(liftPounds), label),
     liftVolumeLabel: volume > 0 ? formatMassLabel(volume, volumeUnit, Math.round(volume).toLocaleString('en-US')) : null,
     liftSessionCount: lifts.length,
-    checkinBars: dayBars(keys, checkinDayMarks(checkinDays), label),
-    checkinLabel: checkinCount > 0 ? `${checkinCount} ${checkinCount === 1 ? 'day' : 'days'}` : null,
-    cardioBars: dayBars(keys, cardio, label),
-    cardioLabel: cardioSec > 0 ? durationLabel(cardioSec) : null,
+    liftTimeBars: dayBars(keys, liftTime, label),
+    liftTimeLabel: liftSec > 0 ? durationLabel(liftSec) : null,
+    cardioTimeBars: dayBars(keys, cardio, label),
+    cardioTimeLabel: cardioSec > 0 ? durationLabel(cardioSec) : null,
+    checkinCells: showCalendar ? grid.cells : [],
+    checkinMarks: showCalendar ? checkinMarks : {},
+    checkinHeader: showCalendar && grid.showHeader,
+    checkinLabel: checkinDone > 0 ? `${checkinDone} ${checkinDone === 1 ? 'day' : 'days'}` : null,
     mileBars: dayBars(keys, miles, label),
     mileLabel: mileTotal > 0 ? `${Math.round(mileTotal * 10) / 10} mi` : null,
     stepBars: dayBars(keys, steps, label),
@@ -388,7 +432,7 @@ export function useFitnessDashboard(range: DashboardRange, custom: CustomRange |
           .limit(80),
         supabase
           .from('challenge_participants')
-          .select('challenge_id, distance_meters_total')
+          .select('challenge_id, distance_meters_total, joined_at, eliminated_at')
           .eq('user_id', userId),
         start
           ? supabase
@@ -428,11 +472,22 @@ export function useFitnessDashboard(range: DashboardRange, custom: CustomRange |
         coins !== 0 ? `${Math.round(coins)} coins` : '',
       ].filter(Boolean);
       const distanceByChallenge = new Map<string, number>();
-      for (const row of (progress.data ?? []) as Array<{ challenge_id?: string; distance_meters_total?: number | null }>) {
+      const membership = new Map<string, { joinedAt: string | null; eliminatedAt: string | null }>();
+      for (const row of (progress.data ?? []) as Array<{
+        challenge_id?: string;
+        distance_meters_total?: number | null;
+        joined_at?: string | null;
+        eliminated_at?: string | null;
+      }>) {
         const id = String(row.challenge_id ?? '');
-        if (id) {
-          distanceByChallenge.set(id, Number(row.distance_meters_total) || 0);
+        if (!id) {
+          continue;
         }
+        distanceByChallenge.set(id, Number(row.distance_meters_total) || 0);
+        membership.set(id, {
+          joinedAt: row.joined_at ?? null,
+          eliminatedAt: row.eliminated_at ?? null,
+        });
       }
       let bodyDays = body.days;
       let syncedAt = body.syncedAt;
@@ -501,6 +556,7 @@ export function useFitnessDashboard(range: DashboardRange, custom: CustomRange |
         bodyDays,
         syncedAt,
         distanceByChallenge,
+        membership,
         trophies,
         earnedLabel: ledgerRows.length > 0 && earnedBits.length > 0 ? earnedBits.join(' · ') : null,
       };
@@ -560,6 +616,59 @@ export function useFitnessDashboard(range: DashboardRange, custom: CustomRange |
     });
   }
 
+  const calendarDuties: CalendarDuty[] = [];
+  if (extra.data) {
+    const seen = new Set<string>();
+    const pushDuty = (
+      row: {
+        id: string;
+        proofs?: unknown;
+        starts_at?: string | null;
+        ends_at?: string | null;
+        timezone?: string | null;
+        official_kind?: string | null;
+      },
+      timeZone: string,
+    ) => {
+      if (!row.id || seen.has(row.id) || parseChallengeProofs(row.proofs).length === 0) {
+        return;
+      }
+      const member = extra.data?.membership.get(row.id);
+      const bounds = dutyBounds({
+        startAt: row.starts_at,
+        endAt: row.ends_at,
+        joinedAt: member?.joinedAt,
+        eliminatedAt: member?.eliminatedAt,
+        timeZone,
+        now: new Date(),
+      });
+      if (!bounds) {
+        return;
+      }
+      const complete = extra.data.checkins
+        .filter((item) => item.challenge_id === row.id && officialBoardDayComplete(row, item))
+        .map((item) => item.period_key);
+      seen.add(row.id);
+      calendarDuties.push({ ...bounds, complete });
+    };
+    for (const row of loggable.data ?? []) {
+      if (!challengeHasDailyCheckinDuty(row) && !isOfficialCoinChallenge(row)) {
+        continue;
+      }
+      const timeZone = isOfficialCoinChallenge(row)
+        ? OFFICIAL_COIN_TZ
+        : dashboardZone(row.timezone) || dashboardZone(null) || OFFICIAL_COIN_TZ;
+      pushDuty(row, timeZone);
+    }
+    for (const room of [coin.status.weekly, coin.status.monthly]) {
+      if (!room?.joined) {
+        continue;
+      }
+      const full = (loggable.data ?? []).find((item) => item.id === room.challenge.id) ?? room.challenge;
+      pushDuty(full, OFFICIAL_COIN_TZ);
+    }
+  }
+
   const model = extra.data
     ? buildModel({
         range,
@@ -571,6 +680,7 @@ export function useFitnessDashboard(range: DashboardRange, custom: CustomRange |
         bodyDays: extra.data.bodyDays,
         syncedAt: extra.data.syncedAt,
         showSyncLabel: Platform.OS === 'web',
+        duties: calendarDuties,
         challenges,
         trophies: extra.data.trophies,
         earnedLabel: extra.data.earnedLabel,

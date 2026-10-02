@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { bodyCards, enteredFromParts, mergeLiftHealthSessions, poundsByDay, sessionVisible, syncDayLabel } from '@/lib/dashboard/split';
+import {
+  bodyCards,
+  enteredFromParts,
+  liftAndCardioSeconds,
+  mergeLiftHealthSessions,
+  poundsByDay,
+  sessionVisible,
+  syncDayLabel,
+} from '@/lib/dashboard/split';
 import { bucketBodyPoints, sleepMinutesFromSamples } from '@/lib/health/bodyDays';
 
 describe('effort stays on blOb rows', () => {
@@ -53,6 +61,23 @@ describe('effort stays on blOb rows', () => {
     expect(rows[0]?.pounds).toBe(5000);
     expect(rows[0]?.start).toBe('2026-10-01T14:10:00.000Z');
     expect(rows[0]?.end).toBe('2026-10-01T14:50:00.000Z');
+  });
+
+  it('keeps cardio time off the lift clock', () => {
+    expect(
+      liftAndCardioSeconds({
+        performedAt: '2026-10-01T14:00:00.000Z',
+        completedAt: '2026-10-01T14:40:00.000Z',
+        cardioSeconds: 7 * 60,
+      }),
+    ).toEqual({ lift: 33 * 60, cardio: 7 * 60 });
+    expect(
+      liftAndCardioSeconds({
+        performedAt: '2026-10-01T14:00:00.000Z',
+        completedAt: '2026-10-01T14:07:00.000Z',
+        cardioSeconds: 7 * 60,
+      }),
+    ).toEqual({ lift: 0, cardio: 7 * 60 });
   });
 
   it('hides rows with the source filter and leaves pounds alone', () => {
