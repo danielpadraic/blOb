@@ -1,4 +1,6 @@
-import { parseProofParts } from '@/lib/challengeProofs';
+import { parseChallengeProofs, parseProofParts } from '@/lib/challengeProofs';
+import { checkinSlotSnapshot } from '@/lib/multiCheckin';
+import { normalizePeriodKey } from '@/lib/checkinPeriod';
 
 /**
  * A consistency day on Official Weekly / Monthly.
@@ -66,4 +68,109 @@ export function officialPeriodCounts(row: {
     return false;
   }
   return storedWorkoutSeconds(row) >= 30 * 60;
+}
+
+type OfficialProofChallenge = {
+  proofs?: unknown;
+  proof_type?: unknown;
+  proof_requirements?: Array<{ type?: string; required?: boolean }> | null;
+  taskLabel?: string | null;
+  task?: string | null;
+};
+
+export type OfficialBoardCheckin = {
+  id?: string | null;
+  user_id?: string | null;
+  period_key?: string | null;
+  proof_parts?: unknown;
+  pre_selfie_url?: string | null;
+  post_selfie_url?: string | null;
+  hr_monitor_url?: string | null;
+  health_workout_id?: string | null;
+};
+
+/**
+ * The Workout slot can live on the check-in column when the part bag has not
+ * copied it yet. Fold that id in so the same remaining-label check sees it.
+ */
+function partsWithWorkoutColumn(row: OfficialBoardCheckin): unknown {
+  const workoutId = String(row.health_workout_id ?? '').trim();
+  if (!workoutId) {
+    return row.proof_parts;
+  }
+  const parts = parseProofParts(row.proof_parts);
+  const hr = parts.hr ?? parts.hr_monitor;
+  if (String(hr?.url ?? '').trim() || hr?.health || String(hr?.healthWorkoutId ?? '').trim()) {
+    return row.proof_parts;
+  }
+  const base =
+    row.proof_parts && typeof row.proof_parts === 'object' && !Array.isArray(row.proof_parts)
+      ? { ...(row.proof_parts as Record<string, unknown>) }
+      : {};
+  return {
+    ...base,
+    hr: { method: 'hr', healthWorkoutId: workoutId },
+  };
+}
+
+/**
+ * Official board day. True only when this room's proof list is present and
+ * remainingProofLabels is empty for the row. A selfie pair with Workout still
+ * open does not count. An empty proof list does not count every row.
+ */
+export function officialBoardDayComplete(
+  challenge: OfficialProofChallenge | null | undefined,
+  row: OfficialBoardCheckin | null | undefined,
+): boolean {
+  if (!challenge || !row) {
+    return false;
+  }
+  if (parseChallengeProofs(challenge.proofs).length === 0) {
+    return false;
+  }
+  const snap = checkinSlotSnapshot(challenge, partsWithWorkoutColumn(row), {
+    pre_selfie_url: row.pre_selfie_url,
+    post_selfie_url: row.post_selfie_url,
+    hr_monitor_url: row.hr_monitor_url,
+  });
+  return snap.required > 0 && snap.remaining.length === 0;
+}
+
+export type OfficialBoardDayHit = {
+  userId: string;
+  periodKey: string;
+  checkinId: string;
+};
+
+/** One Chicago day per person. Later duplicate rows for the same day are ignored. */
+export function officialBoardDaysByUser(
+  challenge: OfficialProofChallenge | null | undefined,
+  rows: readonly OfficialBoardCheckin[],
+): Map<string, OfficialBoardDayHit[]> {
+  const seen = new Set<string>();
+  const byUser = new Map<string, OfficialBoardDayHit[]>();
+  for (const row of rows) {
+    if (!officialBoardDayComplete(challenge, row)) {
+      continue;
+    }
+    const userId = String(row.user_id ?? '').trim();
+    const periodKey = normalizePeriodKey(row.period_key);
+    const checkinId = String(row.id ?? '').trim();
+    if (!userId || !periodKey || !checkinId) {
+      continue;
+    }
+    const stamp = `${userId}|${periodKey}`;
+    if (seen.has(stamp)) {
+      continue;
+    }
+    seen.add(stamp);
+    const list = byUser.get(userId) ?? [];
+    list.push({ userId, periodKey, checkinId });
+    byUser.set(userId, list);
+  }
+  for (const [userId, list] of byUser) {
+    list.sort((a, b) => a.periodKey.localeCompare(b.periodKey));
+    byUser.set(userId, list);
+  }
+  return byUser;
 }

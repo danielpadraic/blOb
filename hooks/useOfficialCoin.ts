@@ -2,7 +2,7 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 
 import { useAuth } from '@/hooks/useAuth';
 import { chicagoDateStamp } from '@/lib/chicagoToday';
-import { officialPeriodCounts } from '@/lib/checkin/officialDay';
+import { officialBoardDayComplete, officialBoardDaysByUser } from '@/lib/checkin/officialDay';
 import { normalizePeriodKey } from '@/lib/checkinPeriod';
 import {
   canRejoinOfficialCoin,
@@ -308,7 +308,12 @@ export function useOfficialCoinDays(
         hr_monitor_url?: string | null;
         health_workout_id?: string | null;
       }[];
-      const live = rows.filter((row) => officialPeriodCounts(row));
+      // Every roster member in this room. Never narrow to the signed-in user.
+      const counted = officialBoardDaysByUser(challenge, rows);
+      const live = rows.filter((row) => {
+        const hit = counted.get(String(row.user_id))?.find((day) => day.checkinId === String(row.id));
+        return Boolean(hit);
+      });
       if (live.length === 0) {
         return byUser;
       }
@@ -396,7 +401,7 @@ export function useOfficialCoinFinishDays(
           if (!key || !today || key >= today) {
             return false;
           }
-          if (officialPeriodCounts(row)) {
+          if (officialBoardDayComplete(challenge, row)) {
             return false;
           }
           return Boolean(row.pre_selfie_url || row.post_selfie_url || row.hr_monitor_url || row.health_workout_id || row.proof_parts);

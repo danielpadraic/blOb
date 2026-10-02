@@ -234,9 +234,14 @@ export function ChallengeBoard({
     () =>
       view.people.map((row) => ({
         ...row,
+        days: officialCoin
+          ? coinDays.isSuccess
+            ? (coinDays.data?.get(row.userId)?.length ?? 0)
+            : 0
+          : row.days,
         quantity: progressByUser.get(row.userId)?.logged ?? 0,
       })),
-    [progressByUser, view.people],
+    [coinDays.data, coinDays.isSuccess, officialCoin, progressByUser, view.people],
   );
   const racing = rankedPeople.filter((row) => row.bucket !== 'dropped');
   const doneCount = quantityBoard
