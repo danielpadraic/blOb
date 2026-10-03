@@ -23,7 +23,7 @@ import { healthSourceLabel } from '@/lib/health/proofSummary';
 import { fetchWorkoutPlacements, probeOnline, upsertHealthConnection } from '@/lib/health/remote';
 import { formatHealthDuration } from '@/lib/health/proofSummary';
 import { formatWorkoutWhen } from '@/lib/health/workoutWhen';
-import { proofAlreadyCountsCopy, proofUniquenessFamily, sameTierWorkoutBlock, type WorkoutPlacement } from '@/lib/proofUniqueness';
+import { type WorkoutPlacement } from '@/lib/proofUniqueness';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { ChallengeProof } from '@/lib/challengeProofs';
 import { getHealthProvider, type HealthWorkout } from '@/services/health';
@@ -339,7 +339,7 @@ export function HealthWorkoutPicker({
               onPress={() => setWindowDays((days) => days + HEALTH_PICKER_DAYS)}
             />
             {onOpenGallery ? <Button title="Gallery" size="lg" onPress={onOpenGallery} /> : null}
-            <Button title="Camera" size="lg" onPress={onAddPhoto} />
+            <Button title="Photo of the watch" size="lg" onPress={onAddPhoto} />
             {onClose ? <Button title="Close" size="lg" variant="ghost" onPress={onClose} /> : null}
           </View>
         </View>
@@ -357,14 +357,8 @@ export function HealthWorkoutPicker({
           showsVerticalScrollIndicator={false}>
           {workouts.map((row) => {
             const blocked = workoutAttachBlockReason(row, rules);
-            const tier = sameTierWorkoutBlock(
-              proofUniquenessFamily({
-                frequency: challenge?.frequency ?? frequency,
-                series_id: challenge?.series_id ?? seriesId,
-                days_required: challenge?.days_required ?? daysRequired,
-              }),
-              placements.get(row.providerWorkoutId) ?? [],
-            );
+            // A workout already used on another challenge stays in the list.
+            void placements;
             // Attachable, but we could not check intensity. Reads as a hint, not a refusal.
             const note = blocked ? null : workoutAttachNote(row, rules);
             const busy = attaching || attachingId === row.providerWorkoutId;
@@ -400,15 +394,6 @@ export function HealthWorkoutPicker({
                   {` · ${healthSourceLabel(row.confidence)}`}
                   {Number(row.distanceM) > 0 ? ' · No route on this workout.' : ''}
                 </AppText>
-                {tier ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={tier.line}
-                    onPress={() => Alert.alert(tier.line, proofAlreadyCountsCopy(tier.title))}
-                    style={{ alignSelf: 'flex-start', marginTop: 6, minHeight: 28, justifyContent: 'center' }}>
-                    <AppText style={{ fontSize: 12, fontWeight: '800', color: THEME.danger }}>{tier.line}</AppText>
-                  </Pressable>
-                ) : null}
                 {blocked ? (
                   <AppText className="mt-1 text-[12px] font-semibold" style={{ color: THEME.danger }}>
                     {blocked}
@@ -426,7 +411,7 @@ export function HealthWorkoutPicker({
                   <Button
                     title={copy('health.useWorkout')}
                     size="md"
-                    disabled={Boolean(blocked) || Boolean(tier) || busy}
+                    disabled={Boolean(blocked) || busy}
                     loading={attachingId === row.providerWorkoutId}
                     onPress={() => void attach(row)}
                   />

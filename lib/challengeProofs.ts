@@ -757,6 +757,28 @@ export function isGuidedCameraProof(proof: Pick<ChallengeProof, 'method'>): bool
   return proof.method === 'photo' || proof.method === 'video' || proof.method === 'hr';
 }
 
+/** Pre, post, and the workout slot. One camera, not a form. */
+export function isSlotCameraCheckin(proofs: readonly ChallengeProof[]): boolean {
+  return (
+    proofs.some((proof) => isPreWorkoutProof(proof)) &&
+    proofs.some((proof) => isPostWorkoutProof(proof)) &&
+    proofs.some((proof) => proof.method === 'hr')
+  );
+}
+
+export function slotStripLabel(proof: Pick<ChallengeProof, 'id' | 'name' | 'method'>): string {
+  if (isPreWorkoutProof(proof)) {
+    return 'Pre';
+  }
+  if (isPostWorkoutProof(proof)) {
+    return 'Post';
+  }
+  if (proof.method === 'hr') {
+    return 'Workout';
+  }
+  return proofDisplayName(proof as ChallengeProof);
+}
+
 export function nextEmptyRequiredProof(
   proofs: ChallengeProof[],
   isFilled: (proof: ChallengeProof) => boolean,

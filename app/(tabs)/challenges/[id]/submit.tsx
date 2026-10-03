@@ -35,6 +35,7 @@ import {
   CheckinSafeBoundary,
 } from '@/components/challenge/CheckinSafeBoundary';
 import { LocationProofRow } from '@/components/challenge/LocationProofRow';
+import { CheckinCameraChrome } from '@/components/challenge/CheckinCameraChrome';
 import { HealthWorkoutGate } from '@/components/challenge/HealthWorkoutPicker';
 import {
   WorkoutProofCardRenderer,
@@ -74,6 +75,7 @@ import { normalizeCheckinStill } from '@/lib/checkinPhotoOrientation';
 import type { HealthWorkout } from '@/services/health/types';
 import {
   CHECKIN_BOB,
+  CHECKIN_COMPLETE_BODY,
   CHECKIN_REACH_STAY,
   CHECKIN_UPLOAD_STAY,
   canSendCheckin,
@@ -90,6 +92,7 @@ import {
   releaseHeldCheckinBlobs,
   saveCapturedProofLocally,
 } from '@/lib/checkin';
+import { postedStillNeed } from '@/lib/checkin/postedStill';
 import { checkinCameraFocused } from '@/lib/cameraAsk';
 import { requiredChallengeProofs } from '@/lib/challenges';
 import { remainingProofLabelsOf } from '@/lib/multiCheckin';
@@ -102,6 +105,10 @@ import {
   extraProofImageUrls,
   guidedCheckinPrompt,
   isGuidedCameraProof,
+  isPostWorkoutProof,
+  isPreWorkoutProof,
+  isSlotCameraCheckin,
+  slotStripLabel,
   legacyTypeForProof,
   nextEmptyRequiredProof,
   partSatisfies,
@@ -520,6 +527,10 @@ function SubmitWorkoutInner() {
   const checkinIdRef = useRef<string | null>(null);
   checkinIdRef.current = checkinQuery.data?.id ?? null;
   const [captureId, setCaptureId] = useState<string | null>(null);
+  const [snapPreview, setSnapPreview] = useState<string | null>(null);
+  const [slotUpload, setSlotUpload] = useState<Record<string, 'up' | 'fail'>>({});
+  const [postedLine, setPostedLine] = useState<string | null>(null);
+  const unfilledRef = useRef<string[]>([]);
   const [skippedAuto, setSkippedAuto] = useState(false);
   const [cameraFailed, setCameraFailed] = useState(false);
   const [hydrateDone, setHydrateDone] = useState(false);
@@ -1388,17 +1399,36 @@ function SubmitWorkoutInner() {
     const draft = onMedia(proof.id, uri, mimeType, fromLibrary === true, blob);
     // Replacing the attach drops the generated card for this slot instead of leaving it on screen.
     setCardPreview((current) => (current?.proofId === proof.id ? null : current));
-    setCaptureId(null);
+    const cameraTrio = isSlotCameraCheckin(proofSteps);
+    if (!cameraTrio) {
+      setCaptureId(null);
+    }
     setSkippedAuto(true);
     setPreferCamera(false);
+    if (cameraTrio) {
+      setSnapPreview(uri);
+      setPostedLine(null);
+      setSlotUpload((current) => ({ ...current, [proof.id]: 'up' }));
+      const nextId = unfilledRef.current.find((item) => item !== proof.id) ?? null;
+      setCaptureId(nextId);
+    }
     const keep = () => {
       if (!draft) {
         return;
       }
-      void persistProof(proof, draft).catch(() => {
-        setError(null);
-        setFailKind(null);
-      });
+      void persistProof(proof, draft)
+        .then(() => {
+          setSlotUpload((current) => {
+            const next = { ...current };
+            delete next[proof.id];
+            return next;
+          });
+        })
+        .catch(() => {
+          setSlotUpload((current) => ({ ...current, [proof.id]: 'fail' }));
+          setError(null);
+          setFailKind(null);
+        });
     };
     if (!fromLibrary) {
       // Copy into Photos first. A failed library write still keeps the in-app slot.
@@ -1609,7 +1639,12 @@ function SubmitWorkoutInner() {
         comparableHonor && comparableConfig
           ? comparableCheckinCaption(comparableConfig, logDraft.text)
           : null;
-      const body = comparableNotes ?? checkinPostBody(caption.text, readyNow);
+      const cameraTrio = isSlotCameraCheckin(proofSteps);
+      const body = cameraTrio
+        ? readyNow
+          ? CHECKIN_COMPLETE_BODY
+          : ''
+        : (comparableNotes ?? checkinPostBody(caption.text, readyNow));
       let saved: ChallengeCheckin | null = checkinQuery.data ?? null;
       let savedParts = { ...(checkinQuery.data?.proof_parts ?? {}) };
       const failedExtras: string[] = [];
@@ -1996,7 +2031,7 @@ function SubmitWorkoutInner() {
           queryClient,
         }).catch(() => undefined);
       }
-      if (shareWave && uid && !wavePublishedRef.current && !isTeacher3DayChallenge(challenge)) {
+      if (!cameraTrio && shareWave && uid && !wavePublishedRef.current && !isTeacher3DayChallenge(challenge)) {
         const wave = pickCheckinWaveSource({
           proofs: proofSteps,
           parts: savedParts,
@@ -2051,6 +2086,14 @@ function SubmitWorkoutInner() {
       if (extraWarning) {
         setFailKind(null);
         setError(extraWarning);
+      }
+      if (cameraTrio && remainingNow.length > 0) {
+        setPostedLine(postedStillNeed(remainingNow));
+        setSnapPreview(null);
+        const next = blockingProofs.find((proof) => remainingNow.includes(proofDisplayName(proof)));
+        setPreferCamera(false);
+        setCaptureId(next?.id ?? null);
+        return;
       }
       const from = Array.isArray(params.from) ? params.from[0] : params.from;
       if (from === 'multi') {
@@ -2565,6 +2608,8 @@ function SubmitWorkoutInner() {
   const missing = blockingProofs.filter((proof) => !slotFilled(proof));
   const iosHealthReady = Platform.OS === 'ios' && healthProviderAvailable();
   const nextEmpty = nextEmptyRequiredProof(blockingProofs, slotFilled);
+  const cameraTrio = isSlotCameraCheckin(proofSteps);
+  unfilledRef.current = blockingProofs.filter((proof) => !slotFilled(proof)).map((proof) => proof.id);
   const nextPhoto = nextEmpty && isGuidedCameraProof(nextEmpty) ? nextEmpty : null;
   const firstHealth = nextPhoto && proofPrefersHealthAttach(nextPhoto, challenge) ? nextPhoto : null;
   const pairPending = Boolean(officialCoin && siblingChallengeId && !siblingCheckin.isFetched);
@@ -2606,13 +2651,14 @@ function SubmitWorkoutInner() {
     !firstHealth &&
     Boolean(nextPhoto) &&
     !slotFilled(nextPhoto!);
-  const activeCaptureId =
-    captureId ??
-    (shouldAutoHealth
-      ? firstHealth?.id ?? null
-      : shouldOpenGuided || shouldAutoOpen
-        ? nextPhoto?.id ?? null
-        : null);
+  const activeCaptureId = cameraTrio
+    ? (captureId ?? nextEmpty?.id ?? null)
+    : (captureId ??
+      (shouldAutoHealth
+        ? firstHealth?.id ?? null
+        : shouldOpenGuided || shouldAutoOpen
+          ? nextPhoto?.id ?? null
+          : null));
   const activeProof = proofSteps.find((proof) => proof.id === activeCaptureId) ?? null;
   const guided = guidedCheckinPrompt(proofSteps, slotFilled, activeProof);
   const showHealthFirst =
@@ -2630,6 +2676,139 @@ function SubmitWorkoutInner() {
           activeProof.method === 'hr' ||
           activeProof.method === 'distance')),
   );
+
+  if (cameraTrio && checkinReady) {
+    const stripProofs = proofSteps.filter(
+      (proof) => isPreWorkoutProof(proof) || isPostWorkoutProof(proof) || proof.method === 'hr',
+    );
+    const workoutList =
+      activeProof?.method === 'hr' && Platform.OS !== 'web' && !preferCamera && !libraryFirst;
+    const showCamera =
+      Boolean(activeProof) &&
+      !workoutList &&
+      (activeProof?.method === 'photo' ||
+        activeProof?.method === 'video' ||
+        activeProof?.method === 'hr' ||
+        activeProof?.method === 'distance');
+    return (
+      <CheckinCameraChrome
+        slots={stripProofs.map((proof) => {
+          const local = slotStillUris(drafts[proof.id]).find((uri) => uri && !uri.startsWith('health:'));
+          const remote = existingUrlForProof(proof, pairParts, {
+            pre_selfie_url: storedCheckin?.pre_selfie_url,
+            post_selfie_url: storedCheckin?.post_selfie_url,
+            hr_monitor_url: storedCheckin?.hr_monitor_url,
+          });
+          return {
+            id: proof.id,
+            label: slotStripLabel(proof),
+            uri: local || remote || null,
+            open: proof.id === (nextEmpty?.id ?? activeProof?.id),
+            upload: slotUpload[proof.id] ?? null,
+          };
+        })}
+        snapUri={snapPreview}
+        postedLine={postedLine}
+        openLabel={nextEmpty ? slotStripLabel(nextEmpty) : null}
+        canSend={canSend}
+        busy={busy}
+        onReturnToOpen={() => {
+          setSnapPreview(null);
+          setPostedLine(null);
+          setPreferCamera(false);
+          setLibraryFirst(Platform.OS === 'web' && nextEmpty?.method === 'hr');
+          setCaptureId(nextEmpty?.id ?? null);
+        }}
+        onSend={() => void onSubmit()}
+        onSlot={(slotId) => {
+          const proof = proofSteps.find((item) => item.id === slotId);
+          if (!proof) {
+            return;
+          }
+          setSnapPreview(null);
+          if (slotFilled(proof)) {
+            setPreferCamera(proof.method !== 'hr');
+            setLibraryFirst(false);
+            setCaptureId(proof.id);
+            return;
+          }
+          if (nextEmpty?.id === proof.id) {
+            setPreferCamera(false);
+            setLibraryFirst(Platform.OS === 'web' && proof.method === 'hr');
+            setCaptureId(proof.id);
+          }
+        }}>
+        {workoutList && activeProof ? (
+          <HealthWorkoutGate
+            challengeTitle={challenge.title}
+            challenge={challenge}
+            proof={activeProof}
+            minMinutes={challenge.min_minutes}
+            frequency={challenge.frequency}
+            startsAt={challenge.starts_at}
+            isOfficial={challenge.is_official}
+            seriesId={challenge.series_id}
+            timezone={challenge.timezone}
+            daysRequired={challenge.days_required}
+            dayWindows={challenge.day_windows}
+            userId={user?.id}
+            attaching={saveProof.isPending}
+            onAttach={(workout) => onAttachHealth(workout, activeProof)}
+            onOpenGallery={() => {
+              setLibraryFirst(true);
+              setPreferCamera(false);
+            }}
+            onAddPhoto={() => {
+              setLibraryFirst(false);
+              setPreferCamera(true);
+            }}
+            onClose={() => {
+              setPreferCamera(false);
+            }}
+          />
+        ) : null}
+        {showCamera && activeProof ? (
+          <ProofUploader
+            key={activeProof.id}
+            type={legacyTypeForProof(activeProof) ?? captureTypeForMethod(activeProof.method)}
+            fill
+            autoOpen
+            preferLibrary={libraryFirst || (Platform.OS === 'web' && proofPrefersHealthAttach(activeProof, challenge))}
+            locked={busy}
+            title={guided?.title}
+            instruction={guided?.helper}
+            health={{
+              challengeId: id ?? challenge.id,
+              challengeTitle: challenge.title,
+              minMinutes: challenge.min_minutes,
+              frequency: challenge.frequency,
+              startsAt: challenge.starts_at,
+              userId: user?.id,
+              attaching: saveProof.isPending,
+              proof: activeProof,
+              challenge,
+              onAttach: (workout) => onAttachHealth(workout, activeProof),
+            }}
+            onPicked={(uri, mimeType, meta) => {
+              onCaptured(activeProof, uri, mimeType, meta?.fromLibrary, meta?.blob);
+            }}
+            onCancel={() => {
+              if (activeProof.method === 'hr') {
+                setPreferCamera(false);
+                setLibraryFirst(false);
+                return;
+              }
+              setCaptureId(nextEmpty?.id ?? null);
+            }}
+            onUnavailable={() => {
+              setCameraFailed(true);
+              setCaptureId(nextEmpty?.id ?? null);
+            }}
+          />
+        ) : null}
+      </CheckinCameraChrome>
+    );
+  }
 
   if (showHealthFirst && activeProof) {
     return (
