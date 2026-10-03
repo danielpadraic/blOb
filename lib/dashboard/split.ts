@@ -270,7 +270,7 @@ export function bodyCards(
       key: 'exercise',
       title: 'Exercise',
       pick: (day) => day.exerciseMin,
-      format: (total) => durationLabel(total * 60),
+      format: (total) => `${Math.round(total)} min`,
     },
     { key: 'sleep', title: 'Sleep', pick: (day) => day.sleepMin, format: (total) => durationLabel(total * 60) },
     {

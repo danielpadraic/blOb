@@ -92,6 +92,7 @@ export type FitnessDashboardModel = {
   stepBars: DashboardDayBar[];
   stepLabel: string | null;
   bodyCards: BodyCard[];
+  bodyDays: BodyDay[];
   syncedLabel: string | null;
   challenges: DashboardChallengeBar[];
   activities: DashboardActivity[];
@@ -119,6 +120,7 @@ const EMPTY: FitnessDashboardModel = {
   stepBars: [],
   stepLabel: null,
   bodyCards: [],
+  bodyDays: [],
   syncedLabel: null,
   challenges: [],
   activities: [],
@@ -369,6 +371,7 @@ function buildModel(input: {
     stepBars: dayBars(keys, steps, label),
     stepLabel: stepTotal > 0 ? Math.round(stepTotal).toLocaleString('en-US') : null,
     bodyCards: cards,
+    bodyDays: input.bodyDays,
     syncedLabel: input.showSyncLabel ? syncDayLabel(input.syncedAt, zone) : null,
     challenges: input.challenges,
     activities: activities.slice(0, 24),

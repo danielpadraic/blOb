@@ -133,7 +133,7 @@ export function poundChart(
   keys: readonly string[],
   filter: { muscle: string | null; exercise: string | null },
   axisLabel: (day: string) => string,
-): { totalLabel: string | null; bars: PoundBar[] } {
+): { total: number; totalLabel: string | null; bars: PoundBar[] } {
   const unit: WeightUnit = sessions.find((row) => row.unit)?.unit ?? 'lb';
   const byDay = new Map<string, number>();
   for (const session of sessions) {

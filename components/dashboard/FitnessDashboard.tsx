@@ -6,7 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
-import { ProgressRing } from '@/components/ui/ProgressRing';
+import { GoalRing } from '@/components/dashboard/GoalRing';
 import { useFriendCount } from '@/hooks/useSocial';
 import { sourceChipLabel, useFitnessDashboard, type DashboardChip } from '@/hooks/useFitnessDashboard';
 import {
@@ -19,7 +19,19 @@ import { readDashboardRange, writeDashboardRange } from '@/lib/dashboard/rangeCh
 import type { DayMark } from '@/lib/dashboard/calendar';
 import { cardioLines, exerciseChipNames, muscleChipKeys, muscleLabel, poundChart, poundEmptyCopy } from '@/lib/dashboard/effort';
 import { isMuscleKey } from '@/lib/lift/muscles';
-import type { DashboardRange } from '@/lib/dashboard/range';
+import { dashboardZone, type DashboardRange } from '@/lib/dashboard/range';
+import {
+  daysInMonth,
+  daysInYear,
+  DEFAULT_RING_GOALS,
+  readRingGoals,
+  ringProgress,
+  ringTotals,
+  scaledRingGoal,
+  writeRingGoals,
+  type GoalCadence,
+  type RingGoals,
+} from '@/lib/dashboard/ringGoals';
 import { isWideDashboardWindow } from '@/lib/dashboard/wide';
 import { copy } from '@/lib/copy';
 import { healthHowToLine } from '@/lib/health/howTo';
@@ -62,6 +74,8 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
   const [cardioType, setCardioType] = useState<string | null>(null);
   const [barHint, setBarHint] = useState('');
   const [openDay, setOpenDay] = useState<string | null>(null);
+  const [goals, setGoals] = useState<RingGoals>(DEFAULT_RING_GOALS);
+  const [goalsOpen, setGoalsOpen] = useState(false);
   const [promptTick, setPromptTick] = useState(0);
   const custom = range === 'custom' && customStart && customEnd ? { start: customStart, end: customEnd } : null;
   const dash = useFitnessDashboard(range, custom);
@@ -99,6 +113,7 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
       setCustomStart(stored.custom?.start ?? '');
       setCustomEnd(stored.custom?.end ?? '');
     });
+    void readRingGoals().then(setGoals);
   }, [profile.id]);
 
   function chooseRange(next: DashboardRange) {
@@ -132,10 +147,39 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
     [cardioType, model.dayKeys, model.effortSessions],
   );
   const sleepCard = model.bodyCards.find((card) => card.key === 'sleep') ?? null;
-  const ringCards = model.bodyCards.filter((card) => card.key === 'move' || card.key === 'exercise' || card.key === 'stand');
   const bodyCards = model.bodyCards.filter(
     (card) => card.key !== 'sleep' && card.key !== 'move' && card.key !== 'exercise' && card.key !== 'stand',
   );
+  const ringZone = dashboardZone(null);
+  const ringValues = ringTotals(model.bodyDays, model.dayKeys);
+  const goalScale = {
+    customDays: model.dayKeys.length,
+    monthDays: ringZone ? daysInMonth(new Date(), ringZone) : model.dayKeys.length || 30,
+    yearDays: ringZone ? daysInYear(new Date(), ringZone) : 365,
+  };
+  const ringView = (['move', 'exercise', 'stand'] as const).map((key) => {
+    const goal = scaledRingGoal({
+      amount: goals[key].amount,
+      cadence: goals[key].cadence,
+      range,
+      ...goalScale,
+    });
+    const value = ringValues[key];
+    const unit = key === 'move' ? 'cal' : key === 'exercise' ? 'min' : 'hr';
+    const shown = key === 'stand' ? Math.round(value * 10) / 10 : Math.round(value);
+    const goalShown = key === 'stand' ? Math.round(goal * 10) / 10 : Math.round(goal);
+    const withUnit = `${shown} ${unit}`;
+    return {
+      key,
+      value,
+      progress: ringProgress(value, goal),
+      inside: withUnit.length <= 6 ? withUnit : String(shown),
+      name: key === 'move' ? 'MOVE' : key === 'exercise' ? 'EXERCISE' : 'STAND',
+      compare: `${shown} / ${goalShown} ${unit}`,
+      color: key === 'stand' ? THEME.gold : key === 'exercise' ? THEME.circle : THEME.accent,
+    };
+  });
+  const ringSource = model.bodyCards.find((card) => card.key === 'move' || card.key === 'exercise' || card.key === 'stand')?.source;
   const queryClient = useQueryClient();
   const friendCount = friends.data ?? 0;
   const liveCount = model.challenges.length;
@@ -347,22 +391,59 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
         </Card>
       ) : null}
 
-      {showFitness && ringCards.length > 0 ? (
-        <Card title="Rings" chip={ringCards.find((card) => card.source) ? sourceChipLabel(ringCards.find((card) => card.source)?.source ?? 'checkin') : undefined}>
-          <View style={{ flexDirection: 'row', gap: 16, alignItems: 'center' }}>
-            {ringCards.map((card) => (
-              <View key={card.key} style={{ alignItems: 'center', gap: 4 }}>
-                <ProgressRing
-                  progress={1}
-                  size={72}
-                  strokeWidth={7}
-                  color={card.key === 'stand' ? THEME.gold : card.key === 'exercise' ? THEME.circle : THEME.accent}
-                  label={card.valueLabel}
-                  labelClassName="text-[11px] font-bold text-center"
-                  caption={card.title}
+      {showFitness && ringView.some((ring) => ring.value > 0) ? (
+        <Card title="Rings" chip={ringSource ? sourceChipLabel(ringSource) : undefined}>
+          <Pressable accessibilityRole="button" onPress={() => setGoalsOpen((open) => !open)}>
+            <AppText style={{ fontWeight: '700', color: THEME.accent, textDecorationLine: goalsOpen ? 'underline' : 'none' }}>
+              Goals
+            </AppText>
+          </Pressable>
+          {goalsOpen ? (
+            <View style={{ gap: 10 }}>
+              <GoalField
+                label="Move (calories)"
+                amount={String(goals.move.amount)}
+                cadence={goals.move.cadence}
+                onAmount={(amount) => setGoals((current) => ({ ...current, move: { ...current.move, amount } }))}
+                onCadence={(cadence) => setGoals((current) => ({ ...current, move: { ...current.move, cadence } }))}
+              />
+              <GoalField
+                label="Exercise (minutes)"
+                amount={String(goals.exercise.amount)}
+                cadence={goals.exercise.cadence}
+                onAmount={(amount) => setGoals((current) => ({ ...current, exercise: { ...current.exercise, amount } }))}
+                onCadence={(cadence) => setGoals((current) => ({ ...current, exercise: { ...current.exercise, cadence } }))}
+              />
+              <GoalField
+                label="Stand (hours)"
+                amount={String(goals.stand.amount)}
+                cadence={goals.stand.cadence}
+                onAmount={(amount) => setGoals((current) => ({ ...current, stand: { ...current.stand, amount } }))}
+                onCadence={(cadence) => setGoals((current) => ({ ...current, stand: { ...current.stand, cadence } }))}
+              />
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  writeRingGoals(goals);
+                  setGoalsOpen(false);
+                }}>
+                <AppText style={{ fontWeight: '800', color: THEME.textPrimary }}>Save</AppText>
+              </Pressable>
+            </View>
+          ) : null}
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start', justifyContent: 'space-between' }}>
+            {ringView
+              .filter((ring) => ring.value > 0)
+              .map((ring) => (
+                <GoalRing
+                  key={ring.key}
+                  progress={ring.progress}
+                  valueText={ring.inside}
+                  name={ring.name}
+                  compare={ring.compare}
+                  color={ring.color}
                 />
-              </View>
-            ))}
+              ))}
           </View>
         </Card>
       ) : null}
@@ -624,6 +705,47 @@ function AllowHealth({ onAllowed }: { onAllowed: () => void }) {
         <AppText style={{ color: THEME.primaryForeground, fontWeight: '700' }}>{copy('health.allow')}</AppText>
       </Pressable>
       {howTo ? <AppText style={{ color: THEME.textMuted }}>{howTo}</AppText> : null}
+    </View>
+  );
+}
+
+function GoalField({
+  label,
+  amount,
+  cadence,
+  onAmount,
+  onCadence,
+}: {
+  label: string;
+  amount: string;
+  cadence: GoalCadence;
+  onAmount: (amount: number) => void;
+  onCadence: (cadence: GoalCadence) => void;
+}) {
+  return (
+    <View style={{ gap: 6 }}>
+      <AppText style={{ fontWeight: '700', color: THEME.textPrimary }}>{label}</AppText>
+      <TextInput
+        value={amount}
+        onChangeText={(text) => {
+          const next = Number(text.replace(/[^0-9.]/g, ''));
+          if (Number.isFinite(next)) {
+            onAmount(next);
+          }
+        }}
+        keyboardType="decimal-pad"
+        style={dateField}
+      />
+      <View style={{ flexDirection: 'row', gap: 12 }}>
+        {(['daily', 'weekly', 'monthly'] as const).map((item) => (
+          <QuietFilter
+            key={item}
+            label={item === 'daily' ? 'Daily' : item === 'weekly' ? 'Weekly' : 'Monthly'}
+            on={cadence === item}
+            onPress={() => onCadence(item)}
+          />
+        ))}
+      </View>
     </View>
   );
 }
