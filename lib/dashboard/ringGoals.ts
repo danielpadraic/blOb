@@ -37,29 +37,120 @@ function cleanGoal(value: unknown, fallback: RingGoal): RingGoal {
   };
 }
 
-export async function readRingGoals(): Promise<RingGoals> {
+export type StoredRingGoals = {
+  goals: RingGoals;
+  /** True after she taps Save on this dashboard. Interests must not replace Exercise after that. */
+  saved: boolean;
+};
+
+export async function readRingGoals(): Promise<StoredRingGoals> {
   try {
     const raw = await authStorage.getItem(KEY);
     if (!raw) {
-      return DEFAULT_RING_GOALS;
+      return { goals: DEFAULT_RING_GOALS, saved: false };
     }
-    const parsed = JSON.parse(raw) as Partial<RingGoals>;
+    const parsed = JSON.parse(raw) as Partial<RingGoals> & { saved?: boolean };
     return {
-      move: cleanGoal(parsed.move, DEFAULT_RING_GOALS.move),
-      exercise: cleanGoal(parsed.exercise, DEFAULT_RING_GOALS.exercise),
-      stand: cleanGoal(parsed.stand, DEFAULT_RING_GOALS.stand),
+      goals: {
+        move: cleanGoal(parsed.move, DEFAULT_RING_GOALS.move),
+        exercise: cleanGoal(parsed.exercise, DEFAULT_RING_GOALS.exercise),
+        stand: cleanGoal(parsed.stand, DEFAULT_RING_GOALS.stand),
+      },
+      saved: parsed.saved !== false,
     };
   } catch {
-    return DEFAULT_RING_GOALS;
+    return { goals: DEFAULT_RING_GOALS, saved: false };
   }
 }
 
 export function writeRingGoals(goals: RingGoals): void {
   try {
-    void Promise.resolve(authStorage.setItem(KEY, JSON.stringify(goals))).catch(() => undefined);
+    void Promise.resolve(authStorage.setItem(KEY, JSON.stringify({ ...goals, saved: true }))).catch(() => undefined);
   } catch {
     // The fields on screen still apply this visit.
   }
+}
+
+const FITNESS_SESSION_SLUGS = new Set(['lifting', 'hiit', 'yoga', 'mobility']);
+
+export type InterestExerciseSeed = {
+  label: string;
+  slug: string;
+  room: string;
+  qtyKind: string | null;
+  goalQty: number | null;
+  currentQty: number | null;
+  goalPeriod: string | null;
+  currentPeriod: string | null;
+};
+
+export type ExerciseSeed = {
+  minutes: number;
+  cadence: GoalCadence;
+  line: string;
+};
+
+function periodWord(period: 'day' | 'week' | 'month'): string {
+  return period;
+}
+
+function joinLabels(labels: string[]): string {
+  if (labels.length <= 1) {
+    return labels[0] ?? '';
+  }
+  if (labels.length === 2) {
+    return `${labels[0]} and ${labels[1]}`;
+  }
+  return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
+}
+
+/**
+ * Exercise minutes from Interests session goals.
+ * One session is 30 minutes. Sessions add only when they share a period.
+ * Steps, miles, and laps are ignored. Goal quantity wins over the current quantity.
+ */
+export function exerciseSeedFromInterests(rows: readonly InterestExerciseSeed[]): ExerciseSeed | null {
+  const grouped: Record<'day' | 'week' | 'month', { label: string; sessions: number }[]> = {
+    day: [],
+    week: [],
+    month: [],
+  };
+  for (const row of rows) {
+    const slug = row.slug.trim().toLowerCase();
+    const fitness = row.room === 'health_fitness' && FITNESS_SESSION_SLUGS.has(slug);
+    const sports = row.room === 'sports' && row.qtyKind === 'sessions_week' && slug !== 'other';
+    if (!fitness && !sports) {
+      continue;
+    }
+    const goal = Number(row.goalQty);
+    if (!Number.isFinite(goal) || goal <= 0) {
+      continue;
+    }
+    const period = String(row.goalPeriod || row.currentPeriod || '');
+    if (period !== 'day' && period !== 'week' && period !== 'month') {
+      continue;
+    }
+    grouped[period].push({ label: row.label.trim() || slug, sessions: goal });
+  }
+  const ranked = (['week', 'day', 'month'] as const)
+    .map((period) => ({
+      period,
+      rows: grouped[period],
+      sessions: grouped[period].reduce((sum, item) => sum + item.sessions, 0),
+    }))
+    .filter((group) => group.sessions > 0)
+    .sort((a, b) => b.sessions - a.sessions);
+  const best = ranked[0];
+  if (!best) {
+    return null;
+  }
+  const labels = best.rows.map((item) => item.label).filter(Boolean);
+  const noun = labels.length === 1 ? 'goal' : 'goals';
+  return {
+    minutes: best.sessions * 30,
+    cadence: best.period === 'day' ? 'daily' : best.period === 'week' ? 'weekly' : 'monthly',
+    line: `From your ${joinLabels(labels)} ${noun} · ${best.sessions} sessions/${periodWord(best.period)}.`,
+  };
 }
 
 export function daysInMonth(now: Date, timeZone: string): number {

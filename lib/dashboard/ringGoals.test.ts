@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ringProgress, ringTotals, scaledRingGoal } from '@/lib/dashboard/ringGoals';
+import { exerciseSeedFromInterests, ringProgress, ringTotals, scaledRingGoal } from '@/lib/dashboard/ringGoals';
 import { bucketBodyPoints } from '@/lib/health/bodyDays';
 
 describe('ring goals', () => {
@@ -35,6 +35,86 @@ describe('ring goals', () => {
     expect(ringProgress(186, 350)).toBeCloseTo(186 / 350);
     expect(ringProgress(400, 350)).toBe(1);
     expect(ringProgress(0, 350)).toBe(0);
+  });
+});
+
+describe('exercise seed from Interests', () => {
+  it('uses the Lifting goal, not the current count, as 30 minutes a session', () => {
+    const seed = exerciseSeedFromInterests([
+      {
+        label: 'Lifting',
+        slug: 'lifting',
+        room: 'health_fitness',
+        qtyKind: 'sessions_week',
+        goalQty: 4,
+        currentQty: 1,
+        goalPeriod: 'week',
+        currentPeriod: 'week',
+      },
+      {
+        label: 'Running',
+        slug: 'running',
+        room: 'health_fitness',
+        qtyKind: 'miles_outing',
+        goalQty: 20,
+        currentQty: null,
+        goalPeriod: 'week',
+        currentPeriod: 'week',
+      },
+      {
+        label: 'Walking',
+        slug: 'walking',
+        room: 'health_fitness',
+        qtyKind: 'steps_day',
+        goalQty: 10000,
+        currentQty: null,
+        goalPeriod: 'day',
+        currentPeriod: 'day',
+      },
+    ]);
+    expect(seed).toEqual({
+      minutes: 120,
+      cadence: 'weekly',
+      line: 'From your Lifting goal · 4 sessions/week.',
+    });
+  });
+
+  it('adds session goals that share a period', () => {
+    const seed = exerciseSeedFromInterests([
+      {
+        label: 'Lifting',
+        slug: 'lifting',
+        room: 'health_fitness',
+        qtyKind: 'sessions_week',
+        goalQty: 4,
+        currentQty: null,
+        goalPeriod: 'week',
+        currentPeriod: null,
+      },
+      {
+        label: 'HIIT',
+        slug: 'hiit',
+        room: 'health_fitness',
+        qtyKind: 'sessions_week',
+        goalQty: 2,
+        currentQty: 9,
+        goalPeriod: 'week',
+        currentPeriod: 'day',
+      },
+      {
+        label: 'Pickleball',
+        slug: 'pickleball',
+        room: 'sports',
+        qtyKind: 'sessions_week',
+        goalQty: 1,
+        currentQty: null,
+        goalPeriod: 'month',
+        currentPeriod: 'month',
+      },
+    ]);
+    expect(seed?.minutes).toBe(180);
+    expect(seed?.cadence).toBe('weekly');
+    expect(seed?.line).toBe('From your Lifting and HIIT goals · 6 sessions/week.');
   });
 });
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Platform, Pressable, ScrollView, TextInput, useWindowDimensions, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,6 +7,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
 import { GoalRing } from '@/components/dashboard/GoalRing';
+import { useMyInterests } from '@/hooks/useInterests';
 import { useFriendCount } from '@/hooks/useSocial';
 import { sourceChipLabel, useFitnessDashboard, type DashboardChip } from '@/hooks/useFitnessDashboard';
 import {
@@ -24,6 +25,7 @@ import {
   daysInMonth,
   daysInYear,
   DEFAULT_RING_GOALS,
+  exerciseSeedFromInterests,
   readRingGoals,
   ringProgress,
   ringTotals,
@@ -76,6 +78,10 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
   const [openDay, setOpenDay] = useState<string | null>(null);
   const [goals, setGoals] = useState<RingGoals>(DEFAULT_RING_GOALS);
   const [goalsOpen, setGoalsOpen] = useState(false);
+  const [exerciseLocked, setExerciseLocked] = useState(false);
+  const [goalsReady, setGoalsReady] = useState(false);
+  const exerciseSeeded = useRef(false);
+  const interests = useMyInterests();
   const [promptTick, setPromptTick] = useState(0);
   const custom = range === 'custom' && customStart && customEnd ? { start: customStart, end: customEnd } : null;
   const dash = useFitnessDashboard(range, custom);
@@ -113,7 +119,13 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
       setCustomStart(stored.custom?.start ?? '');
       setCustomEnd(stored.custom?.end ?? '');
     });
-    void readRingGoals().then(setGoals);
+    exerciseSeeded.current = false;
+    setGoalsReady(false);
+    void readRingGoals().then((stored) => {
+      setGoals(stored.goals);
+      setExerciseLocked(stored.saved);
+      setGoalsReady(true);
+    });
   }, [profile.id]);
 
   function chooseRange(next: DashboardRange) {
@@ -150,6 +162,34 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
   const bodyCards = model.bodyCards.filter(
     (card) => card.key !== 'sleep' && card.key !== 'move' && card.key !== 'exercise' && card.key !== 'stand',
   );
+  const exerciseSeed = useMemo(() => {
+    const chips = interests.mine.data?.chips ?? [];
+    return exerciseSeedFromInterests(
+      chips.map((row) => ({
+        label: row.catalog?.label ?? '',
+        slug: row.catalog?.slug ?? '',
+        room: row.catalog?.room_slug ?? '',
+        qtyKind: row.catalog?.qty_kind ?? null,
+        goalQty: row.goal_qty == null || row.goal_qty === '' ? null : Number(row.goal_qty),
+        currentQty: row.current_qty == null || row.current_qty === '' ? null : Number(row.current_qty),
+        goalPeriod: row.goal_qty_period,
+        currentPeriod: row.qty_period,
+      })),
+    );
+  }, [interests.mine.data?.chips]);
+  useEffect(() => {
+    if (!goalsReady || exerciseLocked || exerciseSeeded.current || interests.mine.isLoading) {
+      return;
+    }
+    exerciseSeeded.current = true;
+    if (!exerciseSeed) {
+      return;
+    }
+    setGoals((current) => ({
+      ...current,
+      exercise: { amount: exerciseSeed.minutes, cadence: exerciseSeed.cadence },
+    }));
+  }, [exerciseLocked, exerciseSeed, goalsReady, interests.mine.isLoading]);
   const ringZone = dashboardZone(null);
   const ringValues = ringTotals(model.bodyDays, model.dayKeys);
   const goalScale = {
@@ -411,6 +451,7 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
                 label="Exercise (minutes)"
                 amount={String(goals.exercise.amount)}
                 cadence={goals.exercise.cadence}
+                hint={exerciseLocked ? null : exerciseSeed?.line}
                 onAmount={(amount) => setGoals((current) => ({ ...current, exercise: { ...current.exercise, amount } }))}
                 onCadence={(cadence) => setGoals((current) => ({ ...current, exercise: { ...current.exercise, cadence } }))}
               />
@@ -425,6 +466,7 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
                 accessibilityRole="button"
                 onPress={() => {
                   writeRingGoals(goals);
+                  setExerciseLocked(true);
                   setGoalsOpen(false);
                 }}>
                 <AppText style={{ fontWeight: '800', color: THEME.textPrimary }}>Save</AppText>
@@ -713,18 +755,21 @@ function GoalField({
   label,
   amount,
   cadence,
+  hint,
   onAmount,
   onCadence,
 }: {
   label: string;
   amount: string;
   cadence: GoalCadence;
+  hint?: string | null;
   onAmount: (amount: number) => void;
   onCadence: (cadence: GoalCadence) => void;
 }) {
   return (
     <View style={{ gap: 6 }}>
       <AppText style={{ fontWeight: '700', color: THEME.textPrimary }}>{label}</AppText>
+      {hint ? <AppText style={{ color: THEME.textMuted, fontSize: 13 }}>{hint}</AppText> : null}
       <TextInput
         value={amount}
         onChangeText={(text) => {
