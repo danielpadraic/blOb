@@ -1346,6 +1346,7 @@ export async function insertWorkoutCheckInPost(input: {
       .from('posts')
       .select(schema.select)
       .eq('checkin_id', checkinId)
+      .eq('challenge_id', input.challengeId)
       .is('deleted_at', null)
       .order('created_at', { ascending: true })
       .limit(1)

@@ -18,6 +18,7 @@ import { isRecapCardUrl } from '@/lib/health/postWorkoutCard';
 import { patchFeedPostFields } from '@/lib/liveFeedPatch';
 import { dateStampInZone } from '@/lib/officialDays';
 import { OFFICIAL_COIN_TZ, officialCoinDateStamp, officialCoinDisplayTitle, officialCoinKind } from '@/lib/officialCoin';
+import { officialPairLiveMiss, type OfficialPairRoom } from '@/lib/officialPairLive';
 import { supabase } from '@/lib/supabase';
 import { uploadChallengeProof } from '@/utils/upload';
 
@@ -272,6 +273,36 @@ export async function fetchOfficialPairCheckin(input: {
       ),
     ) ?? rows[0]
   );
+}
+
+export {
+  officialPairLiveFailure,
+  officialPairLiveMiss,
+  officialPairSiblingRoom,
+  type OfficialPairRoom,
+} from '@/lib/officialPairLive';
+
+/**
+ * Ask the server to write this Chicago day onto both Official Lives.
+ * One call is one attempt. The screen retries once when a room is still missing.
+ */
+export async function ensureOfficialPairLive(checkinId: string): Promise<{
+  missing: OfficialPairRoom | null;
+  postIds: string[];
+}> {
+  const id = checkinId.trim();
+  if (!id) {
+    return { missing: null, postIds: [] };
+  }
+  const { data, error } = await supabase.rpc('ensure_official_pair_live', { p_checkin_id: id });
+  if (error) {
+    throw new Error(error.message);
+  }
+  const row = (data ?? {}) as { missing?: unknown; post_ids?: unknown };
+  const postIds = Array.isArray(row.post_ids)
+    ? row.post_ids.map((item) => String(item ?? '').trim()).filter(Boolean)
+    : [];
+  return { missing: officialPairLiveMiss(row.missing), postIds };
 }
 
 /**

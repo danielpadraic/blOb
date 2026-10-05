@@ -186,15 +186,18 @@ import {
   sumComparableMetricRows,
 } from '@/lib/comparablePoints';
 import { allowsMultiCheckin, checkinPeriodComplete } from '@/lib/loggable';
-import { isOfficialCoinChallenge, officialCoinDateStamp, officialPastDayKey } from '@/lib/officialCoin';
+import { isOfficialCoinChallenge, officialCoinDateStamp, officialCoinKind, officialPastDayKey } from '@/lib/officialCoin';
 import {
   alignOfficialPairPosts,
-  mirrorOfficialCoinPeriod,
-  saveOfficialPeriodProof,
+  ensureOfficialPairLive,
   fetchOfficialPairCheckin,
   mergeOfficialPairParts,
+  mirrorOfficialCoinPeriod,
+  officialPairLiveFailure,
+  officialPairSiblingRoom,
   orderedCheckinSlides,
   qualifyingSlotUrl,
+  saveOfficialPeriodProof,
   siblingOfficialChallengeId,
 } from '@/lib/officialPairCheckin';
 import { useOfficialCoinStatus } from '@/hooks/useOfficialCoin';
@@ -1843,6 +1846,7 @@ function SubmitWorkoutInner() {
             .from('posts')
             .select('id, media_urls, checkin_stats')
             .eq('checkin_id', checkinId)
+            .eq('challenge_id', id)
             .is('deleted_at', null)
             .maybeSingle();
           postId = (post.data as { id?: string } | null)?.id;
@@ -2003,6 +2007,24 @@ function SubmitWorkoutInner() {
           content: body,
           queryClient,
         }).catch(() => pairPostIds);
+        if (checkinId) {
+          const siblingRoom = officialPairSiblingRoom(officialCoinKind(challenge));
+          let live = await ensureOfficialPairLive(checkinId).catch(() => ({
+            missing: siblingRoom ?? 'Weekly',
+            postIds: pairPostIds,
+          }));
+          if (live.missing) {
+            live = await ensureOfficialPairLive(checkinId).catch(() => live);
+          }
+          if (live.postIds.length) {
+            pairPostIds = live.postIds;
+          }
+          if (live.missing) {
+            setFailKind(null);
+            setError(officialPairLiveFailure(live.missing));
+            return;
+          }
+        }
       }
       if (uid) {
         void runPostSendOcr({

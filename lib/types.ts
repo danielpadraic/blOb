@@ -2178,6 +2178,10 @@ export type Database = {
         Args: { p_challenge_id: string };
         Returns: Record<string, unknown>;
       };
+      ensure_official_pair_live: {
+        Args: { p_checkin_id: string };
+        Returns: { missing?: string | null; post_ids?: string[] };
+      };
       official_coin_enroll: {
         Args: { p_user_id: string };
         Returns: { ok: boolean; added?: number; rooms?: string[]; reason?: string };
