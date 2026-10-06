@@ -39,7 +39,6 @@ import { isWideDashboardWindow } from '@/lib/dashboard/wide';
 import { copy } from '@/lib/copy';
 import { healthHowToLine } from '@/lib/health/howTo';
 import { useHealthLogPrompt } from '@/hooks/useHealthLogPrompt';
-import { copy } from '@/lib/copy';
 import { formatHealthDuration } from '@/lib/health/durationChip';
 import { checkinSubmitHref } from '@/lib/routes';
 import { getHealthProvider } from '@/services/health';
