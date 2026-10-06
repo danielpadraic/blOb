@@ -206,7 +206,6 @@ import { hasChallengeStarted, isClosedForLogs, loggingOpensHelper } from '@/lib/
 import { supabase } from '@/lib/supabase';
 import type { MentionDoc } from '@/lib/mentions';
 import type { ChallengeCheckin } from '@/lib/challengeCheckin';
-import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { firstRouteParam } from '@/lib/challengeLoad';
 import { isChallengeRouteId } from '@/lib/challengeTimezone';
 import { parseDoneIds } from '@/lib/multiCheckin';
