@@ -36,6 +36,8 @@ import {
 } from '@/components/challenge/CheckinSafeBoundary';
 import { LocationProofRow } from '@/components/challenge/LocationProofRow';
 import { CheckinCameraChrome } from '@/components/challenge/CheckinCameraChrome';
+import { cameraStatusLine } from '@/lib/checkin/cameraChrome';
+import { stopAllLiveMedia } from '@/lib/cameraSession';
 import { HealthWorkoutGate } from '@/components/challenge/HealthWorkoutPicker';
 import {
   WorkoutProofCardRenderer,
@@ -92,7 +94,6 @@ import {
   releaseHeldCheckinBlobs,
   saveCapturedProofLocally,
 } from '@/lib/checkin';
-import { postedStillNeed } from '@/lib/checkin/postedStill';
 import { checkinCameraFocused } from '@/lib/cameraAsk';
 import { requiredChallengeProofs } from '@/lib/challenges';
 import { remainingProofLabelsOf } from '@/lib/multiCheckin';
@@ -397,6 +398,7 @@ function SubmitWorkoutInner() {
     setSkippedAuto(true);
     setPreferCamera(false);
   }, []);
+  const leaveOverlayRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     const unsub = navigation.addListener('beforeRemove', (e) => {
@@ -408,10 +410,11 @@ function SubmitWorkoutInner() {
         return;
       }
       e.preventDefault();
-      closeCameraOverlay();
+      stopAllLiveMedia();
+      leaveOverlayRef.current();
     });
     return unsub;
-  }, [closeCameraOverlay, navigation]);
+  }, [navigation]);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') {
@@ -422,18 +425,14 @@ function SubmitWorkoutInner() {
       if (!overlayOpenRef.current) {
         return;
       }
-      closeCameraOverlay();
-      try {
-        win.history.pushState({ blobCheckinCam: true }, '', win.location.href);
-      } catch {
-        // Older webviews
-      }
+      stopAllLiveMedia();
+      leaveOverlayRef.current();
     };
     win.addEventListener('popstate', onPop);
     return () => {
       win.removeEventListener('popstate', onPop);
     };
-  }, [closeCameraOverlay]);
+  }, []);
 
   const missingId = !id;
 
@@ -531,8 +530,12 @@ function SubmitWorkoutInner() {
   checkinIdRef.current = checkinQuery.data?.id ?? null;
   const [captureId, setCaptureId] = useState<string | null>(null);
   const [snapPreview, setSnapPreview] = useState<string | null>(null);
+  const [review, setReview] = useState<{ proofId: string; uri: string } | null>(null);
+  const [cameraPaused, setCameraPaused] = useState(false);
+  const reviewPreviousRef = useRef<SlotDraft | null>(null);
+  const sendHoldRef = useRef<'photo' | 'done' | null>(null);
+  const leavingCameraRef = useRef(false);
   const [slotUpload, setSlotUpload] = useState<Record<string, 'up' | 'fail'>>({});
-  const [postedLine, setPostedLine] = useState<string | null>(null);
   const unfilledRef = useRef<string[]>([]);
   const [skippedAuto, setSkippedAuto] = useState(false);
   const [cameraFailed, setCameraFailed] = useState(false);
@@ -1399,6 +1402,9 @@ function SubmitWorkoutInner() {
     if (!proof?.id || !uri.trim()) {
       return;
     }
+    if (isSlotCameraCheckin(proofSteps)) {
+      reviewPreviousRef.current = drafts[proof.id] ?? null;
+    }
     const draft = onMedia(proof.id, uri, mimeType, fromLibrary === true, blob);
     // Replacing the attach drops the generated card for this slot instead of leaving it on screen.
     setCardPreview((current) => (current?.proofId === proof.id ? null : current));
@@ -1409,11 +1415,15 @@ function SubmitWorkoutInner() {
     setSkippedAuto(true);
     setPreferCamera(false);
     if (cameraTrio) {
+      setReview({ proofId: proof.id, uri });
       setSnapPreview(uri);
-      setPostedLine(null);
-      setSlotUpload((current) => ({ ...current, [proof.id]: 'up' }));
-      const nextId = unfilledRef.current.find((item) => item !== proof.id) ?? null;
-      setCaptureId(nextId);
+      setCameraPaused(true);
+      setCaptureId(proof.id);
+      stopAllLiveMedia();
+      if (!fromLibrary) {
+        void saveCapturedProofLocally({ uri, fromLibrary: false }).catch(() => undefined);
+      }
+      return;
     }
     const keep = () => {
       if (!draft) {
@@ -1441,6 +1451,80 @@ function SubmitWorkoutInner() {
       return;
     }
     keep();
+  }
+
+  function leaveCameraToLive() {
+    if (leavingCameraRef.current) {
+      return;
+    }
+    leavingCameraRef.current = true;
+    stopAllLiveMedia();
+    setCameraPaused(true);
+    setReview(null);
+    setSnapPreview(null);
+    setCaptureId(null);
+    setSkippedAuto(true);
+    setPreferCamera(false);
+    if (id) {
+      router.replace(challengeDetailHref(id, 'lobby', undefined, { tab: 'feed' }) as never);
+    }
+  }
+
+  function retakeReviewedPhoto() {
+    if (!review) {
+      return;
+    }
+    const proof = proofSteps.find((item) => item.id === review.proofId);
+    const previous = reviewPreviousRef.current;
+    const proofId = review.proofId;
+    setReview(null);
+    setSnapPreview(null);
+    setCameraPaused(false);
+    setDrafts((current) => {
+      const next = { ...current };
+      if (previous) {
+        next[proofId] = previous;
+      } else {
+        delete next[proofId];
+      }
+      return next;
+    });
+    setPreferCamera(proof?.method !== 'hr');
+    setLibraryFirst(Platform.OS === 'web' && proof?.method === 'hr');
+    setCaptureId(proofId);
+  }
+
+  async function acceptReviewedPhoto() {
+    if (!review) {
+      return false;
+    }
+    const proof = proofSteps.find((item) => item.id === review.proofId);
+    const draft = drafts[review.proofId];
+    if (!proof) {
+      return false;
+    }
+    const caption = clampProofCaption(proofCaptions[proof.id] ?? '');
+    setSlotUpload((current) => ({ ...current, [proof.id]: 'up' }));
+    try {
+      if (draft?.uri || draft?.health || draft?.healthWorkoutId) {
+        await persistProof(proof, { ...draft, caption });
+      }
+      setSlotUpload((current) => {
+        const next = { ...current };
+        delete next[proof.id];
+        return next;
+      });
+    } catch {
+      setSlotUpload((current) => ({ ...current, [proof.id]: 'fail' }));
+      return false;
+    }
+    setReview(null);
+    setSnapPreview(null);
+    setCameraPaused(false);
+    setPreferCamera(false);
+    setLibraryFirst(Platform.OS === 'web' && proof.method === 'hr');
+    setCaptureId(null);
+    return true;
   }
 
   function onRetakeCurrent(proof?: ChallengeProof) {
@@ -1573,6 +1657,11 @@ function SubmitWorkoutInner() {
       return;
     }
     setSendLock(true);
+    sendHoldRef.current = null;
+    if (isSlotCameraCheckin(proofSteps)) {
+      stopAllLiveMedia();
+      setCameraPaused(true);
+    }
     try {
     for (const proof of blockingProofs.filter((item) => item.method === 'location')) {
       if (partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit))) {
@@ -2020,6 +2109,7 @@ function SubmitWorkoutInner() {
             pairPostIds = live.postIds;
           }
           if (live.missing) {
+            sendHoldRef.current = 'photo';
             setFailKind(null);
             setError(officialPairLiveFailure(live.missing));
             return;
@@ -2109,12 +2199,13 @@ function SubmitWorkoutInner() {
         setFailKind(null);
         setError(extraWarning);
       }
-      if (cameraTrio && remainingNow.length > 0) {
-        setPostedLine(postedStillNeed(remainingNow));
+      if (cameraTrio) {
+        sendHoldRef.current = 'done';
+        stopAllLiveMedia();
+        setCameraPaused(true);
+        setReview(null);
         setSnapPreview(null);
-        const next = blockingProofs.find((proof) => remainingNow.includes(proofDisplayName(proof)));
-        setPreferCamera(false);
-        setCaptureId(next?.id ?? null);
+        router.replace(challengeDetailHref(id, 'lobby', postId, { tab: 'feed', notice: extraWarning }));
         return;
       }
       const from = Array.isArray(params.from) ? params.from[0] : params.from;
@@ -2161,6 +2252,13 @@ function SubmitWorkoutInner() {
     }
     } finally {
       setSendLock(false);
+      if (
+        isSlotCameraCheckin(proofSteps) &&
+        sendHoldRef.current !== 'photo' &&
+        sendHoldRef.current !== 'done'
+      ) {
+        setCameraPaused(false);
+      }
     }
   }
 
@@ -2228,7 +2326,14 @@ function SubmitWorkoutInner() {
       if (saved?.id) {
         checkinIdRef.current = saved.id;
       }
-      if (officialCoin && saved) {
+      if (isSlotCameraCheckin(proofSteps)) {
+        stopAllLiveMedia();
+        setCameraPaused(true);
+        const still = keptStills.find((uri) => uri && !uri.startsWith('health:')) ?? '';
+        setReview({ proofId: target.id, uri: still });
+        setSnapPreview(still || null);
+        setCaptureId(target.id);
+      } else if (officialCoin && saved) {
         const remaining = remainingProofLabelsOf(challenge, saved.proof_parts, null, {
           pre_selfie_url: saved.pre_selfie_url,
           post_selfie_url: saved.post_selfie_url,
@@ -2699,13 +2804,22 @@ function SubmitWorkoutInner() {
           activeProof.method === 'distance')),
   );
 
+  leaveOverlayRef.current = cameraTrio && checkinReady ? leaveCameraToLive : closeCameraOverlay;
+
   if (cameraTrio && checkinReady) {
     const stripProofs = proofSteps.filter(
       (proof) => isPreWorkoutProof(proof) || isPostWorkoutProof(proof) || proof.method === 'hr',
     );
     const workoutList =
-      activeProof?.method === 'hr' && Platform.OS !== 'web' && !preferCamera && !libraryFirst;
+      !review &&
+      !cameraPaused &&
+      activeProof?.method === 'hr' &&
+      Platform.OS !== 'web' &&
+      !preferCamera &&
+      !libraryFirst;
     const showCamera =
+      !review &&
+      !cameraPaused &&
       Boolean(activeProof) &&
       !workoutList &&
       (activeProof?.method === 'photo' ||
@@ -2724,41 +2838,65 @@ function SubmitWorkoutInner() {
           return {
             id: proof.id,
             label: slotStripLabel(proof),
-            uri: local || remote || null,
-            open: proof.id === (nextEmpty?.id ?? activeProof?.id),
+            uri: local || remote || (review?.proofId === proof.id ? review.uri : null) || null,
+            open: proof.id === (review?.proofId ?? nextEmpty?.id ?? activeProof?.id),
             upload: slotUpload[proof.id] ?? null,
           };
         })}
-        snapUri={snapPreview}
-        postedLine={postedLine}
-        openLabel={nextEmpty ? slotStripLabel(nextEmpty) : null}
+        cameraLive={showCamera}
+        reviewOpen={Boolean(review)}
+        reviewUri={review?.uri || null}
+        caption={review ? (proofCaptions[review.proofId] ?? '') : ''}
+        onCaption={(value) => {
+          if (!review) {
+            return;
+          }
+          const proofId = review.proofId;
+          setProofCaptions((current) => ({ ...current, [proofId]: clampProofCaption(value) }));
+        }}
+        notice={error}
         canSend={canSend}
         busy={busy}
-        onReturnToOpen={() => {
-          setSnapPreview(null);
-          setPostedLine(null);
-          setPreferCamera(false);
-          setLibraryFirst(Platform.OS === 'web' && nextEmpty?.method === 'hr');
-          setCaptureId(nextEmpty?.id ?? null);
-        }}
+        onRetake={retakeReviewedPhoto}
+        onUse={() => void acceptReviewedPhoto()}
         onSend={() => void onSubmit()}
         onSlot={(slotId) => {
           const proof = proofSteps.find((item) => item.id === slotId);
           if (!proof) {
             return;
           }
-          setSnapPreview(null);
-          if (slotFilled(proof)) {
-            setPreferCamera(proof.method !== 'hr');
-            setLibraryFirst(false);
+          const local = slotStillUris(drafts[proof.id]).find((uri) => uri && !uri.startsWith('health:'));
+          const remote = existingUrlForProof(proof, pairParts, {
+            pre_selfie_url: storedCheckin?.pre_selfie_url,
+            post_selfie_url: storedCheckin?.post_selfie_url,
+            hr_monitor_url: storedCheckin?.hr_monitor_url,
+          });
+          const uri = local || remote || null;
+          if (proof.method === 'hr' && !uri) {
+            stopAllLiveMedia();
+            setReview(null);
+            setSnapPreview(null);
+            setCameraPaused(false);
+            setPreferCamera(false);
+            setLibraryFirst(Platform.OS === 'web');
             setCaptureId(proof.id);
             return;
           }
-          if (nextEmpty?.id === proof.id) {
-            setPreferCamera(false);
-            setLibraryFirst(Platform.OS === 'web' && proof.method === 'hr');
+          if (uri) {
+            stopAllLiveMedia();
+            setCameraPaused(true);
+            reviewPreviousRef.current = drafts[proof.id] ?? null;
+            setReview({ proofId: proof.id, uri });
+            setSnapPreview(uri);
             setCaptureId(proof.id);
+            return;
           }
+          setReview(null);
+          setSnapPreview(null);
+          setCameraPaused(false);
+          setPreferCamera(false);
+          setLibraryFirst(Platform.OS === 'web' && proof.method === 'hr');
+          setCaptureId(proof.id);
         }}>
         {workoutList && activeProof ? (
           <HealthWorkoutGate
@@ -2785,7 +2923,7 @@ function SubmitWorkoutInner() {
               setPreferCamera(true);
             }}
             onClose={() => {
-              setPreferCamera(false);
+              leaveCameraToLive();
             }}
           />
         ) : null}
@@ -2796,9 +2934,7 @@ function SubmitWorkoutInner() {
             fill
             autoOpen
             preferLibrary={libraryFirst || (Platform.OS === 'web' && proofPrefersHealthAttach(activeProof, challenge))}
-            locked={busy}
-            title={guided?.title}
-            instruction={guided?.helper}
+            statusLine={cameraStatusLine(slotStripLabel(activeProof))}
             health={{
               challengeId: id ?? challenge.id,
               challengeTitle: challenge.title,
@@ -2815,12 +2951,7 @@ function SubmitWorkoutInner() {
               onCaptured(activeProof, uri, mimeType, meta?.fromLibrary, meta?.blob);
             }}
             onCancel={() => {
-              if (activeProof.method === 'hr') {
-                setPreferCamera(false);
-                setLibraryFirst(false);
-                return;
-              }
-              setCaptureId(nextEmpty?.id ?? null);
+              leaveCameraToLive();
             }}
             onUnavailable={() => {
               setCameraFailed(true);

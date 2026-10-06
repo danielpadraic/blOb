@@ -77,6 +77,8 @@ type ProofUploaderProps = {
   onRequestOpen?: () => void;
   title?: string | null;
   instruction?: string | null;
+  /** One short line under the status bar. */
+  statusLine?: string | null;
 };
 
 export function ProofUploader({
@@ -94,6 +96,7 @@ export function ProofUploader({
   onRequestOpen,
   title = null,
   instruction = null,
+  statusLine = null,
 }: ProofUploaderProps) {
   const meta = proofMeta(type);
   const capture = captureKindForProof(type);
@@ -266,8 +269,9 @@ export function ProofUploader({
           chromeInset={false}
           hrScreenshot={type === 'hr_monitor'}
           faceHint={faceHint}
-          title={title}
-          instruction={instruction}
+          title={statusLine ? null : title}
+          instruction={statusLine ? null : instruction}
+          statusLine={statusLine}
           onCaptured={(media) => {
             stopAllLiveMedia();
             onPicked(media.uri, media.mimeType, { fromLibrary: false, blob: media.blob ?? null });

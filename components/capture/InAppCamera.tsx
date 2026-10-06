@@ -30,6 +30,7 @@ import {
   type CameraFacingKind,
 } from '@/components/capture/cameraFacing';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
+import { cameraShutterLabel } from '@/lib/checkin/cameraChrome';
 import { AppText } from '@/components/ui/AppText';
 import {
   cameraErrorKind,
@@ -124,6 +125,8 @@ type InAppCameraProps = {
   /** Guided check-in: next empty required slot. */
   title?: string | null;
   instruction?: string | null;
+  /** One short line in the top bar. Replaces the instruction card. */
+  statusLine?: string | null;
 };
 
 export function InAppCamera({
@@ -151,6 +154,7 @@ export function InAppCamera({
   checkin = false,
   title = null,
   instruction = null,
+  statusLine = null,
 }: InAppCameraProps) {
   const resolvedFacingKind: CameraFacingKind = checkin ? 'checkin' : facingKind;
   const insets = useSafeAreaInsets();
@@ -1344,17 +1348,15 @@ export function InAppCamera({
     }
   }
 
-  const guidedTitle = title?.trim() || null;
-  const guidedHelper = instruction?.trim() || null;
+  const guidedTitle = statusLine?.trim() ? null : title?.trim() || null;
+  const guidedHelper = statusLine?.trim() ? null : instruction?.trim() || null;
   const liveHint = checkin
-    ? guidedTitle
-      ? null
-      : askLine ?? 'Take photo'
+    ? null
     : video && recording
       ? copy('wave.shutterStop')
       : shutterHint;
   const shutterLabel = checkin
-    ? 'Take photo'
+    ? cameraShutterLabel()
     : liveHint
       ? liveHint
       : video
@@ -1545,7 +1547,22 @@ export function InAppCamera({
             Close
           </AppText>
         </Pressable>
-        <View style={{ minWidth: 64 }} />
+        {statusLine?.trim() ? (
+          <AppText
+            numberOfLines={1}
+            style={{
+              flex: 1,
+              textAlign: 'center',
+              color: '#fff',
+              fontSize: 15,
+              fontWeight: '700',
+              marginHorizontal: 8,
+            }}>
+            {statusLine.trim()}
+          </AppText>
+        ) : (
+          <View style={{ minWidth: 64 }} />
+        )}
         {onUseWorkout || onStartWatch ? (
           <View className="items-end" style={{ gap: 8, maxWidth: 168 }}>
             {onUseWorkout ? (
