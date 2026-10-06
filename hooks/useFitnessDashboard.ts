@@ -17,6 +17,7 @@ import {
 import { checkinWorkoutTitle, submittedProofNames, type CheckinPeek } from '@/lib/dashboard/checkinPeek';
 import { effortFromLiftRows, type EffortSession, type LiftEffortRow } from '@/lib/dashboard/effort';
 import { collapseCheckinRows, durationLabel } from '@/lib/dashboard/model';
+import { weekdayLetter } from '@/lib/dashboard/calendar';
 import { dashboardZone, dayInRange, rangeDayKeys, type CustomRange, type DashboardRange } from '@/lib/dashboard/range';
 import {
   bodyCards,
@@ -128,15 +129,6 @@ const EMPTY: FitnessDashboardModel = {
   earnedLabel: null,
 };
 
-function weekdayLabel(day: string, timeZone: string): string {
-  const date = new Date(`${day}T12:00:00Z`);
-  try {
-    return new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short' }).format(date).slice(0, 1);
-  } catch {
-    return '';
-  }
-}
-
 function sourceOf(healthSource: string | null | undefined): DashboardSource {
   if (healthSource === 'healthkit') {
     return 'healthkit';
@@ -184,7 +176,8 @@ function buildModel(input: {
 }): FitnessDashboardModel {
   const zone = dashboardZone(null);
   const keys = rangeDayKeys(input.range, input.now, zone, input.custom);
-  const label = (day: string) => (zone ? weekdayLabel(day, zone) : '');
+  const label = (day: string) =>
+    input.range === 'week' || input.range === 'last7' ? weekdayLetter(day) : day.slice(8, 10);
 
   const lifts = input.lifts.filter((row) => {
     if (row.status === 'open' || !row.completedAt) {

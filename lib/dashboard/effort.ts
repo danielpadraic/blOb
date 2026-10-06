@@ -156,7 +156,7 @@ export function poundChart(
         key,
         label: axisLabel(key),
         value,
-        hint: name ? `${name} · ${mass(value, unit)}` : '',
+        hint: name ? `Pounds · ${name} · ${mass(value, unit)}` : '',
       };
     }),
   };
@@ -167,10 +167,14 @@ export function poundEmptyCopy(name: string, range: DashboardRange): string {
   const when =
     range === 'today'
       ? 'today'
-      : range === 'week'
-        ? 'this week'
+    : range === 'week'
+      ? 'this week'
+      : range === 'last7'
+        ? 'in the last 7 days'
         : range === 'month'
           ? 'this month'
+          : range === 'last30'
+            ? 'in the last 30 days'
           : range === 'year'
             ? 'this year'
             : 'in this range';

@@ -1,4 +1,10 @@
-import { bucketBodyPoints, sleepMinutesFromSamples, type BodyDay, type BodyPoint } from '@/lib/health/bodyDays';
+import {
+  bucketBodyPoints,
+  exerciseSampleMinutes,
+  sleepMinutesFromSamples,
+  type BodyDay,
+  type BodyPoint,
+} from '@/lib/health/bodyDays';
 
 type Sample = { value?: number | string; startDate?: string; endDate?: string };
 
@@ -73,7 +79,11 @@ export async function readAppleBodyDays(
     [
       ...numericPoints(steps, 'steps'),
       ...numericPoints(move, 'moveKcal'),
-      ...numericPoints(exercise, 'exerciseMin'),
+      ...exercise.map((sample) => {
+        const at = String(sample.startDate ?? sample.endDate ?? '');
+        const minutes = exerciseSampleMinutes(Number(sample.value), sample.startDate, sample.endDate);
+        return at && minutes > 0 ? { at, value: minutes, kind: 'exerciseMin' as const } : null;
+      }).filter((point): point is BodyPoint => Boolean(point)),
       ...numericPoints(stand, 'standMin'),
       ...sleepPoints,
       ...numericPoints(heart, 'heart'),

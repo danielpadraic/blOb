@@ -1,10 +1,11 @@
+import { weekdayShort } from '@/lib/dashboard/calendar';
 import { durationLabel } from '@/lib/dashboard/model';
 import { positiveNumber, type BodyDay, type BodyProvider } from '@/lib/health/bodyDays';
 import { formatCompletedDay } from '@/lib/health/workoutWhen';
 
 export type DashboardSource = 'healthkit' | 'health_connect' | 'lift' | 'checkin';
 
-export type DayBar = { key: string; label: string; value: number };
+export type DayBar = { key: string; label: string; value: number; hint?: string };
 
 export type SessionRow = {
   id: string;
@@ -32,13 +33,31 @@ export function dayBars(
   keys: readonly string[],
   values: Map<string, number>,
   label: (day: string) => string,
+  hint?: (day: string, value: number) => string,
 ): DayBar[] {
-  const series = keys.map((key) => ({
-    key,
-    label: label(key),
-    value: values.get(key) ?? 0,
-  }));
+  const series = keys.map((key) => {
+    const value = values.get(key) ?? 0;
+    return {
+      key,
+      label: label(key),
+      value,
+      hint: hint ? hint(key, value) : undefined,
+    };
+  });
   return series.some((day) => day.value > 0) ? series : [];
+}
+
+export function metricDayHint(title: string, day: string, value: number, unit: string): string {
+  const name = weekdayShort(day);
+  if (!name) {
+    return '';
+  }
+  if (unit === 'steps') {
+    return `${title} · ${name} · ${Math.round(value).toLocaleString('en-US')}`;
+  }
+  const shown =
+    unit === 'hr' ? String(Math.round(value * 10) / 10) : Math.round(value).toLocaleString('en-US');
+  return `${title} · ${name} · ${shown} ${unit}`;
 }
 
 /** Wall-clock time that is not a cardio block, plus cardio on its own. A watch workout is not an input. */
@@ -305,7 +324,14 @@ export function bodyCards(
       key: spec.key,
       title: spec.title,
       valueLabel,
-      bars: dayBars(keys, values, label),
+      bars: dayBars(keys, values, label, (day, value) =>
+        metricDayHint(
+          spec.title,
+          day,
+          value,
+          spec.key === 'steps' ? 'steps' : spec.key === 'exercise' ? 'min' : spec.key === 'stand' ? 'hr' : spec.key === 'heart' ? 'bpm' : 'cal',
+        ),
+      ),
       source: newestSource(inRange, spec.pick),
     });
   }

@@ -70,27 +70,27 @@ describe('officialCoinKind', () => {
 });
 
 describe('officialCoinWindowBounds', () => {
-  it('opens the weekly window on Chicago Monday and closes after Sunday', () => {
+  it('opens the weekly window on Chicago Sunday and closes after Saturday', () => {
     const w = officialCoinWindowBounds('coin_weekly', FRIDAY);
-    expect(w.startKey).toBe('2026-09-21');
-    expect(w.endKey).toBe('2026-09-28');
+    expect(w.startKey).toBe('2026-09-20');
+    expect(w.endKey).toBe('2026-09-27');
     expect(w.days).toBe(7);
   });
 
-  it('treats Sunday as the last day of that same week, not a new one', () => {
+  it('starts a new week at Sunday 12:00 a.m. Chicago', () => {
     // Sunday Sep 27 2026, 8pm Chicago.
     const sunday = officialCoinWindowBounds('coin_weekly', new Date('2026-09-28T01:00:00.000Z'));
-    expect(sunday.startKey).toBe('2026-09-21');
-    expect(sunday.endKey).toBe('2026-09-28');
+    expect(sunday.startKey).toBe('2026-09-27');
+    expect(sunday.endKey).toBe('2026-10-04');
   });
 
-  it('rolls the week at Chicago midnight Monday, not UTC midnight', () => {
-    // 04:59 UTC Monday is still 11:59pm Sunday in Chicago.
-    expect(officialCoinWindowBounds('coin_weekly', new Date('2026-09-28T04:59:00.000Z')).startKey).toBe(
-      '2026-09-21',
+  it('rolls the week at Chicago midnight Sunday, not UTC midnight', () => {
+    // 04:59 UTC Sunday is still 11:59 p.m. Saturday in Chicago.
+    expect(officialCoinWindowBounds('coin_weekly', new Date('2026-09-27T04:59:00.000Z')).startKey).toBe(
+      '2026-09-20',
     );
-    expect(officialCoinWindowBounds('coin_weekly', new Date('2026-09-28T05:01:00.000Z')).startKey).toBe(
-      '2026-09-28',
+    expect(officialCoinWindowBounds('coin_weekly', new Date('2026-09-27T05:01:00.000Z')).startKey).toBe(
+      '2026-09-27',
     );
   });
 

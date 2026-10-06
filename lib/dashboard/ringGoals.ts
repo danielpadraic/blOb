@@ -181,21 +181,23 @@ export function scaledRingGoal(input: {
   const custom = Math.max(input.customDays, 1);
   if (input.cadence === 'daily') {
     if (input.range === 'today') return amount;
-    if (input.range === 'week') return amount * 7;
+    if (input.range === 'week' || input.range === 'last7') return amount * 7;
     if (input.range === 'month') return amount * input.monthDays;
+    if (input.range === 'last30') return amount * 30;
     if (input.range === 'year') return amount * input.yearDays;
     return amount * custom;
   }
   if (input.cadence === 'weekly') {
     if (input.range === 'today') return amount / 7;
-    if (input.range === 'week') return amount;
+    if (input.range === 'week' || input.range === 'last7') return amount;
     if (input.range === 'month') return (amount * 52) / 12;
+    if (input.range === 'last30') return amount * (30 / 7);
     if (input.range === 'year') return amount * 52;
     return amount * (custom / 7);
   }
   if (input.range === 'today') return (amount * 12) / 365;
-  if (input.range === 'week') return (amount * 12) / 52;
-  if (input.range === 'month') return amount;
+  if (input.range === 'week' || input.range === 'last7') return (amount * 12) / 52;
+  if (input.range === 'month' || input.range === 'last30') return amount;
   if (input.range === 'year') return amount * 12;
   return ((amount * 12) / 365) * custom;
 }
@@ -207,7 +209,19 @@ export function ringProgress(value: number, goal: number): number {
   return Math.min(1, value / goal);
 }
 
-/** Active calories, exercise minutes, and stand hours. A day cannot exceed 24 stand hours or 1,440 exercise minutes. */
+/**
+ * Minutes for one day. HealthKit sometimes returns that same span in seconds.
+ * A day still cannot exceed 1,440 minutes. Lift time is not added here.
+ */
+export function exerciseDayMinutes(raw: unknown): number {
+  let minutes = positiveNumber(raw) ?? 0;
+  if (minutes > 300) {
+    minutes = minutes / 60;
+  }
+  return Math.min(24 * 60, minutes);
+}
+
+/** Active calories, exercise minutes, and stand hours inside the selected days only. */
 export function ringTotals(days: readonly BodyDay[], keys: readonly string[]): {
   move: number;
   exercise: number;
@@ -220,7 +234,7 @@ export function ringTotals(days: readonly BodyDay[], keys: readonly string[]): {
   for (const day of inRange) {
     const active = positiveNumber(day.moveKcal) ?? positiveNumber(day.calories) ?? 0;
     move += active;
-    exercise += Math.min(24 * 60, positiveNumber(day.exerciseMin) ?? 0);
+    exercise += exerciseDayMinutes(day.exerciseMin);
     stand += Math.min(24, positiveNumber(day.standHours) ?? 0);
   }
   return { move, exercise, stand };

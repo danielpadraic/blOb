@@ -20,6 +20,7 @@ import { readDashboardRange, writeDashboardRange } from '@/lib/dashboard/rangeCh
 import type { DayMark } from '@/lib/dashboard/calendar';
 import { cardioLines, exerciseChipNames, muscleChipKeys, muscleLabel, poundChart, poundEmptyCopy } from '@/lib/dashboard/effort';
 import { isMuscleKey } from '@/lib/lift/muscles';
+import { weekdayLetter } from '@/lib/dashboard/calendar';
 import { dashboardZone, type DashboardRange } from '@/lib/dashboard/range';
 import {
   daysInMonth,
@@ -37,17 +38,23 @@ import {
 import { isWideDashboardWindow } from '@/lib/dashboard/wide';
 import { copy } from '@/lib/copy';
 import { healthHowToLine } from '@/lib/health/howTo';
+import { useHealthLogPrompt } from '@/hooks/useHealthLogPrompt';
+import { copy } from '@/lib/copy';
+import { formatHealthDuration } from '@/lib/health/durationChip';
+import { checkinSubmitHref } from '@/lib/routes';
 import { getHealthProvider } from '@/services/health';
 import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
 import type { Profile } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { useQuery } from '@tanstack/react-query';
 
-const RANGES: DashboardRange[] = ['today', 'week', 'month', 'year', 'custom'];
+const RANGES: DashboardRange[] = ['today', 'week', 'last7', 'month', 'last30', 'year', 'custom'];
 const RANGE_LABEL: Record<DashboardRange, string> = {
   today: 'Today',
   week: 'Week',
+  last7: 'Last 7 days',
   month: 'Month',
+  last30: 'Last 30 days',
   year: 'Year',
   custom: 'Custom',
 };
@@ -75,6 +82,8 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
   const [exercise, setExercise] = useState<string | null>(null);
   const [cardioType, setCardioType] = useState<string | null>(null);
   const [barHint, setBarHint] = useState('');
+  const [ringHint, setRingHint] = useState('');
+  const workoutPrompt = useHealthLogPrompt();
   const [openDay, setOpenDay] = useState<string | null>(null);
   const [goals, setGoals] = useState<RingGoals>(DEFAULT_RING_GOALS);
   const [goalsOpen, setGoalsOpen] = useState(false);
@@ -147,9 +156,11 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
   const model = dash.model;
   const muscles = muscleChipKeys(model.effortSessions);
   const exercises = muscle ? exerciseChipNames(model.effortSessions, muscle) : [];
+  const axisLabel = (day: string) =>
+    range === 'week' || range === 'last7' ? weekdayLetter(day) : day.slice(8, 10);
   const pounds = useMemo(
-    () => poundChart(model.effortSessions, model.dayKeys, { muscle, exercise }, (day) => day.slice(8, 10)),
-    [exercise, model.dayKeys, model.effortSessions, muscle],
+    () => poundChart(model.effortSessions, model.dayKeys, { muscle, exercise }, axisLabel),
+    [axisLabel, exercise, model.dayKeys, model.effortSessions, muscle],
   );
   const poundChip = Boolean(muscle || exercise);
   const showPounds = pounds.total > 0 || poundChip;
@@ -209,6 +220,7 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
     const shown = key === 'stand' ? Math.round(value * 10) / 10 : Math.round(value);
     const goalShown = key === 'stand' ? Math.round(goal * 10) / 10 : Math.round(goal);
     const withUnit = `${shown} ${unit}`;
+    const windowName = RANGE_LABEL[range];
     return {
       key,
       value,
@@ -216,6 +228,7 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
       inside: withUnit.length <= 6 ? withUnit : String(shown),
       name: key === 'move' ? 'MOVE' : key === 'exercise' ? 'EXERCISE' : 'STAND',
       compare: `${shown} / ${goalShown} ${unit}`,
+      tap: `${key === 'move' ? 'Move' : key === 'exercise' ? 'Exercise' : 'Stand'} · ${windowName} · ${shown} ${unit}`,
       color: key === 'stand' ? THEME.gold : key === 'exercise' ? THEME.circle : THEME.accent,
     };
   });
@@ -263,6 +276,50 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
         />
         <TextButton title="Settings" onPress={() => router.push('/profile/account')} />
       </View>
+
+      {workoutPrompt.workout && workoutPrompt.targets[0] ? (
+        <View
+          style={{
+            backgroundColor: THEME.surface,
+            borderRadius: 20,
+            borderWidth: 1,
+            borderColor: THEME.border,
+            paddingHorizontal: 16,
+            paddingVertical: 14,
+            gap: 10,
+            ...themeShadow('card'),
+          }}>
+          <AppText style={{ fontSize: 16, fontWeight: '800', color: THEME.textPrimary }}>
+            {copy('health.prompt', 'gentle', {
+              duration: formatHealthDuration(workoutPrompt.workout.durationSec) ?? '',
+              activity: workoutPrompt.workout.activityLabel,
+            })}
+          </AppText>
+          <View style={{ flexDirection: 'row', gap: 16, alignItems: 'center' }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Begin check-in"
+              onPress={() => router.push(checkinSubmitHref(workoutPrompt.targets[0].id))}
+              style={{
+                backgroundColor: THEME.primary,
+                borderRadius: 999,
+                paddingHorizontal: 16,
+                paddingVertical: 10,
+              }}>
+              <AppText style={{ color: THEME.primaryForeground, fontWeight: '800' }}>
+                {copy('health.beginCheckin')}
+              </AppText>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={copy('health.notNow')}
+              onPress={() => void workoutPrompt.dismiss()}
+              style={{ minHeight: 44, justifyContent: 'center' }}>
+              <AppText style={{ color: THEME.textMuted, fontWeight: '700' }}>{copy('health.notNow')}</AppText>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
 
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
         {RANGES.map((item) => (
@@ -477,16 +534,22 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
             {ringView
               .filter((ring) => ring.value > 0)
               .map((ring) => (
-                <GoalRing
+                <Pressable
                   key={ring.key}
-                  progress={ring.progress}
-                  valueText={ring.inside}
-                  name={ring.name}
-                  compare={ring.compare}
-                  color={ring.color}
-                />
+                  accessibilityRole="button"
+                  accessibilityLabel={ring.tap}
+                  onPress={() => setRingHint(ring.tap)}>
+                  <GoalRing
+                    progress={ring.progress}
+                    valueText={ring.inside}
+                    name={ring.name}
+                    compare={ring.compare}
+                    color={ring.color}
+                  />
+                </Pressable>
               ))}
           </View>
+          {ringHint ? <AppText style={{ color: THEME.textMuted, fontSize: 13 }}>{ringHint}</AppText> : null}
         </Card>
       ) : null}
 
@@ -500,7 +563,8 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
               key={card.key}
               title={`${card.title} · ${card.valueLabel}`}
               chip={card.source ? sourceChipLabel(card.source) : undefined}>
-              <DayChart days={card.bars} color={THEME.accentBright} />
+              <DayChart days={card.bars} color={THEME.accentBright} onHint={setBarHint} />
+              {barHint ? <AppText style={{ color: THEME.textMuted, fontSize: 13 }}>{barHint}</AppText> : null}
             </Card>
           ))
         : null}

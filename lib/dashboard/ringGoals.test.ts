@@ -142,7 +142,7 @@ describe('ring quantities', () => {
       ['2026-10-01'],
     );
     expect(totals.stand).toBe(24);
-    expect(totals.exercise).toBe(24 * 60);
+    expect(totals.exercise).toBe(273);
     expect(totals.move).toBe(186);
   });
 });

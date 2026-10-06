@@ -11,7 +11,7 @@ export type StoredDashboardRange = {
 
 const DEFAULT_CHOICE: StoredDashboardRange = { range: 'week', custom: null };
 
-const RANGES = new Set<DashboardRange>(['today', 'week', 'month', 'year', 'custom']);
+const RANGES = new Set<DashboardRange>(['today', 'week', 'last7', 'month', 'last30', 'year', 'custom']);
 
 export async function readDashboardRange(): Promise<StoredDashboardRange> {
   try {

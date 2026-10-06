@@ -1,6 +1,6 @@
 import { dateStampInZone } from '@/lib/officialDays';
 
-export type DashboardRange = 'today' | 'week' | 'month' | 'year' | 'custom';
+export type DashboardRange = 'today' | 'week' | 'last7' | 'month' | 'last30' | 'year' | 'custom';
 
 export type CustomRange = { start: string; end: string };
 
@@ -64,12 +64,34 @@ export function rangeDayKeys(
   if (range === 'today') {
     return [today];
   }
-  const span = range === 'week' ? 7 : range === 'month' ? 30 : 365;
+  if (range === 'week') {
+    return weekKeys(today);
+  }
+  if (range === 'month') {
+    return monthKeys(today);
+  }
+  const span = range === 'last7' ? 7 : range === 'last30' ? 30 : 365;
   const keys: string[] = [];
   for (let back = span - 1; back >= 0; back -= 1) {
     keys.push(addDaysYmd(today, -back));
   }
   return keys;
+}
+
+/** Sunday 12:00 a.m. through Saturday, in the zone that produced `today`. */
+export function weekKeys(today: string): string[] {
+  const [year, month, day] = today.split('-').map(Number);
+  const dow = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  const start = addDaysYmd(today, -dow);
+  return Array.from({ length: 7 }, (_, index) => addDaysYmd(start, index));
+}
+
+/** The 1st through the last day of the month that contains `today`. */
+export function monthKeys(today: string): string[] {
+  const [year, month] = today.split('-').map(Number);
+  const last = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const start = `${year}-${pad(month)}-01`;
+  return Array.from({ length: last }, (_, index) => addDaysYmd(start, index));
 }
 
 export function dayInRange(day: string, keys: readonly string[]): boolean {

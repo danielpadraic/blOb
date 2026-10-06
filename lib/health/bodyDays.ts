@@ -49,6 +49,30 @@ export function mergeBodyDays(stored: readonly BodyDay[], fresh: readonly BodyDa
   return [...map.values()];
 }
 
+/**
+ * Exercise sample as minutes. A value larger than the clock span is seconds.
+ */
+export function exerciseSampleMinutes(
+  value: number,
+  start?: string | null,
+  end?: string | null,
+): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+  const from = Date.parse(String(start ?? ''));
+  const to = Date.parse(String(end ?? ''));
+  const spanMin =
+    Number.isFinite(from) && Number.isFinite(to) && to > from ? (to - from) / 60000 : 0;
+  if (spanMin > 0 && value > spanMin * 1.5) {
+    return value / 60;
+  }
+  if (spanMin <= 0 && value > 300) {
+    return value / 60;
+  }
+  return value;
+}
+
 export function positiveNumber(value: unknown): number | null {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? n : null;

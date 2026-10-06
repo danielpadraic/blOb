@@ -36,6 +36,17 @@ function mondayIndex(ymd: string): number {
 }
 
 /** Weekday of a calendar date. The stamp is already a local day, so it is not read as a UTC clock. */
+/** "Sun", "Mon", … for a calendar date. Not shifted by the device clock. */
+export function weekdayShort(ymd: string): string {
+  const [year, month, day] = ymd.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day, 12));
+  try {
+    return new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short' }).format(date);
+  } catch {
+    return '';
+  }
+}
+
 export function weekdayLetter(ymd: string): string {
   const [year, month, day] = ymd.split('-').map(Number);
   const date = new Date(Date.UTC(year, month - 1, day, 12));

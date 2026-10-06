@@ -22,9 +22,10 @@ export function HealthLogPromptHost() {
 
   const path = segments as string[];
   const onSubmit = path.includes('submit');
+  const onDashboard = path.includes('profile');
   const onChallengeLive = path.includes('challenges') && path.includes('[id]') && !onSubmit;
   const targets = prompt.targets;
-  const visible = Boolean(prompt.workout && targets.length > 0 && !onSubmit);
+  const visible = Boolean(prompt.workout && targets.length > 0 && !onSubmit && !onDashboard);
   const top = insets.top + (onChallengeLive ? CHALLENGE_LIVE_BANNER_LIFT : 8);
 
   if (!visible || !prompt.workout) {

@@ -159,8 +159,9 @@ export function formatOfficialCoinAmount(coins: number): string {
 }
 
 /**
- * Current Chicago window for a kind. Weekly is Monday through Sunday,
- * monthly is the 1st through the last day. `endKey` is exclusive.
+ * Current Chicago window for a kind. Weekly is Sunday 12:00 a.m. through
+ * Saturday, monthly is the 1st through the last day. `endKey` is exclusive.
+ * The open Official week keeps the dates already stored on that room.
  */
 export function officialCoinWindowBounds(
   kind: OfficialCoinKind,
@@ -175,10 +176,9 @@ export function officialCoinWindowBounds(
     endKey =
       month === 12 ? `${year + 1}-01-01` : `${year}-${pad(month + 1)}-01`;
   } else {
-    // Monday-first, matching Postgres date_trunc('week').
+    // Sunday 12:00 a.m. Chicago through the following Saturday.
     const dow = new Date(Date.UTC(year, month - 1, day)).getUTCDay(); // 0=Sun
-    const backToMonday = dow === 0 ? 6 : dow - 1;
-    startKey = addYmd(today, -backToMonday);
+    startKey = addYmd(today, -dow);
     endKey = addYmd(startKey, 7);
   }
   return {
