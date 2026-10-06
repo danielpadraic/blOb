@@ -78,6 +78,8 @@ export function SetRow({
           flexDirection: 'row',
           alignItems: 'center',
           gap: GAP,
+          borderRadius: 12,
+          backgroundColor: pulse.hot ? THEME.accentSoft : 'transparent',
           paddingVertical: 3,
           opacity: readOnly && !done ? 0.7 : 1,
         },

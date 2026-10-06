@@ -115,6 +115,8 @@ type KeyboardFormShellProps = {
   protectFieldFocus?: boolean;
   /** When the keyboard is down, extra footer pad (tab bar). Keyboard up sits on the keys with no gap. */
   closedFooterPad?: number;
+  /** Solid bar behind the footer buttons. */
+  footerBackground?: string;
 };
 
 export function KeyboardFormShell({
@@ -128,6 +130,7 @@ export function KeyboardFormShell({
   tone = 'light',
   protectFieldFocus = false,
   closedFooterPad,
+  footerBackground,
 }: KeyboardFormShellProps) {
   const insets = useSafeAreaInsets();
   const overlap = useKeyboardOverlap();
@@ -265,7 +268,7 @@ export function KeyboardFormShell({
               paddingTop: 10,
               paddingBottom:
                 overlap > 0 || keyboardHeight > 100 ? 0 : closedFooterPad ?? safeBottom,
-              backgroundColor,
+              backgroundColor: footerBackground ?? backgroundColor,
               borderTopWidth: 1,
               borderTopColor:
                 tone === 'dark' ? 'rgba(255,255,255,0.12)' : THEME.border,

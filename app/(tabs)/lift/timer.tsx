@@ -5,8 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { rowPlaySpecFromRounds, useLiftPlay } from '@/components/lift/LiftPlayHost';
 import { TimerPlanBuilder } from '@/components/lift/TimerPlanBuilder';
+import { LiftFooterBtn } from '@/components/lift/LiftLoggingFooter';
 import { AppText } from '@/components/ui/AppText';
-import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/ui/Screen';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
 import { formatDuration } from '@/lib/lift/duration';
@@ -25,7 +25,7 @@ import {
 } from '@/lib/lift/standaloneTimer';
 import { expandPlan, planDetail, type TimerPlan } from '@/lib/lift/timerPlan';
 import type { LiftRound } from '@/lib/lift/types';
-import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
+import { THEME, themeShadow } from '@/lib/theme';
 
 /**
  * The interval timer on its own, off the plus menu.
@@ -158,15 +158,20 @@ export default function StandaloneTimerScreen() {
         <View
           style={{
             paddingHorizontal: 16,
-            paddingTop: 12,
-            gap: 8,
+            paddingTop: 10,
             backgroundColor: THEME.surface,
             borderTopWidth: 1,
             borderTopColor: THEME.border,
-            paddingBottom: tabBarLift(insets.bottom, 'sticky') + 12,
-            ...themeShadow('bar'),
+            paddingBottom: Math.max(insets.bottom, 12),
           }}>
-          <Button title="Play" disabled={!playable} onPress={() => startPlay(spec)} />
+          <View style={{ flexDirection: 'row' }}>
+            <LiftFooterBtn
+              title="Play"
+              variant="play"
+              disabled={!playable}
+              onPress={() => startPlay(spec)}
+            />
+          </View>
         </View>
       </View>
     </Screen>

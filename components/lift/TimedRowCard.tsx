@@ -118,7 +118,11 @@ export function TimedRowCard({
     <Animated.View
       ref={pulse.ref}
       collapsable={false}
-      style={[cardStyle(rest), pulseToken ? pulse.style : null]}>
+      style={[
+        cardStyle(rest),
+        pulse.hot ? { backgroundColor: THEME.accentSoft, borderColor: THEME.accent } : null,
+        pulseToken ? pulse.style : null,
+      ]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
         <Glyph
           name={rest ? GLYPH.clock : GLYPH.anyExercise}

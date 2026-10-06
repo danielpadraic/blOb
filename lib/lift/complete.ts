@@ -1,7 +1,7 @@
 import { formatDuration } from '@/lib/lift/duration';
 import { formatMassMoved } from '@/lib/lift/massUnit';
 import { formatVolume } from '@/lib/lift/recap';
-import { cardioRowSeconds } from '@/lib/lift/rounds';
+import { canPlay, cardioRowSeconds } from '@/lib/lift/rounds';
 import { isEmptySet, sessionTitle, shortDate, timedRowLabel } from '@/lib/lift/session';
 import type { LiftExerciseDraft, LiftRound, LiftSessionDraft, LiftSessionSummary, LiftSetDraft } from '@/lib/lift/types';
 import type { MuscleKey } from '@/lib/lift/muscles';
@@ -134,6 +134,10 @@ function cardioLeftover(exercise: LiftExerciseDraft): LeftoverTarget | null {
 
 export function leftoverCardioRounds(exercise: LiftExerciseDraft): number {
   if (exercise.kind !== 'cardio') {
+    return 0;
+  }
+  // An empty Cardio chip has no time. It does not block Complete, and it is not the row we scroll to.
+  if (!canPlay(exercise) && cardioRowSeconds(exercise) <= 0) {
     return 0;
   }
   const extra = (exercise.rounds ?? []).filter((round) => !round.completedAt).length;

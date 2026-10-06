@@ -714,6 +714,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
         padded
         protectFieldFocus
         closedFooterPad={Math.max(insets.bottom, 12)}
+        footerBackground={THEME.surface}
         footer={
           readOnly ? (
             <LiftSavedFooter

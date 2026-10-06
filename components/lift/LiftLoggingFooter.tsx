@@ -13,6 +13,7 @@ type FooterBtnProps = {
   dimmed?: boolean;
   loading?: boolean;
   glyph?: boolean;
+  accessibilityLabel?: string;
   onPress: () => void;
 };
 
@@ -23,20 +24,22 @@ export function LiftFooterBtn({
   dimmed,
   loading,
   glyph,
+  accessibilityLabel,
   onPress,
 }: FooterBtnProps) {
-  const isDisabled = Boolean(disabled || loading);
-  const grey = Boolean(dimmed && !loading && variant === 'play');
-  const fill =
-    variant === 'play'
+  const isDisabled = Boolean(loading || (disabled && !dimmed));
+  const quiet = Boolean((dimmed || disabled) && !loading);
+  const fill = quiet
+    ? '#D7DBD8'
+    : variant === 'play'
       ? THEME.accent
       : variant === 'save' || variant === 'share'
         ? THEME.primary
         : variant === 'danger'
           ? THEME.danger
           : THEME.surface;
-  const labelColor = grey
-    ? THEME.textPrimary
+  const labelColor = quiet
+    ? THEME.ink
     : variant === 'outline'
       ? title === 'Delete'
         ? THEME.danger
@@ -46,7 +49,7 @@ export function LiftFooterBtn({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={title}
+      accessibilityLabel={accessibilityLabel ?? title}
       accessibilityState={{ disabled: isDisabled, busy: Boolean(loading) }}
       disabled={isDisabled}
       onPress={onPress}
@@ -61,10 +64,10 @@ export function LiftFooterBtn({
         justifyContent: 'center',
         flexDirection: 'row',
         gap: 4,
-        backgroundColor: grey ? THEME.accentSoft : fill,
+        backgroundColor: fill,
         borderWidth: variant === 'outline' ? 1 : 0,
         borderColor: variant === 'outline' ? THEME.border : 'transparent',
-        opacity: pressed ? 0.88 : 1,
+        opacity: pressed && !isDisabled ? 0.88 : 1,
       })}>
       {loading ? (
         <ActivityIndicator color={labelColor} />
@@ -151,24 +154,12 @@ export function LiftDraftFooter({
   onComplete: () => void;
   onLeftover?: () => void;
 }) {
-  const blocked = Boolean(leftoverLine) && !canComplete;
-  const showLeftover = blocked && !statusLine;
-  const hint = statusLine || (blocked ? leftoverLine : null);
-
   return (
-    <View style={{ gap: 8 }}>
-      {hint ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={hint}
-          disabled={!showLeftover}
-          onPress={showLeftover ? onLeftover : undefined}>
-          <AppText
-            numberOfLines={2}
-            style={{ fontSize: 13, fontWeight: '600', color: showLeftover ? THEME.danger : THEME.textMuted }}>
-            {hint}
-          </AppText>
-        </Pressable>
+    <View style={{ gap: statusLine ? 6 : 0 }}>
+      {statusLine ? (
+        <AppText numberOfLines={1} style={{ fontSize: 13, fontWeight: '700', color: THEME.danger }}>
+          {statusLine}
+        </AppText>
       ) : null}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <LiftFooterBtn title="Play" variant="play" disabled={!canPlay} onPress={onPlay} />
@@ -178,7 +169,8 @@ export function LiftDraftFooter({
           variant="save"
           dimmed={!canComplete}
           loading={completing}
-          onPress={onComplete}
+          accessibilityLabel={!canComplete && leftoverLine ? leftoverLine : 'Complete'}
+          onPress={canComplete ? onComplete : (onLeftover ?? onComplete)}
         />
       </View>
     </View>

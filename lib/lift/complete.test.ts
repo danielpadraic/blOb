@@ -102,6 +102,20 @@ describe('complete gate', () => {
     expect(canCompleteSession(newSessionDraft({ muscleKeys: ['chest'], unit: 'lb' }))).toBe(false);
   });
 
+  it('points at the unchecked set and skips an empty cardio or rest chip', () => {
+    let draft = bench([work(10, 5, true), work(10, 5, true), work(10, 5, false)]);
+    draft.exercises[0].name = 'Pull-Up';
+    draft = addTimedRow(draft, { kind: 'rest', muscleKey: 'back', name: 'Rest' });
+    draft = addTimedRow(draft, {
+      kind: 'cardio',
+      muscleKey: 'cardio',
+      name: 'Cardio',
+      durationSeconds: 0,
+    });
+    expect(firstLeftoverTarget(draft)?.line).toBe('Check or remove Pull-Up set 3');
+    expect(canCompleteSession(draft)).toBe(false);
+  });
+
   it('does not block for a rest row when cardio was never added', () => {
     let draft = bench([work(100, 10, true)]);
     draft = addTimedRow(draft, {

@@ -182,11 +182,13 @@ export function isLiveCameraPath(pathname: string | null | undefined): boolean {
   return path.includes('/capture') || path.includes('/submit');
 }
 
-/** Logging and a saved lift. The footer is the bottom row, so the pill tab stays out of the way. */
+/** Logging, a saved lift, and the timer. The footer is the bottom row, so the pill tab stays out of the way. */
 export function isLiftSessionPath(pathname: string | null | undefined): boolean {
-  return /^\/lift\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/?$/i.test(
-    String(pathname ?? ''),
-  );
+  const path = String(pathname ?? '').split('?')[0].replace(/\/$/, '');
+  if (/\/lift\/timer$/i.test(path)) {
+    return true;
+  }
+  return /\/lift\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(path);
 }
 
 let primed: MediaStream | null = null;
