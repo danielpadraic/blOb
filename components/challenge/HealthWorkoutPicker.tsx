@@ -380,12 +380,14 @@ export function HealthWorkoutPicker({
                   opacity: blocked ? 0.72 : 1,
                 }}>
                 <AppText className="text-[15px] font-bold text-charcoal">{row.activityLabel}</AppText>
+                {when ? (
+                  <AppText className="mt-0.5 text-[13px] font-semibold text-charcoal">{when}</AppText>
+                ) : null}
                 <AppText className="mt-0.5 text-sm text-muted">
                   {[
                     Number(row.distanceM) > 0
                       ? formatDistance(Number(row.distanceM), athleteDistanceUnit())
                       : '',
-                    when,
                     formatDuration(row.durationSec),
                   ]
                     .filter(Boolean)

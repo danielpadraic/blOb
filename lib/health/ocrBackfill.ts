@@ -107,7 +107,8 @@ export function shouldPostSendOcrSlot(input: {
   if (method !== 'hr' && method !== 'distance') {
     return false;
   }
-  if (isVendorHealthSlot(input)) {
+  // A HealthKit attach already has its numbers. A screenshot that only stored a clock still needs a read.
+  if (isVendorHealthSource(input.health?.source) || String(input.healthWorkoutId ?? '').trim()) {
     return false;
   }
   return (input.urls ?? []).some((url) => {

@@ -27,6 +27,8 @@ import {
   withSlotStills,
 } from '@/lib/checkin/slotStills';
 import { appendWorkoutCardUrl, storeRenderedWorkoutCard } from '@/lib/health/appendWorkoutCard';
+import { requestWorkoutCardRedraw } from '@/lib/health/cardRedrawSignal';
+import { patchFeedPostFields } from '@/lib/liveFeedPatch';
 import { saveWorkoutSession } from '@/lib/health/workoutSessions';
 import { recordHrSignature } from '@/lib/health/hrIntegrity';
 import { PeriodCheckinDue } from '@/components/challenge/PeriodCheckinDue';
@@ -1673,6 +1675,7 @@ function SubmitWorkoutInner() {
       if (recapFailedRef.current || cardRequestRef.current || cardTargetRef.current) {
         const error = new Error(miss);
         console.error('[blob:workout-card]', error);
+        requestWorkoutCardRedraw();
         return miss;
       }
       return null;
@@ -1700,7 +1703,7 @@ function SubmitWorkoutInner() {
       if (!uid || !checkinId) {
         return null;
       }
-      await withinCap(
+      const siblingCheckinId = await withinCap(
         appendWorkoutCardUrl({
           userId: uid,
           checkinId,
@@ -1708,8 +1711,26 @@ function SubmitWorkoutInner() {
           cardUrl: saved.cardUrl,
         }),
       );
+      const checkinIds = [checkinId, siblingCheckinId].filter((value): value is string => Boolean(value));
+      const posted = await supabase
+        .from('posts')
+        .select('id, media_urls, checkin_stats')
+        .eq('author_id', uid)
+        .in('checkin_id', checkinIds)
+        .is('deleted_at', null);
+      for (const row of posted.data ?? []) {
+        if (!row.id) {
+          continue;
+        }
+        patchFeedPostFields(queryClient, row.id, {
+          id: row.id,
+          media_urls: row.media_urls,
+          checkin_stats: row.checkin_stats,
+        });
+      }
       return null;
     } catch (error) {
+      requestWorkoutCardRedraw();
       return fail(error);
     }
   }
@@ -2187,33 +2208,6 @@ function SubmitWorkoutInner() {
           }
         }
       }
-      if (uid) {
-        void runPostSendOcr({
-          challengeId: id,
-          postId,
-          postIds: pairPostIds,
-          siblingChallengeId,
-          periodKey: checkinPeriodKey(challenge),
-          timeZone: challengeClockTz(challenge),
-          slots: proofSteps.map((proof) => {
-            const draft = draftWithReadStats(proof, drafts[proof.id]);
-            const saved = savedParts[proof.id];
-            return {
-              proof,
-              urls: uniqueProofUrls([
-                ...(Array.isArray(saved?.urls) ? saved.urls : []),
-                saved?.url,
-                ...slotStillUris(draft),
-              ]),
-              caption: proofCaptions[proof.id] ?? saved?.caption ?? null,
-              mimeType: draft?.mimeType,
-              health: draft?.health ?? saved?.health ?? null,
-              healthWorkoutId: draft?.healthWorkoutId ?? saved?.healthWorkoutId ?? null,
-            };
-          }),
-          queryClient,
-        }).catch(() => undefined);
-      }
       if (!cameraTrio && shareWave && uid && !wavePublishedRef.current && !isTeacher3DayChallenge(challenge)) {
         const wave = pickCheckinWaveSource({
           proofs: proofSteps,
@@ -2254,6 +2248,9 @@ function SubmitWorkoutInner() {
         }
       }
       await successHaptic();
+      // The recap upload has to finish after the Live rows exist. Eight seconds, then
+      // say so and still open this Live. The error is logged; it is not discarded.
+      const cardMiss = await awaitWorkoutCardUpload(checkinId);
       if (comparableHonor) {
         void queryClient.invalidateQueries({ queryKey: liveListKey(id) });
         void queryClient.invalidateQueries({ queryKey: ['challenge-participants', id] });
@@ -2263,10 +2260,8 @@ function SubmitWorkoutInner() {
         void queryClient.invalidateQueries({
           predicate: (query) => isHomeSocialFeedKey(query.queryKey),
         });
+        void queryClient.invalidateQueries({ queryKey: liveListKey(id, uid) });
       }
-      // The recap upload has to finish after the Live rows exist. Eight seconds, then
-      // say so and still open this Live. The error is logged; it is not discarded.
-      const cardMiss = await awaitWorkoutCardUpload(checkinId);
       const cardLine = copy('checkin.workoutCardFailed');
       if (cardMiss) {
         if (!failedExtras.includes(cardLine)) {
@@ -2277,6 +2272,35 @@ function SubmitWorkoutInner() {
         if (cardIndex >= 0) {
           failedExtras.splice(cardIndex, 1);
         }
+      }
+      if (uid) {
+        void runPostSendOcr({
+          challengeId: id,
+          postId,
+          postIds: pairPostIds,
+          siblingChallengeId,
+          periodKey: checkinPeriodKey(challenge),
+          timeZone: challengeClockTz(challenge),
+          slots: proofSteps.map((proof) => {
+            const draft = draftWithReadStats(proof, drafts[proof.id]);
+            const saved = savedParts[proof.id];
+            return {
+              proof,
+              urls: uniqueProofUrls([
+                ...(Array.isArray(saved?.urls) ? saved.urls : []),
+                saved?.url,
+                ...slotStillUris(draft),
+              ]),
+              caption: proofCaptions[proof.id] ?? saved?.caption ?? null,
+              mimeType: draft?.mimeType,
+              health: draft?.health ?? saved?.health ?? null,
+              healthWorkoutId: draft?.healthWorkoutId ?? saved?.healthWorkoutId ?? null,
+            };
+          }),
+          queryClient,
+        }).catch((error) => {
+          console.error('[blob:ocr]', error);
+        });
       }
       // A failed extra never rolls back the required slot — warn, do not block.
       const extraWarning = attachmentWarning();

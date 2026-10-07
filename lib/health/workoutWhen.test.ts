@@ -40,9 +40,14 @@ describe('when a Health workout finished', () => {
     expect(formatCompletedDay('2026-10-01T04:40:00.000Z', CHICAGO)).toBe('Wed, Sep 30');
   });
 
-  it('stays blank when a clock is missing', () => {
-    expect(formatWorkoutWhen({ startedAt: '2026-10-01T12:23:00.000Z', timeZone: CHICAGO })).toBe('');
-    expect(formatWorkoutWhen({ endedAt: '2026-10-01T13:14:00.000Z', timeZone: CHICAGO })).toBe('');
+  it('uses whichever clock exists when the other is missing', () => {
+    expect(formatWorkoutWhen({ startedAt: '2026-10-01T12:23:00.000Z', timeZone: CHICAGO })).toBe(
+      'Thu, Oct 1 · 7:23 AM',
+    );
+    expect(formatWorkoutWhen({ endedAt: '2026-10-01T13:14:00.000Z', timeZone: CHICAGO })).toBe(
+      'Thu, Oct 1 · 8:14 AM',
+    );
+    expect(formatWorkoutWhen({ timeZone: CHICAGO })).toBe('');
     expect(formatCompletedDay(null, CHICAGO)).toBe('');
     expect(formatCompletedDay('not-a-date', CHICAGO)).toBe('');
   });

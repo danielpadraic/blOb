@@ -111,7 +111,7 @@ export function WorkoutProofCardRenderer({ request, onRendered, onFailed }: Prop
         top: -WORKOUT_CARD_HEIGHT,
         width: WORKOUT_CARD_WIDTH,
         height: WORKOUT_CARD_HEIGHT,
-        opacity: 0,
+        opacity: 0.02,
         zIndex: -1,
       }}>
       <WorkoutProofCard

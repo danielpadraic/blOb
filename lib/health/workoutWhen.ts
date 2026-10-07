@@ -109,10 +109,15 @@ export function formatCompletedDay(endedAt?: string | null, timeZone?: string | 
   return part ? dayLabel(part) : '';
 }
 
+function oneClockLine(instant: Date, zone: string): string {
+  const part = zonedClock(instant, zone);
+  return part ? `${dayLabel(part)} · ${clock(part, true)}` : '';
+}
+
 /**
  * Same calendar day: "Wed, Oct 1 · 7:23–8:14 AM".
  * Crosses midnight: "Tue, Sep 30, 11:40 PM – Wed, Oct 1, 12:10 AM".
- * The day is the day `endedAt` falls on. Blank when either clock is missing.
+ * One clock is enough: the day and that time still print. Blank only when both are missing.
  */
 export function formatWorkoutWhen(input: {
   startedAt?: string | null;
@@ -120,15 +125,23 @@ export function formatWorkoutWhen(input: {
   timeZone?: string | null;
 }): string {
   const zone = workoutTimeZone(input.timeZone);
-  const start = input.startedAt ? new Date(input.startedAt) : null;
-  const end = input.endedAt ? new Date(input.endedAt) : null;
-  if (!zone || !start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+  if (!zone) {
     return '';
   }
-  const startPart = zonedClock(start, zone);
-  const endPart = zonedClock(end, zone);
-  if (!startPart || !endPart) {
+  const start = input.startedAt ? new Date(input.startedAt) : null;
+  const end = input.endedAt ? new Date(input.endedAt) : null;
+  const startOk = Boolean(start && !Number.isNaN(start.getTime()));
+  const endOk = Boolean(end && !Number.isNaN(end.getTime()));
+  if (!startOk && !endOk) {
     return '';
+  }
+  if (!startOk || !endOk) {
+    return oneClockLine((startOk ? start : end) as Date, zone);
+  }
+  const startPart = zonedClock(start as Date, zone);
+  const endPart = zonedClock(end as Date, zone);
+  if (!startPart || !endPart) {
+    return oneClockLine((endPart ? end : start) as Date, zone);
   }
   if (startPart.key === endPart.key) {
     const shared = startPart.dayPeriod && startPart.dayPeriod === endPart.dayPeriod;

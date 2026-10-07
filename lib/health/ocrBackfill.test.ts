@@ -119,6 +119,13 @@ describe('OCR backfill slot picker', () => {
         urls: ['https://x/face.jpg'],
       }),
     ).toBe(false);
+    expect(
+      shouldPostSendOcrSlot({
+        proof: { method: 'hr' },
+        urls: ['https://x/shot.jpg'],
+        health: { startedAt: '2026-10-07T11:12:00.000Z', endedAt: '2026-10-07T11:48:00.000Z' },
+      }),
+    ).toBe(true);
   });
 
   it('unions every still instead of keeping only the first read', () => {

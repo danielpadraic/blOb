@@ -147,13 +147,14 @@ export async function readWorkoutScreenshot(input: {
   }
   // Dark Fitness screenshots: grayscale + invert of the same still, in memory only.
   const inverted = imageBase64 ? await invertJpegBase64(imageBase64) : null;
-  if (!inverted) {
+  if (!inverted && !imageBase64 && !storageUrl) {
     return first;
   }
   const second = await postOcrWorkout({
     token,
-    imageBase64: inverted,
-    storageUrl: '',
+    imageBase64: inverted || imageBase64,
+    storageUrl: inverted || imageBase64 ? '' : storageUrl,
+    invert: !inverted,
     started,
     urls,
     slot,
@@ -168,6 +169,7 @@ async function postOcrWorkout(input: {
   token: string;
   imageBase64: string | null;
   storageUrl: string;
+  invert?: boolean;
   started: number;
   urls: string[];
   slot: string | null;
@@ -180,7 +182,9 @@ async function postOcrWorkout(input: {
       method: 'POST',
       headers: { 'content-type': 'application/json', Authorization: `Bearer ${input.token}` },
       body: JSON.stringify(
-        input.imageBase64 ? { imageBase64: input.imageBase64 } : { imageUrl: input.storageUrl },
+        input.imageBase64
+          ? { imageBase64: input.imageBase64, ...(input.invert ? { invert: true } : null) }
+          : { imageUrl: input.storageUrl, ...(input.invert ? { invert: true } : null) },
       ),
       signal: controller.signal,
     });

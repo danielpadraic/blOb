@@ -30,7 +30,7 @@ export const maxDuration = 60;
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
-type Body = { imageUrl?: unknown; imageBase64?: unknown };
+type Body = { imageUrl?: unknown; imageBase64?: unknown; invert?: unknown };
 
 /** Guards against a decode that would blow the function's memory. Screenshots are far smaller. */
 const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
@@ -149,6 +149,16 @@ export async function ocrWorkoutFromBuffer(bytes: Buffer): Promise<OcrWorkoutRea
   };
 }
 
+/** Second pass only: grayscale + invert in memory. Does not write a file. */
+async function ocrInvertPass(bytes: Buffer): Promise<OcrWorkoutRead> {
+  const pass = await ocrImageBuffer(bytes, 'always');
+  const parsed = dropOcrAvgIfAboveMax(parseWorkoutOcrText(pass.text));
+  if (hasOcrNumbers(parsed)) {
+    return { ok: true, isWorkoutScreen: true, reason: 'ok', parsed, inverted: true, pass: 2 };
+  }
+  return { ok: true, isWorkoutScreen: false, reason: 'no_numbers', inverted: true, pass: 2 };
+}
+
 /**
  * Exported as a named method so Vercel hands us a web-standard `Request`. A default export would be
  * invoked with Node's `IncomingMessage` instead, which has no `headers.get`.
@@ -182,7 +192,8 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     const image = bytes ?? (await downloadImageBytes(imageUrl));
-    const read = await ocrWorkoutFromBuffer(image);
+    const read =
+      body.invert === true ? await ocrInvertPass(image) : await ocrWorkoutFromBuffer(image);
     if (!read.isWorkoutScreen) {
       // A selfie or social photo in an HR slot is an expected outcome, not an error. The caller
       // shows no chips and Send stays available.

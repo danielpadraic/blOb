@@ -24,6 +24,7 @@ import {
   type OcrBackfillPart,
 } from '@/lib/health/ocrBackfill';
 import { readWorkoutScreenshot } from '@/lib/health/ocrClient';
+import { isRecapCardUrl } from '@/lib/health/postWorkoutCard';
 import {
   buildOcrHealthProof,
   ocrFieldsFromParse,
@@ -185,7 +186,9 @@ export async function runPostSendOcr(input: {
     if (!shouldPostSendOcrSlot(slot)) {
       continue;
     }
-    const urls = uniqueProofUrls(slot.urls).filter((url) => url && !url.startsWith('health:'));
+    const urls = uniqueProofUrls(slot.urls).filter(
+      (url) => url && !url.startsWith('health:') && !isRecapCardUrl(url),
+    );
     const existing = fieldsFromHealth(slot.health);
     const read = await readSlotStills(slot.proof.id, urls);
     const union = unionOcrFields([
@@ -233,7 +236,9 @@ export async function runPostSendOcr(input: {
     const stats = ocrCheckinStats(snapshot);
     const postIds = [...new Set([...(input.postIds ?? []), input.postId].map((id) => String(id ?? '').trim()).filter(Boolean))];
     if (stats && postIds.length > 0) {
-      await stampOfficialPairStats({ postIds, stats, queryClient: input.queryClient }).catch(() => undefined);
+      await stampOfficialPairStats({ postIds, stats, queryClient: input.queryClient }).catch((error) => {
+        console.error('[blob:ocr]', error);
+      });
     }
   }
   if (wrote) {

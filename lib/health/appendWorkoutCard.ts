@@ -91,12 +91,20 @@ async function writeCardOnCheckin(row: CheckinCardRow, proofId: string, cardUrl:
   } catch (error) {
     siblingError = error;
   }
+  let twinChallengeId = sibling?.challenge_id ?? null;
+  if (!twinChallengeId) {
+    try {
+      twinChallengeId = await officialTwinChallengeId(row.challenge_id);
+    } catch (error) {
+      siblingError = siblingError ?? error;
+    }
+  }
   const posts = await livePostsFor(row.user_id, [row.id, sibling?.id ?? '']);
   const wanted = new Set(
     workoutCardPostIds({
       challengeId: row.challenge_id,
       checkinId: row.id,
-      siblingChallengeId: sibling?.challenge_id,
+      siblingChallengeId: twinChallengeId,
       siblingCheckinId: sibling?.id,
       posts: posts.map((post) => ({
         id: post.id,
@@ -128,6 +136,31 @@ async function writeCardOnCheckin(row: CheckinCardRow, proofId: string, cardUrl:
   if (siblingError) {
     throw siblingError;
   }
+}
+
+/** The other Official room, even when that Chicago day has no check-in row yet. */
+async function officialTwinChallengeId(challengeId: string): Promise<string | null> {
+  const mine = await supabase
+    .from('challenges')
+    .select('id, official_kind')
+    .eq('id', challengeId)
+    .maybeSingle();
+  if (mine.error) {
+    throw new Error(mine.error.message || 'Could not show that workout card.');
+  }
+  if (!officialCoinKind(mine.data)) {
+    return null;
+  }
+  const rooms = await supabase
+    .from('challenges')
+    .select('id, official_kind')
+    .in('official_kind', ['coin_weekly', 'coin_monthly'])
+    .neq('id', challengeId);
+  if (rooms.error) {
+    throw new Error(rooms.error.message || 'Could not show that workout card.');
+  }
+  const twin = (rooms.data ?? []).find((room) => officialCoinKind(room));
+  return twin?.id ? String(twin.id) : null;
 }
 
 async function officialSibling(row: CheckinCardRow): Promise<CheckinCardRow | null> {
