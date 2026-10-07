@@ -16,6 +16,7 @@ import {
 } from '@/lib/dashboard/calendar';
 import { checkinWorkoutTitle, submittedProofNames, type CheckinPeek } from '@/lib/dashboard/checkinPeek';
 import { effortFromLiftRows, type EffortSession, type LiftEffortRow } from '@/lib/dashboard/effort';
+import { workoutHistoryDays, type HistoryCardio, type HistoryHealth, type HistoryLift, type WorkoutHistoryDay } from '@/lib/dashboard/history';
 import { collapseCheckinRows, durationLabel } from '@/lib/dashboard/model';
 import { weekdayLetter } from '@/lib/dashboard/calendar';
 import { dashboardZone, dayInRange, rangeDayKeys, type CustomRange, type DashboardRange } from '@/lib/dashboard/range';
@@ -97,6 +98,7 @@ export type FitnessDashboardModel = {
   syncedLabel: string | null;
   challenges: DashboardChallengeBar[];
   activities: DashboardActivity[];
+  history: WorkoutHistoryDay[];
   trophies: string[];
   earnedLabel: string | null;
 };
@@ -125,6 +127,7 @@ const EMPTY: FitnessDashboardModel = {
   syncedLabel: null,
   challenges: [],
   activities: [],
+  history: [],
   trophies: [],
   earnedLabel: null,
 };
@@ -179,6 +182,8 @@ function buildModel(input: {
   const label = (day: string) =>
     input.range === 'week' || input.range === 'last7' ? weekdayLetter(day) : day.slice(8, 10);
 
+  const historyHealth: HistoryHealth[] = [];
+  const historyLifts: HistoryLift[] = [];
   const lifts = input.lifts.filter((row) => {
     if (row.status === 'open' || !row.completedAt) {
       return false;
@@ -234,6 +239,15 @@ function buildModel(input: {
       pounds: moved,
       href: `/lift/${row.id}`,
     });
+    if (day && row.title.trim()) {
+      historyLifts.push({
+        day,
+        title: row.title,
+        pounds: moved,
+        unit: row.unit,
+        href: `/lift/${row.id}`,
+      });
+    }
   }
 
   const miles = new Map<string, number>();
@@ -269,6 +283,14 @@ function buildModel(input: {
           pounds: 0,
           href: `/challenges/${row.challenge_id}`,
         });
+        historyHealth.push({
+          day: row.period_key,
+          activity: health.sourceName || health.activityType || 'Workout',
+          durationSec: Number(health.durationSec) || 0,
+          hrAvg: health.avgHrBpm,
+          distanceMeters: Number(health.distanceMeters) > 0 ? Number(health.distanceMeters) : null,
+          href: `/challenges/${row.challenge_id}`,
+        });
       }
     } else {
       sessions.push({
@@ -301,6 +323,30 @@ function buildModel(input: {
       pounds: 0,
       href: null,
     });
+    historyHealth.push({
+      day,
+      activity: workout.activityLabel || 'Workout',
+      durationSec: Number(workout.durationSec) || 0,
+      hrAvg: workout.hrAvg,
+      distanceMeters: Number(workout.distanceM) > 0 ? Number(workout.distanceM) : null,
+      href: null,
+    });
+  }
+
+  const historyCardio: HistoryCardio[] = [];
+  const effortSessions = zone ? effortFromLiftRows(input.effortRows, (iso) => dateDay(iso, zone)) : [];
+  for (const session of effortSessions) {
+    if (!dayInRange(session.day, keys)) {
+      continue;
+    }
+    for (const block of session.cardio) {
+      historyCardio.push({
+        day: session.day,
+        typeLabel: block.typeLabel,
+        seconds: block.seconds,
+        distanceMeters: block.distanceMeters,
+      });
+    }
   }
 
   const merged = mergeLiftHealthSessions(dedupeHealthSessions(sessions));
@@ -357,7 +403,7 @@ function buildModel(input: {
     checkinHeader: showCalendar && grid.showHeader,
     checkinLabel: checkinDone > 0 ? `${checkinDone} ${checkinDone === 1 ? 'day' : 'days'}` : null,
     checkinPeeks: input.peeks,
-    effortSessions: zone ? effortFromLiftRows(input.effortRows, (iso) => dateDay(iso, zone)) : [],
+    effortSessions,
     dayKeys: keys,
     mileBars: dayBars(keys, miles, label),
     mileLabel: mileTotal > 0 ? `${Math.round(mileTotal * 10) / 10} mi` : null,
@@ -368,6 +414,7 @@ function buildModel(input: {
     syncedLabel: input.showSyncLabel ? syncDayLabel(input.syncedAt, zone) : null,
     challenges: input.challenges,
     activities: activities.slice(0, 24),
+    history: workoutHistoryDays({ health: historyHealth, lifts: historyLifts, cardio: historyCardio }),
     trophies: input.trophies,
     earnedLabel: input.earnedLabel,
   };

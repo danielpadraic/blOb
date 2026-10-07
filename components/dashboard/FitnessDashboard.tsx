@@ -6,7 +6,9 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { Avatar } from '@/components/ui/Avatar';
 import { AppText } from '@/components/ui/AppText';
+import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { GoalRing } from '@/components/dashboard/GoalRing';
+import { MascotState } from '@/components/mascot/MascotState';
 import { useMyInterests } from '@/hooks/useInterests';
 import { useFriendCount } from '@/hooks/useSocial';
 import { sourceChipLabel, useFitnessDashboard, type DashboardChip } from '@/hooks/useFitnessDashboard';
@@ -246,6 +248,7 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
   }
 
   return (
+    <View style={{ flex: 1 }}>
     <ScrollView
       style={{ flex: 1 }}
       contentContainerStyle={{ paddingBottom: wide ? 32 : tabBarLift(insets.bottom) + 88, gap: 12 }}>
@@ -487,68 +490,62 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
         </Card>
       ) : null}
 
-      {showFitness && ringView.some((ring) => ring.value > 0) ? (
+      {showFitness ? (
         <Card title="Rings" chip={ringSource ? sourceChipLabel(ringSource) : undefined}>
-          <Pressable accessibilityRole="button" onPress={() => setGoalsOpen((open) => !open)}>
-            <AppText style={{ fontWeight: '700', color: THEME.accent, textDecorationLine: goalsOpen ? 'underline' : 'none' }}>
-              Goals
-            </AppText>
+          <Pressable accessibilityRole="button" accessibilityLabel="Edit goals" onPress={() => setGoalsOpen(true)}>
+            <AppText style={{ fontWeight: '700', color: THEME.accent }}>Edit goals</AppText>
           </Pressable>
-          {goalsOpen ? (
-            <View style={{ gap: 10 }}>
-              <GoalField
-                label="Move (calories)"
-                amount={String(goals.move.amount)}
-                cadence={goals.move.cadence}
-                onAmount={(amount) => setGoals((current) => ({ ...current, move: { ...current.move, amount } }))}
-                onCadence={(cadence) => setGoals((current) => ({ ...current, move: { ...current.move, cadence } }))}
-              />
-              <GoalField
-                label="Exercise (minutes)"
-                amount={String(goals.exercise.amount)}
-                cadence={goals.exercise.cadence}
-                hint={exerciseLocked ? null : exerciseSeed?.line}
-                onAmount={(amount) => setGoals((current) => ({ ...current, exercise: { ...current.exercise, amount } }))}
-                onCadence={(cadence) => setGoals((current) => ({ ...current, exercise: { ...current.exercise, cadence } }))}
-              />
-              <GoalField
-                label="Stand (hours)"
-                amount={String(goals.stand.amount)}
-                cadence={goals.stand.cadence}
-                onAmount={(amount) => setGoals((current) => ({ ...current, stand: { ...current.stand, amount } }))}
-                onCadence={(cadence) => setGoals((current) => ({ ...current, stand: { ...current.stand, cadence } }))}
-              />
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => {
-                  writeRingGoals(goals);
-                  setExerciseLocked(true);
-                  setGoalsOpen(false);
-                }}>
-                <AppText style={{ fontWeight: '800', color: THEME.textPrimary }}>Save</AppText>
-              </Pressable>
-            </View>
-          ) : null}
           <View style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start', justifyContent: 'space-between' }}>
-            {ringView
-              .filter((ring) => ring.value > 0)
-              .map((ring) => (
-                <Pressable
-                  key={ring.key}
-                  accessibilityRole="button"
-                  accessibilityLabel={ring.tap}
-                  onPress={() => setRingHint(ring.tap)}>
-                  <GoalRing
-                    progress={ring.progress}
-                    valueText={ring.inside}
-                    name={ring.name}
-                    compare={ring.compare}
-                    color={ring.color}
-                  />
-                </Pressable>
-              ))}
+            {ringView.map((ring) => (
+              <Pressable
+                key={ring.key}
+                accessibilityRole="button"
+                accessibilityLabel={ring.tap}
+                onPress={() => setRingHint(ring.tap)}>
+                <GoalRing
+                  progress={ring.progress}
+                  valueText={ring.inside}
+                  name={ring.name}
+                  compare={ring.compare}
+                  color={ring.color}
+                />
+              </Pressable>
+            ))}
           </View>
           {ringHint ? <AppText style={{ color: THEME.textMuted, fontSize: 13 }}>{ringHint}</AppText> : null}
+        </Card>
+      ) : null}
+
+      {showFitness && !dash.loading && model.history.length === 0 ? (
+        <MascotState compact kind="empty" title="No workouts in this window yet." />
+      ) : null}
+      {showFitness && model.history.length > 0 ? (
+        <Card title="Workout history">
+          {model.history.map((row) => (
+            <Pressable
+              key={row.day}
+              accessibilityRole="button"
+              accessibilityLabel={row.label}
+              disabled={!row.href}
+              onPress={() => {
+                if (row.href) {
+                  router.push(row.href as never);
+                }
+              }}
+              style={{
+                paddingVertical: 12,
+                borderBottomWidth: 1,
+                borderBottomColor: THEME.border,
+                gap: 2,
+              }}>
+              <AppText style={{ fontSize: 16, fontWeight: '800', color: THEME.textPrimary }}>{row.label}</AppText>
+              {row.lines.map((line) => (
+                <AppText key={`${row.day}-${line.kind}-${line.text}`} style={{ fontSize: 14, color: THEME.textMuted }}>
+                  {line.text}
+                </AppText>
+              ))}
+            </Pressable>
+          ))}
         </Card>
       ) : null}
 
@@ -627,6 +624,23 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
 
       {dash.loading ? <AppText style={{ color: THEME.textMuted }}>Loading your effort…</AppText> : null}
     </ScrollView>
+    <ChromeOverlay
+      visible={goalsOpen}
+      onClose={() => setGoalsOpen(false)}
+      insetBottom={wide ? 0 : tabBarLift(insets.bottom)}>
+      <EditGoalsSheet
+        goals={goals}
+        exerciseHint={exerciseLocked ? null : exerciseSeed?.line}
+        onCancel={() => setGoalsOpen(false)}
+        onSave={(next) => {
+          setGoals(next);
+          writeRingGoals(next);
+          setExerciseLocked(true);
+          setGoalsOpen(false);
+        }}
+      />
+    </ChromeOverlay>
+    </View>
   );
 }
 
@@ -810,6 +824,89 @@ function AllowHealth({ onAllowed }: { onAllowed: () => void }) {
         <AppText style={{ color: THEME.primaryForeground, fontWeight: '700' }}>{copy('health.allow')}</AppText>
       </Pressable>
       {howTo ? <AppText style={{ color: THEME.textMuted }}>{howTo}</AppText> : null}
+    </View>
+  );
+}
+
+function keptGoals(current: RingGoals, draft: RingGoals): RingGoals {
+  const one = (next: RingGoals['move'], prev: RingGoals['move']): RingGoals['move'] => ({
+    cadence: next.cadence,
+    amount: Number.isFinite(next.amount) && next.amount > 0 ? next.amount : prev.amount,
+  });
+  return {
+    move: one(draft.move, current.move),
+    exercise: one(draft.exercise, current.exercise),
+    stand: one(draft.stand, current.stand),
+  };
+}
+
+function EditGoalsSheet({
+  goals,
+  exerciseHint,
+  onCancel,
+  onSave,
+}: {
+  goals: RingGoals;
+  exerciseHint?: string | null;
+  onCancel: () => void;
+  onSave: (goals: RingGoals) => void;
+}) {
+  const [draft, setDraft] = useState(goals);
+  return (
+    <View
+      style={{
+        backgroundColor: THEME.surface,
+        borderTopLeftRadius: 22,
+        borderTopRightRadius: 22,
+        paddingHorizontal: 16,
+        paddingTop: 16,
+        paddingBottom: 20,
+        gap: 14,
+        ...themeShadow('card'),
+      }}>
+      <AppText style={{ fontSize: 20, fontWeight: '800', color: THEME.textPrimary }}>Edit goals</AppText>
+      <GoalField
+        label="Move"
+        amount={String(draft.move.amount)}
+        cadence={draft.move.cadence}
+        onAmount={(amount) => setDraft((current) => ({ ...current, move: { ...current.move, amount } }))}
+        onCadence={(cadence) => setDraft((current) => ({ ...current, move: { ...current.move, cadence } }))}
+      />
+      <GoalField
+        label="Exercise"
+        amount={String(draft.exercise.amount)}
+        cadence={draft.exercise.cadence}
+        hint={exerciseHint}
+        onAmount={(amount) => setDraft((current) => ({ ...current, exercise: { ...current.exercise, amount } }))}
+        onCadence={(cadence) => setDraft((current) => ({ ...current, exercise: { ...current.exercise, cadence } }))}
+      />
+      <GoalField
+        label="Stand"
+        amount={String(draft.stand.amount)}
+        cadence={draft.stand.cadence}
+        onAmount={(amount) => setDraft((current) => ({ ...current, stand: { ...current.stand, amount } }))}
+        onCadence={(cadence) => setDraft((current) => ({ ...current, stand: { ...current.stand, cadence } }))}
+      />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Save"
+        onPress={() => onSave(keptGoals(goals, draft))}
+        style={{
+          minHeight: 48,
+          borderRadius: 999,
+          backgroundColor: THEME.primary,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+        <AppText style={{ color: THEME.primaryForeground, fontWeight: '800' }}>Save</AppText>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Cancel"
+        onPress={onCancel}
+        style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
+        <AppText style={{ color: THEME.textMuted, fontWeight: '700' }}>Cancel</AppText>
+      </Pressable>
     </View>
   );
 }
