@@ -26,7 +26,7 @@ import {
   slotStillUris,
   withSlotStills,
 } from '@/lib/checkin/slotStills';
-import { storeRenderedWorkoutCard } from '@/lib/health/appendWorkoutCard';
+import { appendWorkoutCardUrl, storeRenderedWorkoutCard } from '@/lib/health/appendWorkoutCard';
 import { saveWorkoutSession } from '@/lib/health/workoutSessions';
 import { recordHrSignature } from '@/lib/health/hrIntegrity';
 import { PeriodCheckinDue } from '@/components/challenge/PeriodCheckinDue';
@@ -551,6 +551,13 @@ function SubmitWorkoutInner() {
   const [liftPickerOpen, setLiftPickerOpen] = useState(false);
   const recapWaitRef = useRef<((ready: boolean) => void) | null>(null);
   const recapUriRef = useRef<string | null>(null);
+  const recapUploadRef = useRef<{
+    promise: Promise<{ cardUrl: string; siblingCheckinId: string | null }>;
+    proofId: string;
+  } | null>(null);
+  const recapFailedRef = useRef(false);
+  const cardRequestRef = useRef<WorkoutCardRequest | null>(null);
+  cardRequestRef.current = cardRequest;
   const healthAttachLock = useRef(false);
   const liftParam = firstRouteParam(params.lift);
   const [sendLock, setSendLock] = useState(false);
@@ -1648,6 +1655,65 @@ function SubmitWorkoutInner() {
     Alert.alert('Still needed', names ? `${names}.` : copy('checkin.emptyBob'));
   }
 
+  async function awaitWorkoutCardUpload(checkinId: string | null | undefined): Promise<string | null> {
+    const miss = copy('checkin.workoutCardFailed');
+    const capAt = Date.now() + 8000;
+    const remaining = () => Math.max(0, capAt - Date.now());
+    let job = recapUploadRef.current;
+    while (
+      !job &&
+      !recapFailedRef.current &&
+      (cardRequestRef.current || cardTargetRef.current) &&
+      remaining() > 0
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      job = recapUploadRef.current;
+    }
+    if (!job) {
+      if (recapFailedRef.current || cardRequestRef.current || cardTargetRef.current) {
+        const error = new Error(miss);
+        console.error('[blob:workout-card]', error);
+        return miss;
+      }
+      return null;
+    }
+    const fail = (error: unknown) => {
+      console.error('[blob:workout-card]', error);
+      return miss;
+    };
+    const withinCap = <T,>(work: Promise<T>): Promise<T> =>
+      new Promise<T>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(miss)), remaining());
+        work.then(
+          (value) => {
+            clearTimeout(timer);
+            resolve(value);
+          },
+          (error: unknown) => {
+            clearTimeout(timer);
+            reject(error);
+          },
+        );
+      });
+    try {
+      const saved = await withinCap(job.promise);
+      if (!uid || !checkinId) {
+        return null;
+      }
+      await withinCap(
+        appendWorkoutCardUrl({
+          userId: uid,
+          checkinId,
+          proofId: job.proofId,
+          cardUrl: saved.cardUrl,
+        }),
+      );
+      return null;
+    } catch (error) {
+      return fail(error);
+    }
+  }
+
   async function onSubmit() {
     if (!id) {
       return;
@@ -1749,7 +1815,7 @@ function SubmitWorkoutInner() {
           };
         });
         if (!recapReady) {
-          failedExtras.push(copy('checkin.workoutFailed'));
+          failedExtras.push(copy('checkin.workoutCardFailed'));
         }
       }
       for (const proof of proofSteps) {
@@ -1867,12 +1933,17 @@ function SubmitWorkoutInner() {
       const attachmentWarning = () => {
         const liftFailed = failedExtras.includes(copy('checkin.liftFailed'));
         const workoutFailed = failedExtras.includes(copy('checkin.workoutFailed'));
+        const cardFailed = failedExtras.includes(copy('checkin.workoutCardFailed'));
         const photoFails = failedExtras.filter(
-          (line) => line !== copy('checkin.liftFailed') && line !== copy('checkin.workoutFailed'),
+          (line) =>
+            line !== copy('checkin.liftFailed') &&
+            line !== copy('checkin.workoutFailed') &&
+            line !== copy('checkin.workoutCardFailed'),
         );
         return [
           liftFailed ? copy('checkin.liftFailed') : null,
           workoutFailed ? copy('checkin.workoutFailed') : null,
+          cardFailed ? copy('checkin.workoutCardFailed') : null,
           photoFails.length === 0
             ? null
             : photoFails.length === 1
@@ -2108,9 +2179,10 @@ function SubmitWorkoutInner() {
             pairPostIds = live.postIds;
           }
           if (live.missing) {
+            const cardMiss = await awaitWorkoutCardUpload(checkinId);
             sendHoldRef.current = 'photo';
             setFailKind(null);
-            setError(officialPairLiveFailure(live.missing));
+            setError([officialPairLiveFailure(live.missing), cardMiss].filter(Boolean).join(' '));
             return;
           }
         }
@@ -2191,6 +2263,20 @@ function SubmitWorkoutInner() {
         void queryClient.invalidateQueries({
           predicate: (query) => isHomeSocialFeedKey(query.queryKey),
         });
+      }
+      // The recap upload has to finish after the Live rows exist. Eight seconds, then
+      // say so and still open this Live. The error is logged; it is not discarded.
+      const cardMiss = await awaitWorkoutCardUpload(checkinId);
+      const cardLine = copy('checkin.workoutCardFailed');
+      if (cardMiss) {
+        if (!failedExtras.includes(cardLine)) {
+          failedExtras.push(cardMiss);
+        }
+      } else {
+        const cardIndex = failedExtras.indexOf(cardLine);
+        if (cardIndex >= 0) {
+          failedExtras.splice(cardIndex, 1);
+        }
       }
       // A failed extra never rolls back the required slot — warn, do not block.
       const extraWarning = attachmentWarning();
@@ -2437,6 +2523,8 @@ function SubmitWorkoutInner() {
     if (Platform.OS === 'web' || !challenge) {
       return;
     }
+    recapFailedRef.current = false;
+    recapUploadRef.current = null;
     setDrafts((current) => ({
       ...current,
       [target.id]: { ...current[target.id], addingRoute: true },
@@ -2526,27 +2614,34 @@ function SubmitWorkoutInner() {
         ];
       });
       recapUriRef.current = fileUri;
-      recapWaitRef.current?.(true);
-      recapWaitRef.current = null;
       const checkinId = checkinIdRef.current;
       if (!proof || !uid || !checkinId || !id) {
+        recapFailedRef.current = true;
+        recapWaitRef.current?.(false);
+        recapWaitRef.current = null;
+        console.error('[blob:workout-card]', new Error('Couldn’t add the workout card.'));
         return;
       }
-      // Extra slide. A failed raster leaves the chips and the selfies already saved.
-      void storeRenderedWorkoutCard({
+      // Extra slide. The upload is awaited before Live opens. A rejection stays on this promise.
+      const upload = storeRenderedWorkoutCard({
         userId: uid,
         checkinId,
         challengeId: id,
         proofId: proof.id,
         fileUri,
-      })
-        .then(() => {
-          void queryClient.invalidateQueries({
-            predicate: (query) => isHomeSocialFeedKey(query.queryKey),
-          });
-          void queryClient.invalidateQueries({ queryKey: liveListKey(id, uid) });
-        })
-        .catch(() => undefined);
+      }).then((saved) => {
+        void queryClient.invalidateQueries({
+          predicate: (query) => isHomeSocialFeedKey(query.queryKey),
+        });
+        void queryClient.invalidateQueries({ queryKey: liveListKey(id, uid) });
+        return saved;
+      });
+      recapUploadRef.current = { promise: upload, proofId: proof.id };
+      void upload.catch((error) => {
+        console.error('[blob:workout-card]', error);
+      });
+      recapWaitRef.current?.(true);
+      recapWaitRef.current = null;
     },
     // persistProof and proofSteps are stable enough for this callback; drafts are set functionally.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2559,6 +2654,8 @@ function SubmitWorkoutInner() {
     if (!pending || !key.startsWith(pending.proofId)) {
       return;
     }
+    recapFailedRef.current = true;
+    console.error('[blob:workout-card]', new Error('Could not build that workout card.'));
     // The Health attach already satisfied the slot, so drop the card quietly.
     setDrafts((current) => ({
       ...current,
@@ -2805,6 +2902,14 @@ function SubmitWorkoutInner() {
 
   leaveOverlayRef.current = cameraTrio && checkinReady ? leaveCameraToLive : closeCameraOverlay;
 
+  const workoutCardRaster = (
+    <WorkoutProofCardRenderer
+      request={cardRequest}
+      onRendered={onCardRendered}
+      onFailed={onCardFailed}
+    />
+  );
+
   if (cameraTrio && checkinReady) {
     const stripProofs = proofSteps.filter(
       (proof) => isPreWorkoutProof(proof) || isPostWorkoutProof(proof) || proof.method === 'hr',
@@ -2826,7 +2931,9 @@ function SubmitWorkoutInner() {
         activeProof?.method === 'hr' ||
         activeProof?.method === 'distance');
     return (
-      <CheckinCameraChrome
+      <View style={{ flex: 1 }}>
+        {workoutCardRaster}
+        <CheckinCameraChrome
         slots={stripProofs.map((proof) => {
           const local = slotStillUris(drafts[proof.id]).find((uri) => uri && !uri.startsWith('health:'));
           const remote = existingUrlForProof(proof, pairParts, {
@@ -2958,12 +3065,15 @@ function SubmitWorkoutInner() {
             }}
           />
         ) : null}
-      </CheckinCameraChrome>
+        </CheckinCameraChrome>
+      </View>
     );
   }
 
   if (showHealthFirst && activeProof) {
     return (
+      <View style={{ flex: 1 }}>
+        {workoutCardRaster}
       <Screen padded={false} edges={['top', 'left', 'right', 'bottom']}>
         <HealthWorkoutGate
           challengeTitle={challenge.title}
@@ -2993,12 +3103,14 @@ function SubmitWorkoutInner() {
           }}
         />
       </Screen>
+      </View>
     );
   }
 
   if (activeProof && (activeProof.method === 'photo' || activeProof.method === 'video' || activeProof.method === 'hr' || activeProof.method === 'distance')) {
     return (
       <View style={{ flex: 1, backgroundColor: THEME.primary }}>
+        {workoutCardRaster}
         <ProofUploader
           key={activeProof.id}
           type={legacyTypeForProof(activeProof) ?? captureTypeForMethod(activeProof.method)}
@@ -3068,11 +3180,7 @@ function SubmitWorkoutInner() {
   return (
     <Screen padded={false} edges={TAB_ROOT_EDGES} keyboardAvoiding={false}>
       {/* Off-screen rasterizer. The user only ever sees the finished card in the slot. */}
-      <WorkoutProofCardRenderer
-        request={cardRequest}
-        onRendered={onCardRendered}
-        onFailed={onCardFailed}
-      />
+      {workoutCardRaster}
       {hydrateError ? (
         <Pressable
           onPress={() => {

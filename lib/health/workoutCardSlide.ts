@@ -38,6 +38,39 @@ export function proofPartWithExtraCard(
   };
 }
 
+export type WorkoutCardPostRef = {
+  id: string;
+  challengeId: string;
+  checkinId: string;
+};
+
+/**
+ * This room's Live post, plus the Official twin for the same Chicago day.
+ * A post on any other challenge is left alone, even if it shares a check-in id.
+ */
+export function workoutCardPostIds(input: {
+  challengeId: string;
+  checkinId: string;
+  siblingChallengeId?: string | null;
+  siblingCheckinId?: string | null;
+  posts: readonly WorkoutCardPostRef[];
+}): string[] {
+  const siblingChallenge = String(input.siblingChallengeId ?? '').trim();
+  const siblingCheckin = String(input.siblingCheckinId ?? '').trim();
+  const ids: string[] = [];
+  for (const post of input.posts) {
+    const sameRoom = post.challengeId === input.challengeId && post.checkinId === input.checkinId;
+    const twinRoom =
+      Boolean(siblingChallenge) &&
+      post.challengeId === siblingChallenge &&
+      (post.checkinId === input.checkinId || (Boolean(siblingCheckin) && post.checkinId === siblingCheckin));
+    if ((sameRoom || twinRoom) && !ids.includes(post.id)) {
+      ids.push(post.id);
+    }
+  }
+  return ids;
+}
+
 /** Existing stills, then one recap. An older workout_card file is replaced, not stacked. */
 export function mediaWithExtraCard(
   urls: Array<string | null | undefined> | null | undefined,

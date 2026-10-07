@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { mediaWithExtraCard, proofPartWithExtraCard } from '@/lib/health/workoutCardSlide';
+import { mediaWithExtraCard, proofPartWithExtraCard, workoutCardPostIds } from '@/lib/health/workoutCardSlide';
 
 const SHOT = 'https://cdn.test/u/c/hr_monitor-1.jpg';
 const PRE = 'https://cdn.test/u/c/pre_selfie-1.jpg';
@@ -23,5 +23,36 @@ describe('a workout card is an extra slide', () => {
 
   it('replaces an older recap file and leaves the selfies', () => {
     expect(mediaWithExtraCard([PRE, SHOT, OLD], CARD)).toEqual([PRE, SHOT, CARD]);
+  });
+});
+
+describe('the recap lands on this Live and the Official twin', () => {
+  const posts = [
+    { id: 'weekly-post', challengeId: 'weekly', checkinId: 'weekly-day' },
+    { id: 'monthly-post', challengeId: 'monthly', checkinId: 'monthly-day' },
+    { id: 'monthly-shared', challengeId: 'monthly', checkinId: 'weekly-day' },
+    { id: 'other-post', challengeId: 'private', checkinId: 'weekly-day' },
+  ];
+
+  it('patches this room and the twin for that day, and leaves a selfie post alone', () => {
+    expect(
+      workoutCardPostIds({
+        challengeId: 'weekly',
+        checkinId: 'weekly-day',
+        siblingChallengeId: 'monthly',
+        siblingCheckinId: 'monthly-day',
+        posts,
+      }),
+    ).toEqual(['weekly-post', 'monthly-post', 'monthly-shared']);
+  });
+
+  it('patches only this room when the day has no Official twin', () => {
+    expect(
+      workoutCardPostIds({
+        challengeId: 'weekly',
+        checkinId: 'weekly-day',
+        posts,
+      }),
+    ).toEqual(['weekly-post']);
   });
 });

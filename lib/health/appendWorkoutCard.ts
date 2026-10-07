@@ -1,6 +1,6 @@
 import { parseCheckinHealthProof } from '@/lib/health/checkinHealthProof';
 import { isVendorHealthProof } from '@/lib/health/cardRedraw';
-import { mediaWithExtraCard, proofPartWithExtraCard } from '@/lib/health/workoutCardSlide';
+import { mediaWithExtraCard, proofPartWithExtraCard, workoutCardPostIds } from '@/lib/health/workoutCardSlide';
 import { officialCoinKind } from '@/lib/officialCoin';
 import type { CheckinProofStats } from '@/lib/checkin/proofStats';
 import { supabase } from '@/lib/supabase';
@@ -40,6 +40,36 @@ function vendorProofId(parts: Record<string, Record<string, unknown>>, preferred
   return preferred && parts[preferred] ? preferred : null;
 }
 
+type LiveCardPost = {
+  id: string;
+  challenge_id: string | null;
+  checkin_id: string | null;
+  media_urls: string[] | null;
+  checkin_stats: unknown;
+};
+
+async function livePostsFor(userId: string, checkinIds: string[]): Promise<LiveCardPost[]> {
+  const ids = [...new Set(checkinIds.map((id) => id.trim()).filter(Boolean))];
+  if (ids.length === 0) {
+    return [];
+  }
+  const posts = await supabase
+    .from('posts')
+    .select('id, challenge_id, checkin_id, media_urls, checkin_stats')
+    .eq('author_id', userId)
+    .in('checkin_id', ids)
+    .is('deleted_at', null);
+  if (posts.error) {
+    throw new Error(posts.error.message || 'Could not show that workout card.');
+  }
+  return (posts.data ?? []) as LiveCardPost[];
+}
+
+/**
+ * Save the recap on this check-in, then patch this room's Live post and the Official
+ * twin for the same Chicago day (`period_key`). Selfies and screenshots stay; the card
+ * is one extra slide. A missing post is left for a later append — it does not throw.
+ */
 async function writeCardOnCheckin(row: CheckinCardRow, proofId: string, cardUrl: string): Promise<void> {
   const parts = asParts(row.proof_parts);
   const slotId = vendorProofId(parts, proofId) ?? proofId;
@@ -54,32 +84,49 @@ async function writeCardOnCheckin(row: CheckinCardRow, proofId: string, cardUrl:
     throw new Error(saved.error.message || 'Could not save that workout card.');
   }
 
-  const post = await supabase
-    .from('posts')
-    .select('id, media_urls, checkin_stats')
-    .eq('checkin_id', row.id)
-    .eq('author_id', row.user_id)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (post.error || !post.data?.id) {
-    return;
+  let sibling: CheckinCardRow | null = null;
+  let siblingError: unknown = null;
+  try {
+    sibling = await officialSibling(row);
+  } catch (error) {
+    siblingError = error;
   }
-  const prior =
-    post.data.checkin_stats && typeof post.data.checkin_stats === 'object'
-      ? (post.data.checkin_stats as CheckinProofStats)
-      : {};
-  const media = mediaWithExtraCard(post.data.media_urls as string[] | null, cardUrl);
-  const write = await supabase
-    .from('posts')
-    .update({
-      media_urls: media,
-      checkin_stats: { ...prior, card_url: cardUrl },
-    })
-    .eq('id', post.data.id);
-  if (write.error) {
-    throw new Error(write.error.message || 'Could not show that workout card.');
+  const posts = await livePostsFor(row.user_id, [row.id, sibling?.id ?? '']);
+  const wanted = new Set(
+    workoutCardPostIds({
+      challengeId: row.challenge_id,
+      checkinId: row.id,
+      siblingChallengeId: sibling?.challenge_id,
+      siblingCheckinId: sibling?.id,
+      posts: posts.map((post) => ({
+        id: post.id,
+        challengeId: String(post.challenge_id ?? ''),
+        checkinId: String(post.checkin_id ?? ''),
+      })),
+    }),
+  );
+  for (const post of posts) {
+    if (!wanted.has(post.id)) {
+      continue;
+    }
+    const prior =
+      post.checkin_stats && typeof post.checkin_stats === 'object'
+        ? (post.checkin_stats as CheckinProofStats)
+        : {};
+    const media = mediaWithExtraCard(post.media_urls, cardUrl);
+    const write = await supabase
+      .from('posts')
+      .update({
+        media_urls: media,
+        checkin_stats: { ...prior, card_url: cardUrl },
+      })
+      .eq('id', post.id);
+    if (write.error) {
+      throw new Error(write.error.message || 'Could not show that workout card.');
+    }
+  }
+  if (siblingError) {
+    throw siblingError;
   }
 }
 
@@ -89,7 +136,10 @@ async function officialSibling(row: CheckinCardRow): Promise<CheckinCardRow | nu
     .select('id, official_kind')
     .eq('id', row.challenge_id)
     .maybeSingle();
-  if (mine.error || !officialCoinKind(mine.data)) {
+  if (mine.error) {
+    throw new Error(mine.error.message || 'Could not show that workout card.');
+  }
+  if (!officialCoinKind(mine.data)) {
     return null;
   }
   const rooms = await supabase
@@ -97,6 +147,9 @@ async function officialSibling(row: CheckinCardRow): Promise<CheckinCardRow | nu
     .select('id, official_kind')
     .in('official_kind', ['coin_weekly', 'coin_monthly'])
     .neq('id', row.challenge_id);
+  if (rooms.error) {
+    throw new Error(rooms.error.message || 'Could not show that workout card.');
+  }
   const ids = (rooms.data ?? [])
     .filter((room) => officialCoinKind(room))
     .map((room) => String(room.id ?? ''))
@@ -113,7 +166,10 @@ async function officialSibling(row: CheckinCardRow): Promise<CheckinCardRow | nu
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
-  if (sibling.error || !sibling.data?.id) {
+  if (sibling.error) {
+    throw new Error(sibling.error.message || 'Could not show that workout card.');
+  }
+  if (!sibling.data?.id) {
     return null;
   }
   return sibling.data as CheckinCardRow;
@@ -168,7 +224,7 @@ export async function appendWorkoutCardUrl(input: {
   }
   const row = loaded.data as CheckinCardRow;
   await writeCardOnCheckin(row, input.proofId, input.cardUrl);
-  const sibling = await officialSibling(row).catch(() => null);
+  const sibling = await officialSibling(row);
   if (!sibling) {
     return null;
   }

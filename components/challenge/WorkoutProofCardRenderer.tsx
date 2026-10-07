@@ -38,16 +38,26 @@ const SETTLE_MS = 220;
  */
 export function WorkoutProofCardRenderer({ request, onRendered, onFailed }: Props) {
   const svgRef = useRef<Svg | null>(null);
+  const onRenderedRef = useRef(onRendered);
+  const onFailedRef = useRef(onFailed);
+  const requestRef = useRef(request);
+  onRenderedRef.current = onRendered;
+  onFailedRef.current = onFailed;
+  requestRef.current = request;
+  const requestKey = request?.key ?? '';
 
   useEffect(() => {
-    if (!request || Platform.OS === 'web') {
+    const active = requestRef.current;
+    if (!active || active.key !== requestKey || Platform.OS === 'web') {
       return;
     }
+    // Restart only when this card's key changes. A later selfie snap re-renders the check-in
+    // screen and must not drop a raster that is already in flight.
     let cancelled = false;
     const timer = setTimeout(() => {
       const node = svgRef.current;
       if (!node || typeof node.toDataURL !== 'function') {
-        onFailed(request.key, 'Could not build that workout card.');
+        onFailedRef.current(active.key, 'Could not build that workout card.');
         return;
       }
       try {
@@ -58,15 +68,15 @@ export function WorkoutProofCardRenderer({ request, onRendered, onFailed }: Prop
             }
             void (async () => {
               try {
-                const uri = await writeWorkoutCardPng(base64, request.key);
+                const uri = await writeWorkoutCardPng(base64, active.key);
                 if (cancelled) {
                   return;
                 }
-                onRendered(request.key, uri);
+                onRenderedRef.current(active.key, uri);
               } catch (caught) {
                 if (!cancelled) {
-                  onFailed(
-                    request.key,
+                  onFailedRef.current(
+                    active.key,
                     caught instanceof Error ? caught.message : 'Could not build that workout card.',
                   );
                 }
@@ -76,14 +86,14 @@ export function WorkoutProofCardRenderer({ request, onRendered, onFailed }: Prop
           { width: WORKOUT_CARD_WIDTH, height: WORKOUT_CARD_HEIGHT },
         );
       } catch {
-        onFailed(request.key, 'Could not build that workout card.');
+        onFailedRef.current(active.key, 'Could not build that workout card.');
       }
     }, SETTLE_MS);
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [request, onRendered, onFailed]);
+  }, [requestKey]);
 
   if (!request || Platform.OS === 'web') {
     return null;
