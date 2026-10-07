@@ -35,6 +35,7 @@ import {
   useShareLiftSession,
 } from '@/hooks/useLift';
 import { canCompleteSession, firstLeftoverTarget, sessionWeightMoved } from '@/lib/lift/complete';
+import { liftLoggingClosedPad } from '@/lib/lift/footerPad';
 import { rankHealthKitWorkouts } from '@/lib/lift/healthkit';
 import { bumpSessionInPlace, canOverloadSession, overloadChipLabel } from '@/lib/lift/overload';
 import { hasShareableWork, sessionCardioSeconds } from '@/lib/lift/recap';
@@ -713,7 +714,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
       <KeyboardFormShell
         padded
         protectFieldFocus
-        closedFooterPad={Math.max(insets.bottom, 12)}
+        closedFooterPad={liftLoggingClosedPad(insets.bottom, Platform.OS)}
         footerBackground={THEME.surface}
         footer={
           readOnly ? (
