@@ -10,30 +10,46 @@ import {
  * One `workout_card-` file per check-in.
  */
 
+/** The on-device raster (`blob-workout-proof-…`). It is not a selfie and not the stored card. */
+export function isLocalWorkoutRaster(url?: string | null): boolean {
+  return String(url ?? '').includes('blob-workout-proof');
+}
+
+function isCardFile(url: string, cardUrl?: string | null): boolean {
+  return (
+    !url ||
+    url.startsWith('health:') ||
+    isWorkoutCardSlide(url) ||
+    isWorkoutCardStoragePath(url) ||
+    isLocalWorkoutRaster(url) ||
+    isWorkoutCardUrl(url, cardUrl)
+  );
+}
+
+/** Slot photos only. A recap file is not a pre, post, or HR photo. */
+export function proofPartWithoutCardFile(
+  part: Record<string, unknown>,
+  cardUrl?: string | null,
+): Record<string, unknown> {
+  const currentUrl = String(part.url ?? '').trim();
+  const listed = Array.isArray(part.urls) ? part.urls.map((item) => String(item ?? '')) : [];
+  const stills = uniqueProofUrls([currentUrl, ...listed]).filter((url) => url && !isCardFile(url, cardUrl));
+  const keepUrl = Boolean(currentUrl) && !isCardFile(currentUrl, cardUrl);
+  return {
+    ...part,
+    url: keepUrl ? currentUrl : (stills[0] ?? ''),
+    urls: stills,
+  };
+}
+
 export function proofPartWithExtraCard(
   part: Record<string, unknown>,
   cardUrl: string,
   cardVersion: number,
 ): Record<string, unknown> {
-  const currentUrl = String(part.url ?? '').trim();
-  const listed = Array.isArray(part.urls) ? part.urls.map((item) => String(item ?? '')) : [];
-  const stills = uniqueProofUrls([currentUrl, ...listed]).filter(
-    (url) =>
-      url &&
-      !url.startsWith('health:') &&
-      !isWorkoutCardSlide(url) &&
-      !isWorkoutCardStoragePath(url) &&
-      !isWorkoutCardUrl(url, cardUrl),
-  );
-  const keepUrl =
-    Boolean(currentUrl) &&
-    !currentUrl.startsWith('health:') &&
-    !isWorkoutCardSlide(currentUrl) &&
-    !isWorkoutCardStoragePath(currentUrl);
   return {
-    ...part,
-    url: keepUrl ? currentUrl : cardUrl,
-    urls: uniqueProofUrls([...stills, cardUrl]),
+    ...proofPartWithoutCardFile(part, cardUrl),
+    cardUrl,
     cardVersion,
   };
 }
@@ -71,12 +87,48 @@ export function workoutCardPostIds(input: {
   return ids;
 }
 
+/** Uploaded copy of the on-device raster. Only a duplicate when that local file is also on the post. */
+function isUploadedRasterExtra(url: string): boolean {
+  return /\/checkin-extra-\d+-\d+\.(jpe?g|png|webp)$/i.test(String(url ?? '').split('?')[0]);
+}
+
+/**
+ * Selfies and screenshots stay. One recap, last.
+ * Drops extra `workout_card-` files and the local raster that was copied into the slides.
+ */
+export function collapseRecapSlides(
+  urls: Array<string | null | undefined> | null | undefined,
+  cardUrl?: string | null,
+): string[] {
+  const list = uniqueProofUrls(urls);
+  const hasLocal = list.some((url) => isLocalWorkoutRaster(url));
+  const cards = list.filter(
+    (url) => isWorkoutCardStoragePath(url) || isWorkoutCardUrl(url, cardUrl) || isWorkoutCardSlide(url),
+  );
+  const named = String(cardUrl ?? '').split('?')[0];
+  const keep =
+    cards.find((url) => named && url.split('?')[0] === named) ?? cards[cards.length - 1] ?? '';
+  const stills = list.filter((url) => {
+    if (isLocalWorkoutRaster(url) || isWorkoutCardStoragePath(url) || isWorkoutCardSlide(url)) {
+      return false;
+    }
+    if (keep && isWorkoutCardUrl(url, keep)) {
+      return false;
+    }
+    if (hasLocal && isUploadedRasterExtra(url)) {
+      return false;
+    }
+    return true;
+  });
+  return keep ? uniqueProofUrls([...stills, keep]) : stills;
+}
+
 /** Existing stills, then one recap. An older workout_card file is replaced, not stacked. */
 export function mediaWithExtraCard(
   urls: Array<string | null | undefined> | null | undefined,
   cardUrl: string,
 ): string[] {
-  const stills = uniqueProofUrls(urls).filter(
+  const stills = collapseRecapSlides(urls, cardUrl).filter(
     (url) => !isWorkoutCardSlide(url) && !isWorkoutCardStoragePath(url) && !isWorkoutCardUrl(url, cardUrl),
   );
   return uniqueProofUrls([...stills, cardUrl]);

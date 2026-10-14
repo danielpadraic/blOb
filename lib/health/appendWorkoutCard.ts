@@ -1,6 +1,11 @@
 import { parseCheckinHealthProof } from '@/lib/health/checkinHealthProof';
 import { isVendorHealthProof } from '@/lib/health/cardRedraw';
-import { mediaWithExtraCard, proofPartWithExtraCard, workoutCardPostIds } from '@/lib/health/workoutCardSlide';
+import {
+  mediaWithExtraCard,
+  proofPartWithExtraCard,
+  proofPartWithoutCardFile,
+  workoutCardPostIds,
+} from '@/lib/health/workoutCardSlide';
 import { officialCoinKind } from '@/lib/officialCoin';
 import type { CheckinProofStats } from '@/lib/checkin/proofStats';
 import { supabase } from '@/lib/supabase';
@@ -73,8 +78,15 @@ async function livePostsFor(userId: string, checkinIds: string[]): Promise<LiveC
 async function writeCardOnCheckin(row: CheckinCardRow, proofId: string, cardUrl: string): Promise<void> {
   const parts = asParts(row.proof_parts);
   const slotId = vendorProofId(parts, proofId) ?? proofId;
-  const part = parts[slotId] ?? {};
-  parts[slotId] = proofPartWithExtraCard(part, cardUrl, WORKOUT_CARD_VERSION);
+  for (const [id, part] of Object.entries(parts)) {
+    parts[id] =
+      id === slotId
+        ? proofPartWithExtraCard(part, cardUrl, WORKOUT_CARD_VERSION)
+        : proofPartWithoutCardFile(part, cardUrl);
+  }
+  if (!parts[slotId]) {
+    parts[slotId] = proofPartWithExtraCard({}, cardUrl, WORKOUT_CARD_VERSION);
+  }
   const saved = await supabase
     .from('challenge_checkins')
     .update({ proof_parts: parts } as never)

@@ -208,9 +208,10 @@ export type CardRepairScope = {
 export function slotHasWorkoutCardFile(part: {
   url?: string | null;
   urls?: Array<string | null> | null;
+  cardUrl?: string | null;
 }): boolean {
   const listed = Array.isArray(part.urls) ? part.urls : [];
-  return [part.url, ...listed].some((url) => isWorkoutCardStoragePath(url));
+  return [part.url, part.cardUrl, ...listed].some((url) => isWorkoutCardStoragePath(url));
 }
 
 /**

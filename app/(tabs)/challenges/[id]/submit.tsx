@@ -27,7 +27,6 @@ import {
   withSlotStills,
 } from '@/lib/checkin/slotStills';
 import { appendWorkoutCardUrl, storeRenderedWorkoutCard } from '@/lib/health/appendWorkoutCard';
-import { requestWorkoutCardRedraw } from '@/lib/health/cardRedrawSignal';
 import { patchFeedPostFields } from '@/lib/liveFeedPatch';
 import { saveWorkoutSession } from '@/lib/health/workoutSessions';
 import { recordHrSignature } from '@/lib/health/hrIntegrity';
@@ -166,7 +165,8 @@ import {
   type CheckinHealthProof,
 } from '@/lib/health/attachProof';
 import { workoutOverlapsLiftWindow } from '@/lib/checkin/unionAttachments';
-import { isRecapCardUrl } from '@/lib/health/postWorkoutCard';
+import { isWorkoutCardSlide, isWorkoutCardStoragePath } from '@/lib/health/postWorkoutCard';
+import { isLocalWorkoutRaster } from '@/lib/health/workoutCardSlide';
 import { upsertHealthWorkout } from '@/lib/health/remote';
 import type { WorkoutRoute } from '@/lib/health/route';
 import {
@@ -1675,7 +1675,6 @@ function SubmitWorkoutInner() {
       if (recapFailedRef.current || cardRequestRef.current || cardTargetRef.current) {
         const error = new Error(miss);
         console.error('[blob:workout-card]', error);
-        requestWorkoutCardRedraw();
         return miss;
       }
       return null;
@@ -1730,7 +1729,6 @@ function SubmitWorkoutInner() {
       }
       return null;
     } catch (error) {
-      requestWorkoutCardRedraw();
       return fail(error);
     }
   }
@@ -1849,7 +1847,9 @@ function SubmitWorkoutInner() {
         const withStats = draftWithReadStats(proof, draft);
         const savedStills = proofImageUrls(savedParts[proof.id]);
         const draftStills = slotStillUris(withStats);
-        const mergedStills = uniqueProofUrls([...savedStills, ...draftStills, recapUriRef.current]);
+        const mergedStills = uniqueProofUrls([...savedStills, ...draftStills]).filter(
+          (url) => !isWorkoutCardStoragePath(url) && !isWorkoutCardSlide(url) && !isLocalWorkoutRaster(url),
+        );
         const persistDraft: SlotDraft | undefined = withStats
           ? {
               ...withStats,
@@ -1921,9 +1921,6 @@ function SubmitWorkoutInner() {
             failedExtras.push(extra.name ?? 'Photo');
             console.log('[blob:checkin-extra]', getErrorMessage(uploadError));
           }
-        }
-        if (recapUriRef.current && !extraUrls.includes(recapUriRef.current)) {
-          extraUrls.push(recapUriRef.current);
         }
         if (uploadedExtras.length) {
           setExtras(uploadedExtras);
@@ -2174,7 +2171,7 @@ function SubmitWorkoutInner() {
             siblingCheckin.data,
           ),
           extras: extraUrls,
-          recap: recapUriRef.current,
+          recap: null,
         });
         pairPostIds = await alignOfficialPairPosts({
           userId: uid,
@@ -2601,43 +2598,15 @@ function SubmitWorkoutInner() {
         return;
       }
       const proof = proofSteps.find((item) => item.id === pending.proofId);
-      const kept = slotStillUris(drafts[pending.proofId]).filter((uri) => !isRecapCardUrl(uri, fileUri));
-      const mergedUris = uniqueProofUrls([...kept, fileUri]);
-      const draft: SlotDraft = {
-        uri: mergedUris[0] ?? fileUri,
-        uris: mergedUris,
-        mimeType: 'image/png',
-        health: pending.health,
-        healthWorkoutId: pending.healthWorkoutId,
-        building: false,
-        fromLibrary: false,
-      };
       setDrafts((current) => ({
         ...current,
         [pending.proofId]: {
           ...current[pending.proofId],
-          ...draft,
-          uris: uniqueProofUrls([
-            ...slotStillUris(current[pending.proofId]).filter((uri) => !isRecapCardUrl(uri, fileUri)),
-            fileUri,
-          ]),
+          building: false,
+          health: pending.health,
+          healthWorkoutId: pending.healthWorkoutId,
         },
       }));
-      setExtras((current) => {
-        if (current.some((item) => item.uri === fileUri || item.id === `recap-${pending.healthWorkoutId}`)) {
-          return current;
-        }
-        return [
-          ...current,
-          {
-            id: `recap-${pending.healthWorkoutId}`,
-            uri: fileUri,
-            kind: 'photo' as const,
-            name: 'Workout',
-          },
-        ];
-      });
-      recapUriRef.current = fileUri;
       const checkinId = checkinIdRef.current;
       if (!proof || !uid || !checkinId || !id) {
         recapFailedRef.current = true;
