@@ -643,7 +643,8 @@ function liveVisualUrls(post: PostWithMeta, isOwner: boolean): string[] {
   const fromFields = mediaUrlsForPost({
     urls: post.media_urls,
     hidden: post.hidden_media_urls,
-    isOwner,
+    // Check-in proof is the same slides for every viewer: stills, then one recap.
+    isOwner: isOwner || isLiveCheckinPost(post),
     stats: post.checkin_stats,
   });
   if (fromFields.length > 0) {

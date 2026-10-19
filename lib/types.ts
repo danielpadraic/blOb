@@ -355,6 +355,8 @@ export interface Profile {
   tos_version?: string | null;
   privacy_version?: string | null;
   tutorial_completed_at?: string | null;
+  /** Set when she taps Don’t show again. Coaches stay off and Live does not jump. */
+  tour_dismissed_at?: string | null;
   /** First-seen coaches: home-live-pills, challenge-live, lift. Not the Home first-run tour. */
   contextual_tours_seen?: string[] | null;
   create_tour_opt_out_at?: string | null;
@@ -1124,6 +1126,7 @@ export type ProfileUpdate = Partial<
     | 'interests_skipped_all_at'
     | 'interests_nudge_at'
     | 'contextual_tours_seen'
+    | 'tour_dismissed_at'
     | 'declared_region'
     | 'home_state'
     | 'phone'

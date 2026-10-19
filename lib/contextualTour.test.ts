@@ -51,6 +51,9 @@ describe('contextual first-seen flags', () => {
       wasContextualTourSeen('user-1', 'challenge-live', { tutorial_completed_at: '2026-09-26T00:00:00.000Z' }),
     ).toBe(true);
     expect(
+      wasContextualTourSeen('user-1', 'challenge-live', { tour_dismissed_at: '2026-10-19T00:00:00.000Z' }),
+    ).toBe(true);
+    expect(
       wasContextualTourSeen('user-1', 'lift', { tutorial_completed_at: '2026-09-26T00:00:00.000Z' }),
     ).toBe(false);
     markHomeTourCompleted('user-9');

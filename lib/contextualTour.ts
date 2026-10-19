@@ -83,7 +83,7 @@ function patchProfileCache(userId: string, seen: Set<ContextualTourId>) {
     if (!current || typeof current !== 'object') {
       return current;
     }
-    return { ...current, contextual_tours_seen: list };
+    return { ...current, contextual_tours_seen: list, tour_dismissed_at: new Date().toISOString() };
   });
 }
 
@@ -92,7 +92,10 @@ async function persistProfileSeen(userId: string, seen: Set<ContextualTourId>) {
   try {
     const { error } = await supabase
       .from('profiles')
-      .update({ contextual_tours_seen: [...seen] })
+      .update({
+        contextual_tours_seen: [...seen],
+        tour_dismissed_at: new Date().toISOString(),
+      })
       .eq('id', userId);
     if (error) {
       return;
@@ -122,15 +125,22 @@ export async function hydrateContextualTours(userId: string | null | undefined):
 export function wasContextualTourSeen(
   userId: string | null | undefined,
   id: ContextualTourId,
-  profile?: { contextual_tours_seen?: unknown; tutorial_completed_at?: string | null } | null,
+  profile?: {
+    contextual_tours_seen?: unknown;
+    tutorial_completed_at?: string | null;
+    tour_dismissed_at?: string | null;
+  } | null,
 ): boolean {
   if (!userId) {
     return false;
   }
-  if (
-    (id === 'home-live-pills' || id === 'challenge-live') &&
-    wasHomeTourCompleted(userId, profile?.tutorial_completed_at)
-  ) {
+    if (profile?.tour_dismissed_at) {
+      return true;
+    }
+    if (
+      (id === 'home-live-pills' || id === 'challenge-live') &&
+      wasHomeTourCompleted(userId, profile?.tutorial_completed_at)
+    ) {
     return true;
   }
   if (profileHasContextualTour(profile, id)) {

@@ -99,29 +99,33 @@ export function sortLivePosts<T extends LivePostLike>(posts: T[]): T[] {
     });
 }
 
-/** FlatList key. post.id, else checkin_id. Never index. Never media_urls length. */
+/** FlatList key. One check-in stays one row. Never index. Never media_urls length. */
 export function liveRowKey(
   row:
     | {
         id?: string | null;
         kind?: string | null;
         createdAt?: string | null;
-        post?: { checkin_id?: string | null } | null;
+        post?: { id?: string | null; checkin_id?: string | null } | null;
       }
     | null
     | undefined,
   _index = 0,
 ): string {
   try {
-    const id = String(row?.id ?? '').trim();
-    if (id) {
-      return id;
-    }
     if (row?.kind === 'post') {
       const checkinId = liveCheckinKey(row.post?.checkin_id);
       if (checkinId) {
         return `checkin:${checkinId}`;
       }
+      const postId = String(row.post?.id ?? row.id ?? '').trim();
+      if (postId) {
+        return postId;
+      }
+    }
+    const id = String(row?.id ?? '').trim();
+    if (id) {
+      return id;
     }
     return `live:${row?.kind ?? 'row'}:${String(row?.createdAt ?? '')}`;
   } catch {

@@ -84,7 +84,7 @@ describe('seedLiveFeedPosts / liveRowKey', () => {
         },
         0,
       ),
-    ).toBe('post-new');
+    ).toBe('checkin:11111111-1111-4111-8111-111111111111');
     expect(
       liveRowKey(
         {

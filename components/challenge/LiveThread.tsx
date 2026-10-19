@@ -549,10 +549,11 @@ export function LiveThread({
       return;
     }
     if (rows.length === 0) {
-      if (commentsReady) {
-        notifyFirstPaint();
+      if (!commentsReady) {
+        return;
       }
-      return;
+      const frame = requestAnimationFrame(() => notifyFirstPaint());
+      return () => cancelAnimationFrame(frame);
     }
     if (firstPaintStartedRef.current) {
       return;
@@ -625,26 +626,26 @@ export function LiveThread({
     if (!firstPaintPendingRef.current) {
       return;
     }
+    firstPaintPendingRef.current = false;
     pinToLiveEdge(false, 'first-paint');
     markLiveInitialScroll(landingChallengeId);
-    firstPaintPendingRef.current = false;
     notifyFirstPaint();
   }, [emptyList, focused, highlightKey, landingChallengeId, notifyFirstPaint, pinToLiveEdge]);
   finishFirstPaintPinRef.current = finishFirstPaintPin;
 
   const lastNewestIdRef = useRef<string | null>(null);
   useEffect(() => {
-    let newestId: string | null = null;
+    let newestKey: string | null = null;
     for (let i = rows.length - 1; i >= 0; i -= 1) {
       const row = rows[i];
       if (row.kind === 'post') {
-        newestId = row.post.id;
+        newestKey = liveRowKey(row);
         break;
       }
     }
     const previous = lastNewestIdRef.current;
-    lastNewestIdRef.current = newestId;
-    if (previous && newestId && newestId !== previous) {
+    lastNewestIdRef.current = newestKey;
+    if (previous && newestKey && newestKey !== previous) {
       pinToLiveEdge(false, 'new-post');
     }
   }, [pinToLiveEdge, rows]);
@@ -1180,9 +1181,10 @@ export function LiveThread({
           }
           style={
             Platform.OS === 'web'
-              ? ({ flex: 1, overflowY: 'auto', overflowX: 'hidden' } as object)
+              ? ({ flex: 1, overflowY: 'auto', touchAction: 'pan-y' } as object)
               : { flex: 1 }
           }
+          directionalLockEnabled
         />
 
         {/*

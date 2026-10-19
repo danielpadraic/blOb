@@ -47,7 +47,6 @@ function remountThrownScreen(retry: () => Promise<void>, pathname: string, error
   }
   const live = liveRetryHref(current);
   if (live && !current.includes('/submit')) {
-    router.replace(live);
     void retry();
     return;
   }
