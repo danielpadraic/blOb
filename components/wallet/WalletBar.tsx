@@ -63,13 +63,6 @@ export function WalletBar({ compact = false }: { compact?: boolean }) {
         return;
       }
       void queryClient.invalidateQueries({ queryKey: ['profile'] });
-      if (official) {
-        return;
-      }
-      if (!tourLocked && profile.tutorial_completed_at) {
-        playCount('coins', lastShownCoins, coins, setDisplayCoins, animatingCoins, markCoinsShown);
-      }
-      playCount('bucks', lastShownBucks, bucks, setDisplayBucks, animatingBucks, markBucksShown);
     }
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
@@ -90,16 +83,7 @@ export function WalletBar({ compact = false }: { compact?: boolean }) {
         document.removeEventListener('visibilitychange', onDocumentVisible);
       }
     };
-  }, [
-    bucks,
-    coins,
-    lastShownBucks,
-    lastShownCoins,
-    official,
-    profile?.id,
-    profile?.tutorial_completed_at,
-    tourLocked,
-  ]);
+  }, [profile?.id, queryClient]);
 
   async function markCoinsShown() {
     await supabase.rpc('mark_coin_balance_shown');

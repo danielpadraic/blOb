@@ -50,7 +50,7 @@ import { MascotState } from '@/components/mascot/MascotState';
 import { StackBackButton, useDismissTo } from '@/components/navigation/StackBackButton';
 import { useHostRoundPrompt } from '@/hooks/useHostRoundPrompt';
 import { useStalled } from '@/hooks/useStalled';
-import { BODY_METRICS_HREF, captureHref, challengeDetailHref, liveRetryHref, LOBBY_HREF } from '@/lib/routes';
+import { BODY_METRICS_HREF, captureHref, challengeDetailHref, liveRetryHref, LOBBY_HREF, safeInAppPath } from '@/lib/routes';
 import { pushCheckinSubmit } from '@/lib/challengeNav';
 import {
   applyLiveBackGesture,
@@ -306,6 +306,7 @@ export default function ChallengeDetailScreen() {
     commentId?: string;
     tab?: string;
     receipt?: string;
+    from?: string;
     notice?: string;
     invite?: string;
   }>();
@@ -316,6 +317,7 @@ export default function ChallengeDetailScreen() {
   const highlightCommentId = Array.isArray(params.commentId) ? params.commentId[0] : params.commentId;
   const tabParam = Array.isArray(params.tab) ? params.tab[0] : params.tab;
   const receiptParam = Array.isArray(params.receipt) ? params.receipt[0] : params.receipt;
+  const fromParam = Array.isArray(params.from) ? params.from[0] : params.from;
   const noticeParam = Array.isArray(params.notice) ? params.notice[0] : params.notice;
   const loggedParam = Array.isArray(params.logged) ? params.logged[0] : params.logged;
   const fundedParam = Array.isArray(params.funded) ? params.funded[0] : params.funded;
@@ -913,6 +915,11 @@ export default function ChallengeDetailScreen() {
 
   const closePaidReceipt = useCallback(() => {
     setReceiptOpen(false);
+    const back = safeInAppPath(fromParam);
+    if (back) {
+      router.replace(back as never);
+      return;
+    }
     setPageTab('overview');
     if (returnTo === 'home') {
       router.replace('/feed');
@@ -923,7 +930,7 @@ export default function ChallengeDetailScreen() {
         challengeDetailHref(id, returnTo === 'feed' ? 'feed' : 'lobby', null, { tab: 'overview' }),
       );
     }
-  }, [id, receiptParam, returnTo, router]);
+  }, [fromParam, id, receiptParam, returnTo, router]);
 
   useEffect(() => {
     if (receiptParam !== '1') {

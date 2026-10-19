@@ -40,7 +40,8 @@ describe('header count-up', () => {
 
 describe('wallet settlement receipt', () => {
   it('deep-links a settled row to that challenge Overview', () => {
-    expect(String(walletReceiptHref('abc-1'))).toBe('/challenges/abc-1?tab=overview');
+    expect(String(walletReceiptHref('abc-1'))).toBe('/challenges/abc-1?tab=overview&receipt=1');
+    expect(String(walletReceiptHref('abc-1', '/feed'))).toContain('from=%2Ffeed');
     expect(String(walletReceiptHref('abc-1'))).not.toContain('board');
     expect(walletReceiptHref('   ')).toBeNull();
   });

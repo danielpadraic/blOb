@@ -70,6 +70,24 @@ describe('lifecycle', () => {
     expect(overviewMoneyPhase(row)).toBe('live');
   });
 
+  it('does not pay Workout Group style before ends_at plus the review window', () => {
+    const ends = new Date('2026-09-01T05:00:00.000Z');
+    const paidEarly = new Date('2026-08-31T13:41:44.000Z');
+    const row = {
+      status: 'ended' as const,
+      prize_structure: 'equal_split',
+      starts_at: '2026-08-24T05:00:00.000Z',
+      ends_at: ends.toISOString(),
+      duration_days: 8,
+      length_value: 8,
+      length_unit: 'days',
+      days_required: 8,
+    };
+    expect(isSettlementReviewReady(row, paidEarly)).toBe(false);
+    expect(shouldAutoSettle(row, paidEarly)).toBe(false);
+    expect(shouldAutoSettle(row, new Date(ends.getTime() + 2 * 60 * 60 * 1000))).toBe(true);
+  });
+
   it('can settle when ends_at was 3 hours ago', () => {
     const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
     const row = {

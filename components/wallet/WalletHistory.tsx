@@ -95,7 +95,7 @@ export function WalletHistory() {
       </AppText>
       <View className="mt-2 gap-2">
         {query.data.map((row) => {
-          const href = walletReceiptHref(row.challengeId);
+          const href = walletReceiptHref(row.challengeId, wallet.origin);
           return (
             <Pressable
               key={row.id}

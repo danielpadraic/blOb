@@ -143,12 +143,12 @@ export function walletReceiptHeadline(input: {
   return `${name} · Prize`;
 }
 
-export function walletReceiptHref(challengeId: string | null | undefined) {
+export function walletReceiptHref(challengeId: string | null | undefined, origin?: string | null) {
   const id = String(challengeId ?? '').trim();
   if (!id) {
     return null;
   }
-  return challengeDetailHref(id, 'lobby', null, { tab: 'overview' });
+  return challengeDetailHref(id, 'lobby', null, { tab: 'overview', receipt: true, from: origin });
 }
 
 export function asWalletReceiptRow(input: {

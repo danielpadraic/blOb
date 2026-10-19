@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { usePathname } from 'expo-router';
 
 import { useBadgeCatalog } from '@/hooks/useBadges';
 import { useMyProfile } from '@/hooks/useProfile';
@@ -22,6 +23,8 @@ type WalletContextValue = {
   scrollToLatest: boolean;
   openWallet: (options?: OpenWalletOptions) => void;
   closeWallet: () => void;
+  /** Screen that opened the sheet. Receipt Close returns here. */
+  origin: string;
   openSend: () => void;
   closeSend: () => void;
   openTopUp: (request: TopUpRequest) => void;
@@ -37,8 +40,10 @@ const WalletContext = createContext<WalletContextValue | null>(null);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const { profile } = useMyProfile();
+  const pathname = usePathname();
   const catalog = useBadgeCatalog();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [origin, setOrigin] = useState('/feed');
   const [scrollToLatest, setScrollToLatest] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
   const [topUp, setTopUp] = useState<TopUpRequest | null>(null);
@@ -66,12 +71,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const openWallet = useCallback((options?: OpenWalletOptions) => {
     if (profile) {
+      const here = String(pathname ?? '').trim();
+      setOrigin(here.startsWith('/') ? here : '/feed');
       setSendOpen(false);
       setTopUp(null);
       setScrollToLatest(Boolean(options?.scrollToLatest));
       setSheetOpen(true);
     }
-  }, [profile]);
+  }, [pathname, profile]);
 
   const openSend = useCallback(() => {
     setSheetOpen(false);
@@ -110,6 +117,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       sendOpen,
       topUp,
       scrollToLatest,
+      origin,
       openWallet,
       closeWallet: () => {
         setSheetOpen(false);
@@ -125,7 +133,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       unlocks: queue,
       dismissUnlock: () => setQueue((current) => current.slice(1)),
     }),
-    [closeAll, openSend, openTopUp, openWallet, queue, scrollToLatest, sendOpen, sentToast, showSentToast, sheetOpen, topUp],
+    [closeAll, openSend, openTopUp, openWallet, origin, queue, scrollToLatest, sendOpen, sentToast, showSentToast, sheetOpen, topUp],
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;

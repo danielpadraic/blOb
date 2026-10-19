@@ -103,6 +103,15 @@ export function createChallengeHref(extra?: {
 }
 
 /** Overview / Live for this row only. Never last-open. Never the Lobby list. */
+/** In-app path only. Wallet Close uses this to return to the screen that opened the sheet. */
+export function safeInAppPath(value: string | null | undefined): string | null {
+  const path = String(value ?? '').trim();
+  if (!path.startsWith('/') || path.startsWith('//') || path.includes('://')) {
+    return null;
+  }
+  return path;
+}
+
 export function challengeHref(id: string): Href {
   return `/challenges/${String(id ?? '').trim()}` as Href;
 }
@@ -123,6 +132,7 @@ export function challengeDetailHref(
     receipt?: boolean;
     commentId?: string | null;
     notice?: string | null;
+    from?: string | null;
   },
 ): Href {
   const challengeId = String(id ?? '').trim();
@@ -138,6 +148,10 @@ export function challengeDetailHref(
   }
   if (extra?.receipt) {
     qs.set('receipt', '1');
+  }
+  const from = safeInAppPath(extra?.from);
+  if (from) {
+    qs.set('from', from);
   }
   const commentId = String(extra?.commentId ?? '').trim();
   if (commentId) {

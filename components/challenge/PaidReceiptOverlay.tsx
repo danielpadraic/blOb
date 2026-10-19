@@ -7,6 +7,7 @@ import { BlobMascot } from '@/components/mascot/BlobMascot';
 import { Button } from '@/components/ui/Button';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
+import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { THEME, themeShadow } from '@/lib/theme';
 import type { Challenge, ChallengeSettlementView } from '@/lib/types';
@@ -71,9 +72,7 @@ export function PaidReceiptOverlay({
               alignItems: 'center',
               justifyContent: 'center',
             }}>
-            <AppText className="text-[15px] font-bold" style={{ color: THEME.textPrimary }}>
-              Close
-            </AppText>
+            <Glyph name={GLYPH.close} color={THEME.textPrimary} size={16} />
           </Pressable>
         </View>
         {paid ? (

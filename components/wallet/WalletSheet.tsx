@@ -14,6 +14,7 @@ import { useMyProfile } from '@/hooks/useProfile';
 import { useWallet } from '@/hooks/useWallet';
 import { useGeoCashOptional } from '@/components/geo/GeoCashHost';
 import { copy } from '@/lib/copy';
+import { cashOutBlockReason } from '@/lib/cashOut';
 import { hasPayoutAddress } from '@/lib/payoutAddress';
 import { tabBarLift, THEME } from '@/lib/theme';
 
@@ -161,6 +162,14 @@ export function WalletSheet() {
                 loading={geo?.busy}
                 onPress={() => {
                   setCashOutNote(null);
+                  const blocked = cashOutBlockReason({
+                    bucks: profile.bucks,
+                    credits: profile.credits,
+                  });
+                  if (blocked) {
+                    setCashOutNote(blocked);
+                    return;
+                  }
                   void (async () => {
                     const allowed = geo ? await geo.ensure({ action: 'cashout' }) : false;
                     if (!allowed) {
