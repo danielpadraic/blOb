@@ -57,7 +57,7 @@ describe('official pair slots', () => {
       extras: [PRE, 'https://cdn.example/extra.jpg'],
       recap: CARD,
     });
-    expect(slides).toEqual([PRE, POST, HR, CARD, 'https://cdn.example/extra.jpg']);
+    expect(slides).toEqual([PRE, POST, HR, 'https://cdn.example/extra.jpg', CARD]);
   });
 
   it('points Weekly at Monthly and leaves Run 128 alone', () => {

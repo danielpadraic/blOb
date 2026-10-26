@@ -166,6 +166,7 @@ import {
 } from '@/lib/health/attachProof';
 import { workoutOverlapsLiftWindow } from '@/lib/checkin/unionAttachments';
 import { isWorkoutCardSlide, isWorkoutCardStoragePath } from '@/lib/health/postWorkoutCard';
+import { requestWorkoutCardRedraw } from '@/lib/health/cardRedrawSignal';
 import { isLocalWorkoutRaster } from '@/lib/health/workoutCardSlide';
 import { upsertHealthWorkout } from '@/lib/health/remote';
 import type { WorkoutRoute } from '@/lib/health/route';
@@ -1461,20 +1462,26 @@ function SubmitWorkoutInner() {
     keep();
   }
 
-  function leaveCameraToLive() {
+  async function leaveCameraToLive() {
     if (leavingCameraRef.current) {
       return;
     }
     leavingCameraRef.current = true;
     stopAllLiveMedia();
     setCameraPaused(true);
+    const cardMiss = await awaitWorkoutCardUpload(checkinIdRef.current);
+    if (cardMiss) {
+      requestWorkoutCardRedraw();
+    }
     setReview(null);
     setSnapPreview(null);
     setCaptureId(null);
     setSkippedAuto(true);
     setPreferCamera(false);
     if (id) {
-      router.replace(challengeDetailHref(id, 'lobby', undefined, { tab: 'feed' }) as never);
+      router.replace(
+        challengeDetailHref(id, 'lobby', undefined, { tab: 'feed', notice: cardMiss }) as never,
+      );
     }
   }
 
@@ -1897,6 +1904,9 @@ function SubmitWorkoutInner() {
       if (uid) {
         for (const [index, extra] of extras.entries()) {
           if (extra.remoteUrl) {
+            if (isLocalWorkoutRaster(extra.remoteUrl) || isWorkoutCardStoragePath(extra.remoteUrl)) {
+              continue;
+            }
             extraUrls.push(extra.remoteUrl);
             uploadedExtras.push(extra);
             continue;
@@ -1904,6 +1914,9 @@ function SubmitWorkoutInner() {
           if (extra.kind === 'gif') {
             extraUrls.push(extra.uri);
             uploadedExtras.push({ ...extra, remoteUrl: extra.uri });
+            continue;
+          }
+          if (isLocalWorkoutRaster(extra.uri) || isWorkoutCardStoragePath(extra.uri)) {
             continue;
           }
           try {
@@ -1952,16 +1965,19 @@ function SubmitWorkoutInner() {
         const liftFailed = failedExtras.includes(copy('checkin.liftFailed'));
         const workoutFailed = failedExtras.includes(copy('checkin.workoutFailed'));
         const cardFailed = failedExtras.includes(copy('checkin.workoutCardFailed'));
+        const pairMiss = failedExtras.find((line) => line.startsWith('Couldn’t post to')) ?? null;
         const photoFails = failedExtras.filter(
           (line) =>
             line !== copy('checkin.liftFailed') &&
             line !== copy('checkin.workoutFailed') &&
-            line !== copy('checkin.workoutCardFailed'),
+            line !== copy('checkin.workoutCardFailed') &&
+            !line.startsWith('Couldn’t post to'),
         );
         return [
           liftFailed ? copy('checkin.liftFailed') : null,
           workoutFailed ? copy('checkin.workoutFailed') : null,
           cardFailed ? copy('checkin.workoutCardFailed') : null,
+          pairMiss,
           photoFails.length === 0
             ? null
             : photoFails.length === 1
@@ -2197,11 +2213,7 @@ function SubmitWorkoutInner() {
             pairPostIds = live.postIds;
           }
           if (live.missing) {
-            const cardMiss = await awaitWorkoutCardUpload(checkinId);
-            sendHoldRef.current = 'photo';
-            setFailKind(null);
-            setError([officialPairLiveFailure(live.missing), cardMiss].filter(Boolean).join(' '));
-            return;
+            failedExtras.push(officialPairLiveFailure(live.missing));
           }
         }
       }
@@ -2439,19 +2451,35 @@ function SubmitWorkoutInner() {
         setReview({ proofId: target.id, uri: still });
         setSnapPreview(still || null);
         setCaptureId(target.id);
-      } else if (officialCoin && saved) {
-        const remaining = remainingProofLabelsOf(challenge, saved.proof_parts, null, {
-          pre_selfie_url: saved.pre_selfie_url,
-          post_selfie_url: saved.post_selfie_url,
-          hr_monitor_url: saved.hr_monitor_url,
-        });
-        if (remaining.length === 0 && saved.status !== 'submitted') {
-          finishReadyRef.current = true;
-          await submitCheckin.mutateAsync({ countDay: true });
+        void buildWorkoutCard(target, enriched, healthWorkoutId, samples);
+      } else {
+        await buildWorkoutCard(target, enriched, healthWorkoutId, samples);
+        const cardMiss = await awaitWorkoutCardUpload(saved?.id ?? checkinIdRef.current);
+        if (cardMiss) {
+          setError(cardMiss);
+          requestWorkoutCardRedraw();
+        }
+        if (officialCoin && saved) {
+          const remaining = remainingProofLabelsOf(challenge, saved.proof_parts, null, {
+            pre_selfie_url: saved.pre_selfie_url,
+            post_selfie_url: saved.post_selfie_url,
+            hr_monitor_url: saved.hr_monitor_url,
+          });
+          if (remaining.length === 0 && saved.status !== 'submitted') {
+            finishReadyRef.current = true;
+            await submitCheckin.mutateAsync({ countDay: true });
+            const siblingRoom = officialPairSiblingRoom(officialCoinKind(challenge));
+            const live = await ensureOfficialPairLive(saved.id).catch(() => ({
+              missing: siblingRoom,
+              postIds: [] as string[],
+            }));
+            const lines = [cardMiss, live.missing ? officialPairLiveFailure(live.missing) : null].filter(Boolean);
+            if (lines.length) {
+              setError(lines.join(' '));
+            }
+          }
         }
       }
-      // Recap is an extra slide. A photo selfie slot still gets one when HK numbers exist.
-      void buildWorkoutCard(target, enriched, healthWorkoutId, samples);
     } catch (caught) {
       setError(getErrorMessage(caught));
     } finally {

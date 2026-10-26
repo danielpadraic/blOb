@@ -105,12 +105,11 @@ export function mergeOfficialPairParts(
     const source = localUrl
       ? proofSlotPart(proof, local?.proof_parts, legacyOf(local))
       : proofSlotPart(proof, sibling?.proof_parts, legacyOf(sibling));
-    const recaps = uniqueProofUrls((source?.urls ?? []).filter((item) => isRecapCardUrl(item)));
     out[proof.id] = {
       ...(source ?? { method: proof.method, url, urls: [url] }),
       method: source?.method || proof.method,
       url,
-      urls: uniqueProofUrls([url, ...recaps]),
+      urls: [url],
     };
   }
   return out;
@@ -165,7 +164,22 @@ export function orderedCheckinSlides(input: {
     }
     push(value);
   }
-  return slides;
+  const rest: string[] = [];
+  let card = '';
+  for (const url of slides) {
+    if (url.startsWith('file:') || url.includes('blob-workout-proof')) {
+      continue;
+    }
+    if (isRecapCardUrl(url, input.recap)) {
+      card = url;
+      continue;
+    }
+    rest.push(url);
+  }
+  const kept = card
+    ? rest.filter((url) => !/\/checkin-extra-\d+-\d+\.(jpe?g|png|webp)$/i.test(url.split('?')[0]))
+    : rest;
+  return card ? [...kept, card] : kept;
 }
 
 /** Chips for Live and Home. Numbers only — no generated sentence. */

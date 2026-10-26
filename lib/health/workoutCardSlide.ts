@@ -101,7 +101,6 @@ export function collapseRecapSlides(
   cardUrl?: string | null,
 ): string[] {
   const list = uniqueProofUrls(urls);
-  const hasLocal = list.some((url) => isLocalWorkoutRaster(url));
   const cards = list.filter(
     (url) => isWorkoutCardStoragePath(url) || isWorkoutCardUrl(url, cardUrl) || isWorkoutCardSlide(url),
   );
@@ -115,7 +114,7 @@ export function collapseRecapSlides(
     if (keep && isWorkoutCardUrl(url, keep)) {
       return false;
     }
-    if (hasLocal && isUploadedRasterExtra(url)) {
+    if (keep && isUploadedRasterExtra(url)) {
       return false;
     }
     return true;
