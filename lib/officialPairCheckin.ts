@@ -33,6 +33,7 @@ export type OfficialCheckinSlice = {
   pre_selfie_url?: string | null;
   post_selfie_url?: string | null;
   hr_monitor_url?: string | null;
+  health_workout_id?: string | null;
   period_key?: string | null;
 };
 
@@ -247,7 +248,7 @@ export function isOfficialCoinPairChallenge(challenge?: { official_kind?: string
 }
 
 const CHECKIN_SLICE =
-  'id, challenge_id, period_key, proof_parts, pre_selfie_url, post_selfie_url, hr_monitor_url, status, submitted_at';
+  'id, challenge_id, period_key, proof_parts, pre_selfie_url, post_selfie_url, hr_monitor_url, health_workout_id, status, submitted_at';
 
 /** This period's Official check-in on the other room, when one is stored. */
 export async function fetchOfficialPairCheckin(input: {

@@ -30,8 +30,9 @@ import {
 import { dateStampInZone } from '@/lib/officialDays';
 import { HOME_PULSE_KEY } from '@/lib/homePulse';
 import { OFFICIAL_COIN_DAYS_KEY, OFFICIAL_COIN_KEY, type OfficialCoinDay, type OfficialCoinStatus } from '@/hooks/useOfficialCoin';
-import { isOfficialCoinChallenge, officialCoinDateStamp } from '@/lib/officialCoin';
+import { isOfficialCoinChallenge, officialCoinDateStamp, officialCoinKind } from '@/lib/officialCoin';
 import { isOfficialSeriesChallenge } from '@/lib/officialSeries';
+import { officialBoardDayComplete } from '@/lib/checkin/officialDay';
 import { getErrorMessage } from '@/utils/errors';
 import { reportAppError } from '@/lib/appErrors';
 import { checkedInForCurrentPeriod } from '@/lib/lobbyChallenge';
@@ -682,7 +683,7 @@ export function useLobbyTodayCheckins(
     queryFn: async (): Promise<Set<string>> => {
       const { data, error } = await supabase
         .from('challenge_checkins')
-        .select('challenge_id, period_key, status, submitted_at')
+        .select('challenge_id, period_key, status, submitted_at, proof_parts, pre_selfie_url, post_selfie_url, hr_monitor_url, health_workout_id')
         .eq('user_id', user!.id)
         .in('challenge_id', ids);
       if (error) {
@@ -690,13 +691,31 @@ export function useLobbyTodayCheckins(
       }
       const byId = new Map(challenges.map((row) => [row.id, row]));
       const submitted = new Set<string>();
+      const officialHits = new Set<string>();
       for (const row of data ?? []) {
         const challengeId = String((row as { challenge_id?: string }).challenge_id ?? '');
-        if (!challengeId) {
+        const challenge = byId.get(challengeId);
+        if (!challengeId || !challenge) {
           continue;
         }
-        if (checkedInForCurrentPeriod(row, byId.get(challengeId))) {
+        const kind = officialCoinKind(challenge);
+        if (kind) {
+          const onToday =
+            normalizePeriodKey((row as { period_key?: unknown }).period_key) === checkinPeriodKey(challenge);
+          if (onToday && officialBoardDayComplete(challenge, row as never)) {
+            officialHits.add(kind);
+          }
+          continue;
+        }
+        if (checkedInForCurrentPeriod(row, challenge)) {
           submitted.add(challengeId);
+        }
+      }
+      if (officialHits.size > 0) {
+        for (const challenge of challenges) {
+          if (officialCoinKind(challenge)) {
+            submitted.add(challenge.id);
+          }
         }
       }
       return submitted;

@@ -150,7 +150,7 @@ describe('Multi Check-In hub rows', () => {
     });
   });
 
-  it('keeps Official on In progress after a pre selfie, and Complete only when both rooms are full', () => {
+  it('keeps Official on In progress after a pre selfie, and Complete when either room has every slot', () => {
     const preOnly = checkinSlotSnapshot(
       { proofs: thirtyDayProofs },
       {},
@@ -216,10 +216,14 @@ describe('Multi Check-In hub rows', () => {
       { remaining: [], filled: 3 },
     );
     expect(full).toEqual({ state: 'complete', line: OFFICIAL_PAIR_STAMPED });
-    expect(officialPairChip({ remaining: [], filled: 3 }, { remaining: [], filled: 0 }).state).toBe(
-      'in_progress',
-    );
-    expect(officialPairChip({ remaining: [], filled: 3 }, null).line).not.toBe(OFFICIAL_PAIR_STAMPED);
+    expect(officialPairChip({ remaining: [], filled: 3 }, { remaining: [], filled: 0 })).toEqual({
+      state: 'complete',
+      line: OFFICIAL_PAIR_STAMPED,
+    });
+    expect(officialPairChip({ remaining: [], filled: 3 }, null)).toEqual({
+      state: 'complete',
+      line: OFFICIAL_PAIR_STAMPED,
+    });
   });
 
   it('reads a stored pre selfie back onto the 30-Day chip and leaves the period open', () => {

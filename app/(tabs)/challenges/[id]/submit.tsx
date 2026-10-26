@@ -190,7 +190,14 @@ import {
   sumComparableMetricRows,
 } from '@/lib/comparablePoints';
 import { allowsMultiCheckin, checkinPeriodComplete } from '@/lib/loggable';
-import { isOfficialCoinChallenge, officialCoinDateStamp, officialCoinKind, officialPastDayKey } from '@/lib/officialCoin';
+import { officialBoardDayComplete } from '@/lib/checkin/officialDay';
+import {
+  isOfficialCoinChallenge,
+  OFFICIAL_COIN_ALREADY_TODAY,
+  officialCoinDateStamp,
+  officialCoinKind,
+  officialPastDayKey,
+} from '@/lib/officialCoin';
 import {
   alignOfficialPairPosts,
   ensureOfficialPairLive,
@@ -707,17 +714,31 @@ function SubmitWorkoutInner() {
     if (!id || !challenge || !checkinQuery.isFetched || isProxy) {
       return;
     }
+    if (officialCoin && siblingChallengeId && !siblingCheckin.isFetched) {
+      return;
+    }
+    const localRow = checkinQuery.data;
+    const sharedDone =
+      officialCoin &&
+      (officialBoardDayComplete(challenge, localRow) ||
+        officialBoardDayComplete(challenge, siblingCheckin.data));
     if (
+      sharedDone ||
       checkinPeriodComplete(challenge, {
-        checkinPhase: checkinQuery.data?.phase,
-        remainingProofLabels: remainingProofLabelsOf(challenge, checkinQuery.data?.proof_parts, null, {
-          pre_selfie_url: checkinQuery.data?.pre_selfie_url,
-          post_selfie_url: checkinQuery.data?.post_selfie_url,
-          hr_monitor_url: checkinQuery.data?.hr_monitor_url,
+        checkinPhase: localRow?.phase,
+        remainingProofLabels: remainingProofLabelsOf(challenge, localRow?.proof_parts, null, {
+          pre_selfie_url: localRow?.pre_selfie_url,
+          post_selfie_url: localRow?.post_selfie_url,
+          hr_monitor_url: localRow?.hr_monitor_url,
         }),
       })
     ) {
-      router.replace(challengeDetailHref(id, 'lobby', null, { tab: 'overview' }) as never);
+      router.replace(
+        challengeDetailHref(id, 'lobby', null, {
+          tab: 'overview',
+          notice: officialCoin ? OFFICIAL_COIN_ALREADY_TODAY : null,
+        }) as never,
+      );
     }
   }, [
     challenge,
@@ -729,6 +750,10 @@ function SubmitWorkoutInner() {
     checkinQuery.isFetched,
     id,
     isProxy,
+    officialCoin,
+    siblingChallengeId,
+    siblingCheckin.data,
+    siblingCheckin.isFetched,
     router,
   ]);
   /**

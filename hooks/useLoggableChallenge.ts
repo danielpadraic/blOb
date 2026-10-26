@@ -196,7 +196,7 @@ export function useLoggableChallenges() {
         }
       }
 
-      return rows.sort((a, b) => {
+      return shareOfficialPickerDay(rows).sort((a, b) => {
         // Official Check-In is the house room. It leads the picker, weekly first.
         const aOfficial = officialCoinPickerRank(a);
         const bOfficial = officialCoinPickerRank(b);
@@ -216,6 +216,35 @@ export function useLoggableChallenges() {
         return new Date(bJoined).getTime() - new Date(aJoined).getTime();
       });
     },
+  });
+}
+
+function shareOfficialPickerDay(rows: LoggableChallenge[]): LoggableChallenge[] {
+  const weekly = rows.find((row) => row.official_kind === 'coin_weekly');
+  const monthly = rows.find((row) => row.official_kind === 'coin_monthly');
+  const full = (row?: LoggableChallenge) =>
+    Boolean(
+      row &&
+        (row.requiredProofCount ?? 0) > 0 &&
+        (row.remainingProofLabels?.length ?? 0) === 0 &&
+        (row.filledProofCount ?? 0) > 0,
+    );
+  if (!full(weekly) && !full(monthly)) {
+    return rows;
+  }
+  return rows.map((row) => {
+    if (row.official_kind !== 'coin_weekly' && row.official_kind !== 'coin_monthly') {
+      return row;
+    }
+    const required = Math.max(row.requiredProofCount ?? 0, row.filledProofCount ?? 0);
+    return {
+      ...row,
+      remainingProofLabels: [],
+      filledProofCount: required,
+      checkinPhase: 'submitted',
+      submittedThisPeriod: true,
+      ctaTitle: checkinCtaTitle('submitted'),
+    };
   });
 }
 

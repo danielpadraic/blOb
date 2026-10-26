@@ -201,6 +201,10 @@ import { hasCompletedBodyMetrics } from '@/lib/bodyMetrics';
 import { cashJoinUi, challengeMoneyShape } from '@/lib/geo/eligibility';
 import { isSubmittedCheckin, stickyCheckinFooterTitle } from '@/lib/challengeCheckin';
 import { remainingProofLabelsOf } from '@/lib/multiCheckin';
+import { officialBoardDayComplete } from '@/lib/checkin/officialDay';
+import { fetchOfficialPairCheckin, siblingOfficialChallengeId } from '@/lib/officialPairCheckin';
+import { checkinPeriodKeyCandidates } from '@/lib/checkinPeriod';
+import { useOfficialCoinStatus } from '@/hooks/useOfficialCoin';
 import { viewerCanRosterManage } from '@/lib/hostRigor';
 import { buildBoard, yourStandingLine } from '@/lib/board';
 import { tabBarLift, THEME, themeShadow } from '@/lib/theme';
@@ -377,6 +381,34 @@ export default function ChallengeDetailScreen() {
     }));
   }, [boardProfiles.data, roster.data]);
   const periodCheckin = usePeriodCheckin(id, challengeQuery.data);
+  const coinRooms = useOfficialCoinStatus();
+  const officialSiblingId = isOfficialCoinChallenge(challengeQuery.data)
+    ? siblingOfficialChallengeId(id, {
+        weeklyId: coinRooms.data?.weekly?.challenge.id,
+        monthlyId: coinRooms.data?.monthly?.challenge.id,
+      })
+    : null;
+  const officialPeriodKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const row of [challengeQuery.data, coinRooms.data?.weekly?.challenge, coinRooms.data?.monthly?.challenge]) {
+      for (const key of checkinPeriodKeyCandidates(row as never)) {
+        if (key) {
+          keys.add(key);
+        }
+      }
+    }
+    return [...keys];
+  }, [challengeQuery.data, coinRooms.data?.monthly?.challenge, coinRooms.data?.weekly?.challenge]);
+  const officialSiblingCheckin = useQuery({
+    queryKey: ['official-pair-checkin', officialSiblingId, user?.id, officialPeriodKeys.join('|')],
+    enabled: Boolean(officialSiblingId && user?.id),
+    queryFn: () =>
+      fetchOfficialPairCheckin({
+        challengeId: officialSiblingId!,
+        userId: user!.id,
+        periodKeys: officialPeriodKeys,
+      }),
+  });
   // The sticky bar showed a disabled "Checking today's check-in" button while this query ran, so a
   // request that never settled left the user unable to check in at all. Fall through to the real
   // CTA instead -- the check-in screen loads its own state.
@@ -625,7 +657,11 @@ export default function ChallengeDetailScreen() {
   });
   const periodSubmitted =
     periodCheckin.data?.phase === 'submitted' || isSubmittedCheckin(periodCheckin.data);
-  const loggedToday = remainingPeriodProofs.length === 0 && periodSubmitted;
+  const officialDayDone =
+    isOfficialCoinChallenge(challenge) &&
+    (officialBoardDayComplete(challenge, periodCheckin.data) ||
+      officialBoardDayComplete(challenge, officialSiblingCheckin.data));
+  const loggedToday = officialDayDone || (remainingPeriodProofs.length === 0 && periodSubmitted);
   const rawPhase = periodCheckin.data?.phase ?? 'none';
   const checkinPhase = loggedToday
     ? 'submitted'
