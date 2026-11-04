@@ -65,16 +65,13 @@ import {
 } from '@/lib/liveThread';
 import {
   LIVE_VIEWPORT_READY_MIN,
-  clearLiveMidScroll,
+  beginLiveVisit,
   hasLiveInitialScroll,
   liveLandingFocus,
   logLiveAutoScroll,
   markLiveInitialScroll,
-  peekLiveMidScroll,
   peekSentLiveCheckin,
-  saveLiveMidScroll,
   shouldLandLiveLatest,
-  takeLiveMidScroll,
   takeSentLiveCheckin,
 } from '@/lib/liveLanding';
 import {
@@ -289,7 +286,6 @@ export function LiveThread({
   const draggingRef = useRef(false);
   const firstPaintPendingRef = useRef(false);
   const viewportHRef = useRef(0);
-  const restoringMidScrollRef = useRef(false);
   /** Last reported offset, used to tell a user's upward scroll from our own downward pin. */
   const lastOffsetRef = useRef(0);
   const emptyList = rows.length === 0;
@@ -498,46 +494,65 @@ export function LiveThread({
     onFirstPaintRef.current?.();
   }, []);
 
+  /** Bumps when the app returns from the background while Live is focused. Each bump is a new visit. */
+  const [visit, setVisit] = useState(0);
+  const visitTokenRef = useRef(0);
+  const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wentBackgroundRef = useRef(false);
+
+  useEffect(
+    () => () => {
+      if (settleTimerRef.current) {
+        clearTimeout(settleTimerRef.current);
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     if (focused) {
       return;
     }
-    // Overview / Board keeps the one-shot land. Only leaving the challenge clears it.
     firstPaintPendingRef.current = false;
+    if (settleTimerRef.current) {
+      clearTimeout(settleTimerRef.current);
+      settleTimerRef.current = null;
+    }
   }, [focused]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
-      if (!focused) {
+      if (next === 'background') {
+        wentBackgroundRef.current = true;
         return;
       }
-      if (next === 'background' || next === 'inactive') {
-        if (!atEndRef.current && lastOffsetRef.current > 8) {
-          saveLiveMidScroll(landingChallengeId, lastOffsetRef.current);
-        } else {
-          clearLiveMidScroll(landingChallengeId);
-        }
+      if (next !== 'active' || !wentBackgroundRef.current) {
         return;
       }
-      if (next !== 'active') {
-        return;
+      wentBackgroundRef.current = false;
+      if (focused) {
+        setVisit((count) => count + 1);
       }
-      const offset = peekLiveMidScroll(landingChallengeId);
-      if (offset == null) {
-        return;
-      }
-      restoringMidScrollRef.current = true;
-      firstPaintPendingRef.current = false;
-      markLiveInitialScroll(landingChallengeId);
-      requestAnimationFrame(() => {
-        listRef.current?.scrollToOffset({ offset, animated: false });
-        takeLiveMidScroll(landingChallengeId);
-        restoringMidScrollRef.current = false;
-        notifyFirstPaint();
-      });
     });
     return () => sub.remove();
-  }, [focused, landingChallengeId, notifyFirstPaint]);
+  }, [focused]);
+
+  // Every focus of Live (open, back from Overview / Home / another challenge, back from the
+  // background) is a new visit: forget the last land and any scroll position, then land on newest.
+  // Declared before the landing effect so both run in the same commit, in this order.
+  useEffect(() => {
+    if (!focused) {
+      return;
+    }
+    visitTokenRef.current += 1;
+    beginLiveVisit(landingChallengeId);
+    firstPaintStartedRef.current = false;
+    firstPaintPendingRef.current = false;
+    userLeftEndRef.current = false;
+    draggingRef.current = false;
+    lastOffsetRef.current = 0;
+    setNotAtEnd(false);
+  }, [focused, landingChallengeId, visit]);
 
   useEffect(() => {
     if (!focused) {
@@ -558,9 +573,10 @@ export function LiveThread({
     if (firstPaintStartedRef.current) {
       return;
     }
+    const highlightSpent = Boolean(highlightKey && highlightedOnce.current === highlightKey);
     const landing = liveLandingFocus({
-      commentId: highlightCommentId,
-      postId: highlightPostId,
+      commentId: highlightSpent ? null : highlightCommentId,
+      postId: highlightSpent ? null : highlightPostId,
       sentPostId: peekSentLiveCheckin(landingChallengeId),
     });
     if (landing.commentId || landing.postId) {
@@ -599,13 +615,10 @@ export function LiveThread({
     return () => cancelAnimationFrame(frame);
     // Do not re-run when commentsReady / isLoading flips. That was the bounce after media hydrate.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focused, highlightCommentId, highlightKey, highlightPostId, landingChallengeId, pinToLiveEdge, rows.length === 0]);
+  }, [focused, highlightCommentId, highlightKey, highlightPostId, landingChallengeId, pinToLiveEdge, rows.length === 0, visit]);
 
   const finishFirstPaintPin = useCallback(() => {
     if (emptyList) {
-      return;
-    }
-    if (highlightKey && highlightedOnce.current === highlightKey) {
       return;
     }
     const alreadyLanded = Boolean(landingChallengeId && hasLiveInitialScroll(landingChallengeId));
@@ -614,10 +627,9 @@ export function LiveThread({
       hasRows: !emptyList,
       viewportReady: viewportHRef.current >= LIVE_VIEWPORT_READY_MIN,
       alreadyLanded,
-      restoringMidScroll: restoringMidScrollRef.current,
     });
     if (!canLand) {
-      if (alreadyLanded || restoringMidScrollRef.current) {
+      if (alreadyLanded) {
         firstPaintPendingRef.current = false;
         notifyFirstPaint();
       }
@@ -630,7 +642,20 @@ export function LiveThread({
     pinToLiveEdge(false, 'first-paint');
     markLiveInitialScroll(landingChallengeId);
     notifyFirstPaint();
-  }, [emptyList, focused, highlightKey, landingChallengeId, notifyFirstPaint, pinToLiveEdge]);
+    // Rows below the fold are measured after the first scrollToEnd, so the offset it used was an
+    // estimate. One settle pass right after the land; a finger, wheel, or newer visit cancels it.
+    const token = visitTokenRef.current;
+    if (settleTimerRef.current) {
+      clearTimeout(settleTimerRef.current);
+    }
+    settleTimerRef.current = setTimeout(() => {
+      settleTimerRef.current = null;
+      if (visitTokenRef.current !== token || draggingRef.current || userLeftEndRef.current) {
+        return;
+      }
+      listRef.current?.scrollToEnd({ animated: false });
+    }, 250);
+  }, [emptyList, focused, landingChallengeId, notifyFirstPaint, pinToLiveEdge]);
   finishFirstPaintPinRef.current = finishFirstPaintPin;
 
   const lastNewestIdRef = useRef<string | null>(null);
@@ -787,7 +812,7 @@ export function LiveThread({
         // A half-measured list can report "at the end" while still sitting on Day 13.
         // The one-shot flag locks after the land timeout or an upward scroll, not here.
         bottomAnchorRef.current = rows[rows.length - 1]?.id ?? null;
-        if (!firstPaintPendingRef.current) {
+        if (!firstPaintPendingRef.current && rows.length > 0) {
           markLiveInitialScroll(landingChallengeId);
         }
         const latestAt = rows[rows.length - 1]?.createdAt;
