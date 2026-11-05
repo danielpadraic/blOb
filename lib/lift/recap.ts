@@ -57,7 +57,8 @@ export type LiftRecap = {
 };
 
 /**
- * Everything the session actually moved: weight times reps, summed over the counted working sets.
+ * Everything the session actually moved: weight times reps, summed over the checked-off working sets.
+ * Same rule as `sessionWeightMoved` stored on Complete, so a card and the history total agree.
  *
  * This is the one number that grows when a session goes well but no single lift got heavier — five
  * sets instead of four is real work that a "heaviest weight" line hides completely. Sets with no
@@ -70,8 +71,8 @@ export function sessionVolume(draft: LiftSessionDraft): number {
     if (exercise.kind !== 'strength') {
       continue;
     }
-    for (const set of completedWorkSets(exercise)) {
-      if (set.weight != null && set.reps != null) {
+    for (const set of exercise.sets) {
+      if (set.kind === 'work' && set.completedAt && set.weight != null && set.reps != null) {
         total += set.weight * set.reps;
       }
     }

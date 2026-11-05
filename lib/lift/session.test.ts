@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addExercise,
   addSet,
+  copySession,
   clampRepsInput,
   clampWeightInput,
   countWorkSets,
@@ -555,5 +556,32 @@ describe('read adapter for old sessions', () => {
     });
     expect(draft.muscleKeys).toEqual(['quads']);
     expect(sessionTitle(draft)).toBe('Legs · Sep 10');
+  });
+});
+
+describe('copySession units', () => {
+  function heavyBench(unit: 'lb' | 'kg'): LiftSessionDraft {
+    let draft = withBench();
+    draft = { ...draft, unit };
+    const row = draft.exercises[0];
+    const set = row.sets[0];
+    return updateSet(draft, row.key, set.key, { weight: 225, reps: 5 });
+  }
+
+  it('converts a friend’s pounds to kilos and keeps reps', () => {
+    const copy = copySession(heavyBench('lb'), { numbers: 'keep', unit: 'kg' });
+    expect(copy.unit).toBe('kg');
+    expect(copy.exercises[0].sets[0].weight).toBe(102);
+    expect(copy.exercises[0].sets[0].reps).toBe(5);
+  });
+
+  it('converts kilos to pounds', () => {
+    const copy = copySession(heavyBench('kg'), { numbers: 'keep', unit: 'lb' });
+    expect(copy.exercises[0].sets[0].weight).toBe(496);
+  });
+
+  it('leaves the number alone when the unit matches, and clears it for empty', () => {
+    expect(copySession(heavyBench('lb'), { numbers: 'keep', unit: 'lb' }).exercises[0].sets[0].weight).toBe(225);
+    expect(copySession(heavyBench('lb'), { numbers: 'empty', unit: 'kg' }).exercises[0].sets[0].weight).toBeNull();
   });
 });

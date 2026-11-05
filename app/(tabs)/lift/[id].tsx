@@ -92,6 +92,7 @@ import { THEME } from '@/lib/theme';
  */
 
 const AUTOSAVE_MS = 900;
+const SAVE_RETRY_MS = 3000;
 
 /** Collapse state belongs to this session only, so it survives navigation but not a new session. */
 const collapseMemory = new Map<string, { muscles: string[]; exercises: string[] }>();
@@ -169,7 +170,16 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
   const [error, setError] = useState<string | null>(null);
   const [doneSheet, setDoneSheet] = useState(false);
 
+  /** Edits exist that the server has not confirmed. Cleared only after a save succeeds. */
   const dirty = useRef(false);
+  /** Bumped on every edit, so a save only clears `dirty` when nothing changed while it was in flight. */
+  const editSeq = useRef(0);
+  /** Complete is writing the finished session; autosave must not queue an older snapshot behind it. */
+  const completeInFlight = useRef(false);
+  const [retryTick, setRetryTick] = useState(0);
+  const mountedRef = useRef(true);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveChain = useRef<Promise<unknown>>(Promise.resolve());
   const draftRef = useRef<LiftSessionDraft | null>(null);
   draftRef.current = draft;
 
@@ -205,10 +215,48 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
     };
   }, [liftingChallenges]);
 
+  // Saves run one at a time so an older snapshot can never land after a newer one.
+  const saveRef = useRef(save);
+  saveRef.current = save;
+
+  const scheduleRetry = useCallback(() => {
+    if (retryTimer.current || !mountedRef.current) {
+      return;
+    }
+    retryTimer.current = setTimeout(() => {
+      retryTimer.current = null;
+      if (mountedRef.current) {
+        setRetryTick((tick) => tick + 1);
+      }
+    }, SAVE_RETRY_MS);
+  }, []);
+
+  const writeDraft = useCallback(
+    (next: LiftSessionDraft, completed?: boolean): Promise<void> => {
+      const seq = editSeq.current;
+      const run = saveChain.current
+        .catch(() => undefined)
+        .then(() => saveRef.current.mutateAsync({ draft: next, completed }))
+        .then(() => {
+          if (editSeq.current === seq) {
+            dirty.current = false;
+          }
+        })
+        .catch((caught) => {
+          dirty.current = true;
+          scheduleRetry();
+          throw caught;
+        });
+      saveChain.current = run;
+      return run;
+    },
+    [scheduleRetry],
+  );
+
   const persist = useCallback(
     async (next: LiftSessionDraft, completed?: boolean) => {
       try {
-        await save.mutateAsync({ draft: next, completed });
+        await writeDraft(next, completed);
         setError(null);
         return true;
       } catch (caught) {
@@ -216,35 +264,44 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
         return false;
       }
     },
-    [save],
+    [writeDraft],
   );
 
-  // Debounced autosave.
+  // Debounced autosave. A failed save leaves `dirty` set and bumps `retryTick`, which re-runs this.
   useEffect(() => {
     if (!draft || readOnly || !dirty.current) {
       return undefined;
     }
     const snapshot = draft;
     const handle = setTimeout(() => {
-      dirty.current = false;
+      if (completeInFlight.current) {
+        return;
+      }
       void persist(snapshot);
     }, AUTOSAVE_MS);
     return () => clearTimeout(handle);
-  }, [draft, persist, readOnly]);
+  }, [draft, persist, readOnly, retryTick]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (retryTimer.current) {
+        clearTimeout(retryTimer.current);
+        retryTimer.current = null;
+      }
+    };
+  }, []);
 
   // Anything still pending when they leave gets written on the way out. The mutation is read
   // through a ref because its identity changes on every state tick, and this must run only on
   // unmount — not every time a save starts or finishes.
-  const saveRef = useRef(save);
-  saveRef.current = save;
-
   const flush = useCallback(() => {
     const pending = draftRef.current;
     if (pending && dirty.current && !pending.completedAt) {
-      dirty.current = false;
-      void saveRef.current.mutateAsync({ draft: pending }).catch(() => undefined);
+      void writeDraft(pending).catch(() => undefined);
     }
-  }, []);
+  }, [writeDraft]);
 
   useEffect(() => () => flush(), [flush]);
 
@@ -265,6 +322,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
         return current;
       }
       dirty.current = true;
+      editSeq.current += 1;
       return update(current);
     });
   }
@@ -395,7 +453,6 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
     if (!draft) {
       return;
     }
-    dirty.current = false;
     setFinishing(true);
     const ok = await persist(draft, false);
     setFinishing(false);
@@ -433,7 +490,6 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
       revealLeftover();
       return;
     }
-    dirty.current = false;
     setCompleting(true);
     const done: LiftSessionDraft = {
       ...draft,
@@ -441,7 +497,9 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
       status: 'completed',
       weightMoved: sessionWeightMoved(draft),
     };
+    completeInFlight.current = true;
     const ok = await persist(done, true);
+    completeInFlight.current = false;
     setCompleting(false);
     if (!ok) {
       return;
@@ -593,7 +651,6 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
     // than opening a second one.
     const bumped = bumpSessionInPlace(draft, plan);
     setDraft(bumped);
-    dirty.current = false;
     await persist(bumped);
   }
 
@@ -701,7 +758,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
 
   const workSets = countWorkSets(draft);
   const doneSets = draft.exercises.reduce(
-    (total, row) => total + row.sets.filter((set) => set.completedAt).length,
+    (total, row) => total + row.sets.filter((set) => set.kind === 'work' && set.completedAt).length,
     0,
   );
 

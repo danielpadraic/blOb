@@ -5,6 +5,7 @@ import {
   splitDuration,
 } from '@/lib/lift/duration';
 import { newId, newLocalKey } from '@/lib/lift/ids';
+import { convertWeight } from '@/utils/units';
 import {
   isLegsMuscle,
   isMuscleKey,
@@ -1068,6 +1069,17 @@ export function copySession(
   options?: { numbers?: 'keep' | 'empty'; unit?: WeightUnit },
 ): LiftSessionDraft {
   const keep = options?.numbers !== 'empty';
+  const targetUnit = options?.unit ?? source.unit;
+  // A 225 lb bar is not 225 kg. Loads follow the viewer's unit, to the nearest half plate.
+  const carryWeight = (weight: number | null): number | null => {
+    if (!keep || weight == null) {
+      return null;
+    }
+    if (source.unit === targetUnit) {
+      return weight;
+    }
+    return Math.round(convertWeight(weight, source.unit, targetUnit) * 2) / 2;
+  };
   return {
     id: newId(),
     title: null,
@@ -1079,7 +1091,7 @@ export function copySession(
     weightMoved: 0,
     healthkitWorkoutUuid: null,
     muscleKeys: source.muscleKeys,
-    unit: options?.unit ?? source.unit,
+    unit: targetUnit,
     sourceSessionId: source.id,
     // Carried locally so the copy can say who it came from straight away. The save RPC works this
     // out again from the source session, so a client cannot claim credit from someone it never saw.
@@ -1116,7 +1128,7 @@ export function copySession(
       sets: row.sets.map((set) => ({
         key: newLocalKey('set'),
         kind: set.kind,
-        weight: keep ? set.weight : null,
+        weight: carryWeight(set.weight),
         reps: keep ? set.reps : null,
         completedAt: null,
       })),

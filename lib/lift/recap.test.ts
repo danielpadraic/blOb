@@ -7,6 +7,7 @@ import {
   recapFallbackText,
   sessionVolume,
 } from '@/lib/lift/recap';
+import { sessionWeightMoved } from '@/lib/lift/complete';
 import { addExercise, addTimedRow, newSessionDraft, refreshSessionMeta } from '@/lib/lift/session';
 import type { LiftExerciseDraft, LiftSessionDraft, LiftSetDraft } from '@/lib/lift/types';
 
@@ -222,6 +223,20 @@ describe('session volume', () => {
       })),
     };
     expect(sessionVolume(draft)).toBe(2430);
+  });
+
+  // Same rule as the total stored on Complete: an unchecked working set is leftover work.
+  it('does not count working sets that were never checked off', () => {
+    const base = volumeSession();
+    const draft: LiftSessionDraft = {
+      ...base,
+      exercises: base.exercises.map((row) => ({
+        ...row,
+        sets: row.sets.map((set) => ({ ...set, completedAt: null })),
+      })),
+    };
+    expect(sessionVolume(draft)).toBe(0);
+    expect(sessionVolume(volumeSession())).toBe(sessionWeightMoved(volumeSession()));
   });
 
   it('reads as a headline on the card, with separators', () => {
