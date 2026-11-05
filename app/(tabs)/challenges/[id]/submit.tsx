@@ -2409,9 +2409,6 @@ function SubmitWorkoutInner() {
     if (healthAttachLock.current || !id || busy) {
       return;
     }
-    healthAttachLock.current = true;
-    recapUriRef.current = null;
-    setError(null);
     const target =
       proof ??
       proofSteps.find((item) => item.method === 'distance' || item.method === 'hr') ??
@@ -2419,6 +2416,9 @@ function SubmitWorkoutInner() {
     if (!target || !uid) {
       return;
     }
+    healthAttachLock.current = true;
+    recapUriRef.current = null;
+    setError(null);
     try {
       const provider = getHealthProvider();
       const enrichedHr = provider?.enrichHeartRate
