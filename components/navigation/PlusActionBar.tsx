@@ -8,6 +8,7 @@ import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import type { LoggableChallenge } from '@/hooks/useLoggableChallenge';
+import { hideOfficialCoinSibling } from '@/lib/officialCoin';
 import { asLoggableList } from '@/lib/loggable';
 import { copy } from '@/lib/copy';
 import { TAB_BAR_GUTTER, TAB_BAR_HEIGHT, THEME, themeShadow } from '@/lib/theme';
@@ -49,7 +50,7 @@ export function PlusActionBar({
   const tourLocked = Boolean(useTourOptional()?.active);
   const [inner, setInner] = useState<PlusPanel>('root');
   const step = panel ?? inner;
-  const loggables = asLoggableList(loggable);
+  const loggables = hideOfficialCoinSibling(asLoggableList(loggable));
   const only = loggables.length === 1 ? loggables[0] : null;
   const tabClear = TAB_BAR_HEIGHT + Math.max(insets.bottom, TAB_BAR_GUTTER) + 6;
   const barWidth = Math.min(width - 24, 430);

@@ -272,14 +272,17 @@ export type OfficialCoinDay = {
 export function useOfficialCoinDays(
   challenge?: OfficialCoinChallenge | null,
   enabled = true,
+  /** The Live host. The monthly board links its days to the weekly host's post. */
+  hostChallengeId?: string | null,
 ) {
   const challengeId = String(challenge?.id ?? '').trim();
+  const postHostId = String(hostChallengeId ?? '').trim() || challengeId;
   const startKey = normalizePeriodKey(challenge?.starts_at ?? '');
   const endKey = normalizePeriodKey(challenge?.ends_at ?? '');
   const on = enabled && Boolean(challengeId) && isOfficialCoinChallenge(challenge);
 
   return useQuery({
-    queryKey: [OFFICIAL_COIN_DAYS_KEY, challengeId, startKey, endKey],
+    queryKey: [OFFICIAL_COIN_DAYS_KEY, challengeId, startKey, endKey, postHostId],
     enabled: on,
     queryFn: async (): Promise<Map<string, OfficialCoinDay[]>> => {
       const byUser = new Map<string, OfficialCoinDay[]>();
@@ -318,15 +321,49 @@ export function useOfficialCoinDays(
         return byUser;
       }
 
+      // The Live post lives on the host room. A scoring-only room maps each day to the host's
+      // check-in for the same person and Chicago day.
+      const hostCheckinByDay = new Map<string, string>();
+      if (postHostId !== challengeId) {
+        const hostCheckins = await supabase
+          .from('challenge_checkins')
+          .select('id, user_id, period_key')
+          .eq('challenge_id', postHostId)
+          .in('user_id', [...new Set(live.map((row) => String(row.user_id)))])
+          .gte('period_key', startKey)
+          .lt('period_key', endKey);
+        if (!hostCheckins.error) {
+          for (const row of (hostCheckins.data ?? []) as {
+            id: string;
+            user_id: string;
+            period_key: string;
+          }[]) {
+            hostCheckinByDay.set(
+              `${row.user_id}:${normalizePeriodKey(row.period_key)}`,
+              String(row.id),
+            );
+          }
+        }
+      }
+      const lookupIds = [
+        ...new Set([...live.map((row) => String(row.id)), ...hostCheckinByDay.values()]),
+      ];
       const postByCheckin = new Map<string, string>();
       const posts = await supabase
         .from('posts')
-        .select('id, checkin_id')
-        .in('checkin_id', live.map((row) => row.id))
+        .select('id, checkin_id, challenge_id')
+        .in('checkin_id', lookupIds)
         .is('deleted_at', null);
       if (!posts.error) {
-        for (const row of (posts.data ?? []) as { id: string; checkin_id: string | null }[]) {
+        for (const row of (posts.data ?? []) as {
+          id: string;
+          checkin_id: string | null;
+          challenge_id?: string | null;
+        }[]) {
           const key = String(row.checkin_id ?? '');
+          if (row.challenge_id && String(row.challenge_id) !== postHostId) {
+            continue;
+          }
           if (key && !postByCheckin.has(key)) {
             postByCheckin.set(key, String(row.id));
           }
@@ -341,7 +378,12 @@ export function useOfficialCoinDays(
           periodKey: normalizePeriodKey(row.period_key),
           userId,
           checkinId: String(row.id),
-          postId: postByCheckin.get(String(row.id)) ?? null,
+          postId:
+            postByCheckin.get(
+              hostCheckinByDay.get(`${userId}:${normalizePeriodKey(row.period_key)}`) ?? '',
+            ) ??
+            postByCheckin.get(String(row.id)) ??
+            null,
         });
         byUser.set(userId, list);
       }

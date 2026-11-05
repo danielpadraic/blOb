@@ -11,6 +11,7 @@ import { KeyboardField, useKeyboardHeight } from '@/components/ui/KeyboardFormSh
 import { useAuth } from '@/hooks/useAuth';
 import { useMyCircles } from '@/hooks/useCircles';
 import type { LoggableChallenge } from '@/hooks/useLoggableChallenge';
+import { hideOfficialCoinSibling } from '@/lib/officialCoin';
 import { useFriends } from '@/hooks/useSocial';
 import { checkinHidesHomeShare } from '@/lib/checkinShare';
 import { buildCounterCard } from '@/lib/counter/card';
@@ -49,7 +50,8 @@ const DESTINATIONS: { id: CounterShareDestination; label: string; glyph: (typeof
   { id: 'message', label: 'Message', glyph: GLYPH.reply },
 ];
 
-export function CounterShareSheet({ visible, draft, challenges, busy, error, onClose, onShare }: Props) {
+export function CounterShareSheet({ visible, draft, challenges: allChallenges, busy, error, onClose, onShare }: Props) {
+  const challenges = useMemo(() => hideOfficialCoinSibling(allChallenges), [allChallenges]);
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const circles = useMyCircles().data ?? [];

@@ -25,7 +25,7 @@ export const TOUR_STEPS: TourStep[] = [
     target: null,
     placement: 'center-low',
     title: 'Home',
-    body: 'Home is the feed. Official Weekly and Monthly Fitness sit on the Live rail first. Quiet rooms are behind See More.',
+    body: 'Home is the feed. Official Fitness sits on the Live rail first. Quiet rooms are behind See More.',
   },
   {
     id: 'officialFitness',

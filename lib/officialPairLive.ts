@@ -13,8 +13,9 @@ export function officialPairSiblingRoom(
   return null;
 }
 
-export function officialPairLiveFailure(room: OfficialPairRoom): string {
-  return `Couldn’t post to ${room}`;
+/** One Official Live, so the failure never names a room. */
+export function officialPairLiveFailure(_room?: OfficialPairRoom): string {
+  return 'Couldn’t post to Official Fitness Live';
 }
 
 export function officialPairLiveMiss(value: unknown): OfficialPairRoom | null {

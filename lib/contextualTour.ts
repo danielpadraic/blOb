@@ -208,7 +208,7 @@ export const HOME_LIVE_PILLS_STEPS: ContextualTourStep[] = [
     target: 'tour-live-pills',
     placement: 'below',
     title: 'Live rail',
-    body: 'Official Weekly and Monthly Fitness sit here first. Quiet rooms are behind See More.',
+    body: 'Official Fitness sits here first. Quiet rooms are behind See More.',
   },
 ];
 

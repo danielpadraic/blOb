@@ -14,6 +14,7 @@ import { honorSlideForPost } from '@/lib/checkin/honorCard';
 import { isWorkoutCardSlide, workoutSlideForPost } from '@/lib/health/postWorkoutCard';
 import { MentionText } from '@/components/feed/MentionText';
 import { InChallengeChip, OriginChip } from '@/components/feed/OriginChip';
+import { normalizeOfficialPairTitle } from '@/lib/officialCoin';
 import { QuoteEmbed } from '@/components/feed/QuoteEmbed';
 import { ReactionBar } from '@/components/feed/ReactionBar';
 import { ReactionStack } from '@/components/feed/ReactionStack';
@@ -192,9 +193,13 @@ function PostCardInner({
   const pairedIds = (post.checkin_stats?.paired_challenge_ids ?? [])
     .map((id) => String(id ?? '').trim())
     .filter((id) => id && id !== post.challenge_id);
-  const pairedTitles = (post.checkin_stats?.paired_titles ?? [])
-    .map((title) => String(title ?? '').trim())
-    .filter(Boolean);
+  const pairedTitles = [
+    ...new Set(
+      (post.checkin_stats?.paired_titles ?? [])
+        .map((title) => normalizeOfficialPairTitle(title))
+        .filter(Boolean),
+    ),
+  ];
   const extraChallengeId = pairedIds[0] ?? null;
   const preview = useChallengeFeedPreview(tagged ? post.challenge_id : undefined);
   const extraPreview = useChallengeFeedPreview(extraChallengeId ?? undefined);

@@ -4,6 +4,13 @@ import { normalizeChallenge } from '@/lib/challenges';
 import { displayChallengePot } from '@/lib/challengePot';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import {
+  hideOfficialCoinSibling,
+  isOfficialCoinMonthly,
+  normalizeOfficialPairTitle,
+  OFFICIAL_BOARD_TABS,
+  OFFICIAL_FITNESS_TITLE,
+  officialHostRedirectHref,
+  withoutOfficialCoinMonthly,
   canRejoinOfficialCoin,
   formatOfficialCoinAmount,
   isOfficialCoinChallenge,
@@ -370,18 +377,18 @@ describe('officialCoinGuarantee', () => {
 
 describe('public titles', () => {
   it('names the two rooms by product, not by official_kind', () => {
-    expect(OFFICIAL_COIN_TITLE.coin_weekly).toBe('Weekly Fitness Challenge');
-    expect(OFFICIAL_COIN_TITLE.coin_monthly).toBe('Monthly Fitness Challenge');
-    expect(officialCoinDisplayTitle(WEEKLY)).toBe('Weekly Fitness Challenge');
-    expect(officialCoinDisplayTitle(MONTHLY)).toBe('Monthly Fitness Challenge');
+    expect(OFFICIAL_COIN_TITLE.coin_weekly).toBe('Official Fitness Challenge');
+    expect(OFFICIAL_COIN_TITLE.coin_monthly).toBe('Official Fitness Challenge');
+    expect(officialCoinDisplayTitle(WEEKLY)).toBe('Official Fitness Challenge');
+    expect(officialCoinDisplayTitle(MONTHLY)).toBe('Official Fitness Challenge');
   });
 
   it('rewrites a stale stored title even when official_kind was not selected', () => {
     expect(officialCoinDisplayTitle({ title: 'Official Weekly Coin' })).toBe(
-      'Weekly Fitness Challenge',
+      'Official Fitness Challenge',
     );
     expect(officialCoinDisplayTitle({ title: '  official monthly coin ' })).toBe(
-      'Monthly Fitness Challenge',
+      'Official Fitness Challenge',
     );
   });
 
@@ -412,10 +419,10 @@ describe('public titles', () => {
 describe('challengeDisplayTitle', () => {
   it('prints the public name for the house rooms', () => {
     expect(challengeDisplayTitle({ ...WEEKLY, title: 'Official Weekly Coin' })).toBe(
-      'Weekly Fitness Challenge',
+      'Official Fitness Challenge',
     );
     expect(challengeDisplayTitle({ ...MONTHLY, title: 'Official Monthly Coin' })).toBe(
-      'Monthly Fitness Challenge',
+      'Official Fitness Challenge',
     );
   });
 
@@ -477,13 +484,13 @@ describe('canRejoinOfficialCoin', () => {
 describe('OFFICIAL_COIN_REJOIN_PILL', () => {
   it('uses the locked slot-0 copy', () => {
     expect(OFFICIAL_COIN_REJOIN_PILL.title).toBe('Rejoin Official');
-    expect(OFFICIAL_COIN_REJOIN_PILL.subline).toBe('Weekly + Monthly · remaining days');
+    expect(OFFICIAL_COIN_REJOIN_PILL.subline).toBe('Week + Month · remaining days');
     expect(OFFICIAL_COIN_REJOIN_PILL.error).toBe('Couldn’t rejoin. Try again.');
   });
 
   it('leaves the Leave confirm exactly as shipped', () => {
     expect(OFFICIAL_COIN_LEAVE_CONFIRM.body).toBe(
-      'You’ll leave the Weekly and Monthly Official rooms. Home Live from those rooms goes away.',
+      'You’ll leave the Official Fitness Challenge, including the week and month boards. Its Live goes away from Home.',
     );
   });
 });
@@ -529,5 +536,39 @@ describe('picker order', () => {
       'weekly-id',
       'monthly-id',
     ]);
+  });
+});
+
+describe('one Official Fitness room', () => {
+  it('hides the monthly sibling when the weekly host is listed', () => {
+    expect(hideOfficialCoinSibling([WEEKLY, MONTHLY, { id: 'x', title: 'Other' }]).map((row) => row.id)).toEqual([
+      WEEKLY.id,
+      'x',
+    ]);
+    expect(hideOfficialCoinSibling([MONTHLY]).map((row) => row.id)).toEqual([MONTHLY.id]);
+    expect(withoutOfficialCoinMonthly([WEEKLY, MONTHLY]).map((row) => row.id)).toEqual([WEEKLY.id]);
+    expect(isOfficialCoinMonthly(MONTHLY)).toBe(true);
+    expect(isOfficialCoinMonthly(WEEKLY)).toBe(false);
+  });
+
+  it('names the tabs and the room once', () => {
+    expect(OFFICIAL_FITNESS_TITLE).toBe('Official Fitness Challenge');
+    expect(OFFICIAL_BOARD_TABS).toEqual({ week: 'This Week', month: 'This Month' });
+  });
+
+  it('prints one title for an old two-title post', () => {
+    expect(normalizeOfficialPairTitle('Weekly Fitness Challenge')).toBe('Official Fitness Challenge');
+    expect(normalizeOfficialPairTitle('Monthly Fitness Challenge')).toBe('Official Fitness Challenge');
+    expect(normalizeOfficialPairTitle('30-Day Consistency')).toBe('30-Day Consistency');
+  });
+
+  it('sends the monthly id to the weekly host and drops deep links the host cannot hold', () => {
+    expect(officialHostRedirectHref('host', { id: 'month', tab: 'board' })).toBe('/challenges/host?tab=board');
+    expect(officialHostRedirectHref('host', { id: 'month', postId: 'p1', commentId: 'c1', tab: 'overview' })).toBe(
+      '/challenges/host?tab=feed',
+    );
+    expect(officialHostRedirectHref('host', { id: 'month', from: '/feed', notice: 'Hi there' })).toBe(
+      '/challenges/host?from=%2Ffeed&notice=Hi+there',
+    );
   });
 });

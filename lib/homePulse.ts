@@ -16,7 +16,7 @@ import { peekLiveLastRead } from '@/lib/liveLastRead';
 import { liveCheckinLabel } from '@/lib/liveThread';
 import { formatRelative } from '@/utils/format';
 import { isEndedLobbyStatus } from '@/lib/lobbyChallenge';
-import { officialCoinKind, type OfficialCoinKind } from '@/lib/officialCoin';
+import { hideOfficialCoinSibling, officialCoinKind, type OfficialCoinKind } from '@/lib/officialCoin';
 import { challengeProgressLine } from '@/lib/challengeProgress';
 import { namedChallengeHref } from '@/lib/routes';
 import { fetchPublicProfilesByIds, personDisplayName } from '@/lib/social';
@@ -62,7 +62,7 @@ export type PulsePill = {
   lastAt: string | null;
   isCallout?: boolean;
   watching?: boolean;
-  /** Standing house rooms lead the rail, weekly then monthly. */
+  /** The Official Fitness card leads the rail. The monthly room is scoring only and never gets a pill. */
   officialCoinKind?: OfficialCoinKind | null;
   /** Card skin: dark house field vs light peer card. */
   isOfficial?: boolean;
@@ -368,7 +368,7 @@ export function buildPulsePills(input: {
   relative?: (at: string) => string;
   now?: number;
 }): PulsePill[] {
-  const challenges = selectPulseChallenges(input.challenges, input.viewerId);
+  const challenges = hideOfficialCoinSibling(selectPulseChallenges(input.challenges, input.viewerId));
   const newestFirst = [...input.posts]
     .filter((post) => Boolean(post?.challenge_id) && !post.deleted_at)
     .sort((a, b) => {
@@ -494,13 +494,13 @@ export async function fetchHomePulsePills(userId?: string): Promise<PulsePill[]>
       fetchCompetingChallenges(userId),
       fetchHostingChallenges(userId),
     ]);
-    challenges = selectPulseChallenges(
+    challenges = hideOfficialCoinSibling(selectPulseChallenges(
       [
         ...joined.map((row) => ({ ...row, joined: true, hosting: String(row.created_by ?? '') === userId })),
         ...hosted.map((row) => ({ ...row, hosting: true, joined: false })),
       ],
       userId,
-    );
+    ));
   } catch {
     return [];
   }

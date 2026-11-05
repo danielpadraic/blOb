@@ -480,3 +480,17 @@ describe('pulseChallengeHref', () => {
     expect(href).not.toContain('/submit');
   });
 });
+
+describe('Official Fitness is one pill', () => {
+  it('drops the monthly sibling and titles the weekly host once', () => {
+    const pills = buildPulsePills({
+      challenges: [
+        { id: 'weekly', status: 'live', joined: true, official_kind: 'coin_weekly', is_official: true },
+        { id: 'monthly', status: 'live', joined: true, official_kind: 'coin_monthly', is_official: true },
+      ],
+      posts: [],
+    });
+    expect(pills.map((pill) => pill.id)).toEqual(['weekly']);
+    expect(pills[0].title).toBe('Official Fitness Challenge');
+  });
+});

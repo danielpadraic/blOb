@@ -14,7 +14,7 @@ describe('official pair live', () => {
     expect(officialPairLiveMiss('Monthly')).toBe('Monthly');
     expect(officialPairLiveMiss('Weekly')).toBe('Weekly');
     expect(officialPairLiveMiss(null)).toBeNull();
-    expect(officialPairLiveFailure('Monthly')).toBe('Couldn’t post to Monthly');
-    expect(officialPairLiveFailure('Weekly')).toBe('Couldn’t post to Weekly');
+    expect(officialPairLiveFailure('Monthly')).toBe('Couldn’t post to Official Fitness Live');
+    expect(officialPairLiveFailure('Weekly')).toBe('Couldn’t post to Official Fitness Live');
   });
 });

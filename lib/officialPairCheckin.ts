@@ -298,8 +298,8 @@ export {
 } from '@/lib/officialPairLive';
 
 /**
- * Ask the server to write this Chicago day onto both Official Lives.
- * One call is one attempt. The screen retries once when a room is still missing.
+ * Ask the server to stamp this Chicago day on both Official rooms and keep the one Live post on
+ * the weekly host. One call is one attempt. The screen retries once when the host post is missing.
  */
 export async function ensureOfficialPairLive(checkinId: string): Promise<{
   missing: OfficialPairRoom | null;
@@ -321,7 +321,7 @@ export async function ensureOfficialPairLive(checkinId: string): Promise<{
 }
 
 /**
- * Both Official Lives show the same slides, on the post that already exists for that check-in.
+ * The Official Live post shows the slides for that check-in.
  * Returns the post ids so OCR can stamp chips on each.
  */
 export async function alignOfficialPairPosts(input: {

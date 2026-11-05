@@ -1,6 +1,7 @@
 import { searchPeople } from '@/lib/social';
 import { resolvePostsSchema } from '@/lib/postsSelect';
 import { corporateIdsFromLookup } from '@/lib/privacyMode';
+import { officialCoinDisplayTitle, withoutOfficialCoinMonthly } from '@/lib/officialCoin';
 import { supabase } from '@/lib/supabase';
 import type { Challenge, Post, PublicProfile } from '@/lib/types';
 import { getErrorMessage } from '@/utils/errors';
@@ -65,7 +66,7 @@ export async function searchGlobal(query: string, userId: string): Promise<Globa
 async function searchChallenges(like: string): Promise<SearchChallenge[]> {
   const { data, error } = await supabase
     .from('challenges')
-    .select('id, title, is_official, visibility, status')
+    .select('id, title, is_official, visibility, status, official_kind')
     .ilike('title', like)
     .or('visibility.eq.public,visibility.eq.friends,visibility.is.null,is_official.eq.true')
     .neq('privacy_mode', 'private_corporate')
@@ -74,7 +75,11 @@ async function searchChallenges(like: string): Promise<SearchChallenge[]> {
     console.log('[blob:search] challenges', getErrorMessage(error));
     return [];
   }
-  return (data ?? []) as SearchChallenge[];
+  const rows = (data ?? []) as Array<SearchChallenge & { official_kind?: string | null }>;
+  return withoutOfficialCoinMonthly(rows).map(({ official_kind, ...row }) => ({
+    ...row,
+    title: officialCoinDisplayTitle({ official_kind, title: row.title }) || row.title,
+  }));
 }
 
 async function searchPosts(like: string): Promise<Post[]> {

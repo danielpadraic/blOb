@@ -72,6 +72,7 @@ import { isOfficialAccount } from '@/lib/official';
 import { THEME, themeShadow } from '@/lib/theme';
 import { AppText } from '@/components/ui/AppText';
 import type { ChallengeWithStats } from '@/lib/types';
+import { withoutOfficialCoinMonthly } from '@/lib/officialCoin';
 import { useQuery } from '@tanstack/react-query';
 
 const LOBBY_TABS = [
@@ -214,6 +215,7 @@ export default function ChallengesScreen() {
 
   const officialAll = useMemo(
     () =>
+      withoutOfficialCoinMonthly(
       houseMode
         ? uniqueById(houseCatalog.filter((row) => isOfficialLobbyRow(row) && !isLobbyEndedChallenge(row, nowMs)))
         : uniqueById([
@@ -221,20 +223,24 @@ export default function ChallengesScreen() {
             ...(activeQuery.data ?? []).filter(isOfficialLobbyRow),
             ...(hostingQuery.data ?? []).filter(isOfficialLobbyRow),
           ]).filter((row) => !isLobbyEndedChallenge(row, nowMs)),
+      ),
     [activeQuery.data, houseCatalog, houseMode, hostingQuery.data, nowMs, officialQuery.data],
   );
 
   const activeAll = useMemo(
     () =>
+      withoutOfficialCoinMonthly(
       houseMode
         ? uniqueById(houseCatalog.filter((row) => !isOfficialLobbyRow(row) && !isLobbyEndedChallenge(row, nowMs)))
         : (activeQuery.data ?? []).filter((row) => !isLobbyEndedChallenge(row, nowMs)),
+      ),
     [activeQuery.data, houseCatalog, houseMode, nowMs],
   );
   const activeIds = useMemo(() => new Set(activeAll.map((row) => row.id)), [activeAll]);
 
   const hostingAll = useMemo(
     () =>
+      withoutOfficialCoinMonthly(
       houseMode
         ? uniqueById(
             houseCatalog.filter(
@@ -243,15 +249,18 @@ export default function ChallengesScreen() {
             ),
           )
         : (hostingQuery.data ?? []).filter((row) => !isLobbyEndedChallenge(row, nowMs)),
+      ),
     [houseCatalog, houseMode, hostingQuery.data, nowMs, user?.id],
   );
   const hostingIds = useMemo(() => new Set(hostingAll.map((row) => row.id)), [hostingAll]);
 
   const endedAll = useMemo(
     () =>
+      withoutOfficialCoinMonthly(
       houseMode
         ? uniqueById(houseCatalog.filter((row) => isLobbyEndedChallenge(row, nowMs)))
         : (endedQuery.data ?? []).filter((row) => isLobbyEndedChallenge(row, nowMs)),
+      ),
     [endedQuery.data, houseCatalog, houseMode, nowMs],
   );
 

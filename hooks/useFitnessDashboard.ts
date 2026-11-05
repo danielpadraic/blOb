@@ -42,7 +42,12 @@ import { getHealthProvider } from '@/services/health';
 import type { HealthWorkout } from '@/services/health/types';
 import { boardQuantityProgress } from '@/lib/board/quantity';
 import { usesQuantityScoring } from '@/lib/challengeExperience';
-import { isOfficialCoinChallenge, OFFICIAL_COIN_TZ } from '@/lib/officialCoin';
+import {
+  isOfficialCoinChallenge,
+  OFFICIAL_BOARD_TABS,
+  OFFICIAL_COIN_TZ,
+  OFFICIAL_FITNESS_TITLE,
+} from '@/lib/officialCoin';
 import { officialBoardDayComplete } from '@/lib/checkin/officialDay';
 import { parseChallengeProofs } from '@/lib/challengeProofs';
 import { challengeHasDailyCheckinDuty } from '@/lib/missDuty';
@@ -633,7 +638,7 @@ export function useFitnessDashboard(range: DashboardRange, custom: CustomRange |
   if (coin.status.weekly?.joined && coin.status.weekly.daysLogged > 0) {
     challenges.push({
       id: coin.status.weekly.challenge.id,
-      title: 'Weekly Fitness Challenge',
+      title: `${OFFICIAL_FITNESS_TITLE} · ${OFFICIAL_BOARD_TABS.week}`,
       line: `${coin.status.weekly.daysLogged} of ${coin.status.weekly.allowedDays}`,
       progress: coin.status.weekly.allowedDays
         ? coin.status.weekly.daysLogged / coin.status.weekly.allowedDays
@@ -643,7 +648,7 @@ export function useFitnessDashboard(range: DashboardRange, custom: CustomRange |
   if (coin.status.monthly?.joined && coin.status.monthly.daysLogged > 0) {
     challenges.push({
       id: coin.status.monthly.challenge.id,
-      title: 'Monthly Fitness Challenge',
+      title: `${OFFICIAL_FITNESS_TITLE} · ${OFFICIAL_BOARD_TABS.month}`,
       line: `${coin.status.monthly.daysLogged} of ${coin.status.monthly.allowedDays}`,
       progress: coin.status.monthly.allowedDays
         ? coin.status.monthly.daysLogged / coin.status.monthly.allowedDays

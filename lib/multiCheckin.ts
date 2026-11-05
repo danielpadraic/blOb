@@ -198,7 +198,7 @@ export function remainingProofLabelsOf(
 export const OFFICIAL_PAIR_PROGRESS =
   'Pre-workout in. Still need post-workout selfie and 30-min HR.';
 export const OFFICIAL_PAIR_STAMPED = 'You’re in for today.';
-export const OFFICIAL_PAIR_IDLE = 'Fills the Weekly and Monthly rooms in one go.';
+export const OFFICIAL_PAIR_IDLE = 'Counts for the week and the month.';
 
 export type OfficialRoomSlots = {
   remaining: readonly string[];

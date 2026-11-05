@@ -17,7 +17,7 @@ import { useMyProfile } from '@/hooks/useProfile';
 import { HOME_LIVE_PILLS_STEPS } from '@/lib/contextualTour';
 import { wasHomeTourCompleted } from '@/lib/homeTour';
 import { copy } from '@/lib/copy';
-import { OFFICIAL_COIN_REJOIN_PILL } from '@/lib/officialCoin';
+import { OFFICIAL_COIN_REJOIN_PILL, OFFICIAL_FITNESS_TITLE } from '@/lib/officialCoin';
 import {
   partitionPulsePills,
   pulseChallengeHref,
@@ -450,10 +450,13 @@ export function PulseRail() {
     }
     const seen = new Set(live.map((pill) => pill.id));
     const optimistic: PulsePill[] = coin.status.rooms
-      .filter((room) => room.challenge.id && !seen.has(String(room.challenge.id)))
+      .filter(
+        (room) =>
+          room.kind === 'coin_weekly' && room.challenge.id && !seen.has(String(room.challenge.id)),
+      )
       .map((room) => ({
         id: String(room.challenge.id),
-        title: String(room.challenge.title ?? ''),
+        title: OFFICIAL_FITNESS_TITLE,
         snippet: copy('pulse.noChatter'),
         faces: [],
         lastAt: null,

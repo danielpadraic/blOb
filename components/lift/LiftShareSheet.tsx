@@ -16,6 +16,7 @@ import { useKeyboardHeight } from '@/components/ui/KeyboardFormShell';
 import { useAuth } from '@/hooks/useAuth';
 import { useMyCircles } from '@/hooks/useCircles';
 import type { LoggableChallenge } from '@/hooks/useLoggableChallenge';
+import { hideOfficialCoinSibling } from '@/lib/officialCoin';
 import {
   useBlockedPeerIds,
   useFriends,
@@ -96,7 +97,7 @@ type SharePerson = {
 export function LiftShareSheet({
   visible,
   draft,
-  challenges,
+  challenges: allChallenges,
   lockedChallengeIds,
   busy,
   error,
@@ -106,6 +107,7 @@ export function LiftShareSheet({
   onComposeHome,
   onSkip,
 }: LiftShareSheetProps) {
+  const challenges = useMemo(() => hideOfficialCoinSibling(allChallenges), [allChallenges]);
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const friends = useFriends(user?.id);

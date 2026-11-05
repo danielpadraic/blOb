@@ -2,8 +2,9 @@
  * Official Coin — the two standing house rooms owned by @blob.
  * Internal kinds are coin_weekly / coin_monthly; people read the titles below.
  *
- *   coin_weekly   "Weekly Fitness Challenge"   Mon 00:00 -> Sun end, America/Chicago, 100 coins
- *   coin_monthly  "Monthly Fitness Challenge"  1st 00:00 -> last day end, America/Chicago, 1,000 coins
+ *   coin_weekly   host room, scores the Chicago week, 100 coins
+ *   coin_monthly  scoring-only room, scores the Chicago month, 1,000 coins
+ * People see ONE room: "Official Fitness Challenge" (weekly host) with two Board tabs.
  *
  * The same challenge row rolls to the next window, so nothing here may assume a
  * fresh id per week. Scoring is count-days, never knockout: no Remaining, no
@@ -24,19 +25,30 @@ export const OFFICIAL_COIN_GUARANTEE: Record<OfficialCoinKind, number> = {
   coin_monthly: 1000,
 };
 
+/** The one name people read for the free Official Fitness pair. */
+export const OFFICIAL_FITNESS_TITLE = 'Official Fitness Challenge';
+
+/** Board tab labels inside the Official Fitness lobby. */
+export const OFFICIAL_BOARD_TABS = {
+  week: 'This Week',
+  month: 'This Month',
+} as const;
+
 /**
- * What people read. `official_kind` and the SQL keep the old internal words —
- * these two strings are the only names a user ever sees.
+ * What people read. `official_kind` and the SQL keep the old internal words.
+ * Both rooms share one public title; the weekly room hosts the lobby and Live.
  */
 export const OFFICIAL_COIN_TITLE: Record<OfficialCoinKind, string> = {
-  coin_weekly: 'Weekly Fitness Challenge',
-  coin_monthly: 'Monthly Fitness Challenge',
+  coin_weekly: OFFICIAL_FITNESS_TITLE,
+  coin_monthly: OFFICIAL_FITNESS_TITLE,
 };
 
 /** Internal names that may still be sitting in `challenges.title`. */
 const LEGACY_OFFICIAL_COIN_TITLES: Record<string, OfficialCoinKind> = {
   'official weekly coin': 'coin_weekly',
   'official monthly coin': 'coin_monthly',
+  'weekly fitness challenge': 'coin_weekly',
+  'monthly fitness challenge': 'coin_monthly',
 };
 
 /**
@@ -134,6 +146,56 @@ export function isOfficialCoinBoardGhost(input: {
     return true;
   }
   return name.startsWith('test rookie') || name.startsWith('test veteran');
+}
+
+/** The scoring-only room. Hidden from Home, Search, and the Check In picker. */
+export function isOfficialCoinMonthly(challenge?: OfficialCoinChallenge | null): boolean {
+  return officialCoinKind(challenge) === 'coin_monthly';
+}
+
+/** Drop the monthly sibling when the weekly host is present in the same list. */
+export function hideOfficialCoinSibling<T extends OfficialCoinChallenge>(rows: readonly T[]): T[] {
+  const hasHost = rows.some((row) => officialCoinKind(row) === 'coin_weekly');
+  return rows.filter((row) => !(hasHost && isOfficialCoinMonthly(row)));
+}
+
+/** Always drop the monthly row, even without the host in the list (Search, pickers). */
+export function withoutOfficialCoinMonthly<T extends OfficialCoinChallenge>(rows: readonly T[]): T[] {
+  return rows.filter((row) => !isOfficialCoinMonthly(row));
+}
+
+/**
+ * Opening the monthly room lands on the weekly host. The host's Live cannot hold a monthly post or
+ * comment, so those deep-link ids are dropped and the Live tab opens instead.
+ */
+export function officialHostRedirectHref(
+  hostId: string,
+  params: Record<string, string | string[] | undefined>,
+): string {
+  const qs = new URLSearchParams();
+  const first = (value: string | string[] | undefined) =>
+    String((Array.isArray(value) ? value[0] : value) ?? '').trim();
+  for (const key of ['returnTo', 'logged', 'funded', 'receipt', 'from', 'notice', 'invite']) {
+    const value = first(params[key]);
+    if (value) {
+      qs.set(key, value);
+    }
+  }
+  const tab = first(params.tab);
+  const deepLinked = Boolean(first(params.postId) || first(params.commentId));
+  if (deepLinked) {
+    qs.set('tab', 'feed');
+  } else if (tab) {
+    qs.set('tab', tab);
+  }
+  const query = qs.toString();
+  return `/challenges/${hostId.trim()}${query ? `?${query}` : ''}`;
+}
+
+/** Pretty title for a stored paired-title string, so old posts do not print two names. */
+export function normalizeOfficialPairTitle(title?: string | null): string {
+  const text = String(title ?? '').trim();
+  return LEGACY_OFFICIAL_COIN_TITLES[text.toLowerCase()] ? OFFICIAL_FITNESS_TITLE : text;
 }
 
 export function isOfficialCoinWeekly(challenge?: OfficialCoinChallenge | null): boolean {
@@ -465,10 +527,10 @@ export function officialCoinEndClock(
 
 /** Leave Official drops both rooms. Warn first. */
 export const OFFICIAL_COIN_LEAVE_CONFIRM = {
-  title: 'Leave Official Coin?',
+  title: 'Leave Official Fitness?',
   body:
-    'You’ll leave the Weekly and Monthly Official rooms. ' +
-    'Home Live from those rooms goes away.',
+    'You’ll leave the Official Fitness Challenge, including the week and month boards. ' +
+    'Its Live goes away from Home.',
   confirm: 'Leave',
   cancel: 'Stay',
 } as const;
@@ -476,7 +538,7 @@ export const OFFICIAL_COIN_LEAVE_CONFIRM = {
 /** Slot 0 of the Home Live rail once someone has left. One tap, both rooms back. */
 export const OFFICIAL_COIN_REJOIN_PILL = {
   title: 'Rejoin Official',
-  subline: 'Weekly + Monthly · remaining days',
+  subline: 'Week + Month · remaining days',
   error: 'Couldn’t rejoin. Try again.',
 } as const;
 

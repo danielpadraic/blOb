@@ -27,6 +27,7 @@ import { ChallengeInvitesCard } from '@/components/challenge/ChallengeInvitesCar
 import { ChallengeMembersCard } from '@/components/challenge/ChallengeMembersCard';
 import { ChallengeModeratorsCard } from '@/components/challenge/ChallengeModeratorsCard';
 import { ChallengeLeaderboard } from '@/components/challenge/ChallengeLeaderboard';
+import { OfficialBoardTabs } from '@/components/challenge/OfficialBoardTabs';
 import { ChallengePrizeLine } from '@/components/challenge/ChallengePrizeLine';
 import { ChallengeResultCard } from '@/components/challenge/ChallengeResultCard';
 import { PaidReceiptOverlay } from '@/components/challenge/PaidReceiptOverlay';
@@ -217,7 +218,10 @@ import { copy } from '@/lib/copy';
 import { isViewerOutOfPrize } from '@/lib/lobbyChallenge';
 import {
   isOfficialCoinChallenge,
+  isOfficialCoinMonthly,
+  isOfficialCoinWeekly,
   officialCoinToFinishLabel,
+  officialHostRedirectHref,
   OFFICIAL_COIN_MECHANICS,
 } from '@/lib/officialCoin';
 import { officialCashJoinBlock } from '@/lib/officialCash';
@@ -382,6 +386,19 @@ export default function ChallengeDetailScreen() {
   }, [boardProfiles.data, roster.data]);
   const periodCheckin = usePeriodCheckin(id, challengeQuery.data);
   const coinRooms = useOfficialCoinStatus();
+  // One Official Fitness room: the monthly id opens the weekly host with the same shell.
+  const officialHostId =
+    isOfficialCoinMonthly(challengeQuery.data) && challengeQuery.data?.id === id
+      ? coinRooms.data?.weekly?.challenge.id ?? null
+      : null;
+  useEffect(() => {
+    if (!officialHostId || officialHostId === id) {
+      return;
+    }
+    router.replace(
+      officialHostRedirectHref(officialHostId, params as Record<string, string | string[] | undefined>) as never,
+    );
+  }, [id, officialHostId, params, router]);
   const officialSiblingId = isOfficialCoinChallenge(challengeQuery.data)
     ? siblingOfficialChallengeId(id, {
         weeklyId: coinRooms.data?.weekly?.challenge.id,
@@ -981,6 +998,7 @@ export default function ChallengeDetailScreen() {
 
   const stillLoading =
     waitingForId ||
+    Boolean(officialHostId && officialHostId !== id) ||
     inviteLink.needsAuth ||
     inviteLink.claiming ||
     (Boolean(id) && (challengeQuery.isLoading || challengeQuery.isFetching) && !challenge);
@@ -1999,25 +2017,40 @@ export default function ChallengeDetailScreen() {
                 </AppText>
               </Pressable>
             ) : null}
-            <ChallengeLeaderboard
-              challenge={challenge}
-              roster={boardRoster}
-              completedUserIds={completions.data ?? new Set()}
-              joined={isJoined}
-              viewerId={user?.id}
-              settlement={moneyPhase === 'settled' ? receipt : null}
-              showReceipt={false}
-              onOpenReceipt={
-                moneyPhase === 'settled' && receipt
-                  ? () => {
-                      setReceiptOpen(true);
-                      setPageTab('overview');
-                    }
-                  : undefined
-              }
-              error={roster.error instanceof Error ? roster.error.message : null}
-              missesUsed={periodMisses.data ?? 0}
-            />
+            {(() => {
+              const weekBoard = (
+                <ChallengeLeaderboard
+                  challenge={challenge}
+                  roster={boardRoster}
+                  completedUserIds={completions.data ?? new Set()}
+                  joined={isJoined}
+                  viewerId={user?.id}
+                  settlement={moneyPhase === 'settled' ? receipt : null}
+                  showReceipt={false}
+                  onOpenReceipt={
+                    moneyPhase === 'settled' && receipt
+                      ? () => {
+                          setReceiptOpen(true);
+                          setPageTab('overview');
+                        }
+                      : undefined
+                  }
+                  error={roster.error instanceof Error ? roster.error.message : null}
+                  missesUsed={periodMisses.data ?? 0}
+                />
+              );
+              return officialCoinRoom && isOfficialCoinWeekly(challenge) ? (
+                <OfficialBoardTabs
+                  hostChallengeId={challenge.id}
+                  monthChallengeId={coinRooms.data?.monthly?.challenge.id}
+                  monthJoined={Boolean(coinRooms.data?.monthly?.joined)}
+                  viewerId={user?.id}
+                  week={weekBoard}
+                />
+              ) : (
+                weekBoard
+              );
+            })()}
           </View>
         ) : null}
 

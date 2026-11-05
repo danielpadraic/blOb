@@ -90,6 +90,8 @@ type ChallengeBoardProps = {
   onOpenBoard?: () => void;
   error?: string | null;
   missesUsed?: number;
+  /** Official Fitness: the weekly host room. Day links open its Live. */
+  hostChallengeId?: string | null;
 };
 
 type NestedLine = { label: string; value: string; icon?: BoardStatKind | null };
@@ -107,6 +109,7 @@ export function ChallengeBoard({
   onOpenBoard,
   error,
   missesUsed = 0,
+  hostChallengeId,
 }: ChallengeBoardProps) {
   const router = useRouter();
   const [receiptOpen, setReceiptOpen] = useState(showReceipt);
@@ -114,7 +117,7 @@ export function ChallengeBoard({
   const compact = variant === 'compact';
   // Official Coin counts days in the current Chicago window. No knockout chrome.
   const officialCoin = isOfficialCoinChallenge(challenge);
-  const coinDays = useOfficialCoinDays(challenge, officialCoin);
+  const coinDays = useOfficialCoinDays(challenge, officialCoin, hostChallengeId);
   const finishDays = useOfficialCoinFinishDays(challenge, viewerId, officialCoin && joined);
   const quantityBoard = usesQuantityScoring(challenge);
   const racingRoster = useMemo(
@@ -452,7 +455,7 @@ export function ChallengeBoard({
           dayLinks={coinRowDays}
           onOpenDay={(entry) =>
             router.push(
-              challengeDetailHref(challenge.id, 'lobby', entry.postId, { tab: 'feed' }),
+              challengeDetailHref(hostChallengeId || challenge.id, 'lobby', entry.postId, { tab: 'feed' }),
             )
           }
           onToggle={() => toggleRow(row.userId)}

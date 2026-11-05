@@ -3,6 +3,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { AppText } from '@/components/ui/AppText';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import type { LoggableChallenge } from '@/hooks/useLoggableChallenge';
+import { hideOfficialCoinSibling } from '@/lib/officialCoin';
 import { THEME, themeShadow } from '@/lib/theme';
 
 type LiftDoneSheetProps = {
@@ -17,13 +18,14 @@ type LiftDoneSheetProps = {
 
 export function LiftDoneSheet({
   visible,
-  challenges,
+  challenges: allChallenges,
   busy,
   error,
   onDone,
   onShare,
   onAddToCheckin,
 }: LiftDoneSheetProps) {
+  const challenges = hideOfficialCoinSibling(allChallenges);
   return (
     <ChromeOverlay visible={visible} onClose={onDone} align="end" zIndex={140}>
       <View
