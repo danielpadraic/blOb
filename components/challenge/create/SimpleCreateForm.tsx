@@ -137,6 +137,8 @@ export function SimpleCreateForm() {
   const funded = Array.isArray(params.funded) ? params.funded[0] : params.funded;
   const editId = Array.isArray(params.editId) ? params.editId[0] : params.editId;
   const resumeDraftId = Array.isArray(params.draftId) ? params.draftId[0] : params.draftId;
+  // A saved draft opens only from Continue draft (resume=1). Plus then Create starts empty.
+  const resumeRequested = firstRouteParam(params.resume) === '1';
   const fromAdvanced = (Array.isArray(params.from) ? params.from[0] : params.from) === 'advanced';
   const interestsStarter = useMemo(
     () =>
@@ -314,7 +316,14 @@ export function SimpleCreateForm() {
   }, [editId, interestsStarter]);
 
   useEffect(() => {
-    if (editId || hydratedRemote.current || editedRef.current || draftsQuery.isLoading || interestsStarter) {
+    if (
+      !resumeRequested ||
+      editId ||
+      hydratedRemote.current ||
+      editedRef.current ||
+      draftsQuery.isLoading ||
+      interestsStarter
+    ) {
       return;
     }
     const remote = pickSimpleDraft(draftsQuery.data ?? [], resumeDraftId);
@@ -340,7 +349,7 @@ export function SimpleCreateForm() {
         router.replace(createHrefForDraft(advanced, returnTo === 'feed' ? { returnTo: 'feed' } : undefined));
       }
     }
-  }, [draftsQuery.data, draftsQuery.isLoading, editId, interestsStarter, resumeDraftId, returnTo, router]);
+  }, [draftsQuery.data, draftsQuery.isLoading, editId, interestsStarter, resumeDraftId, resumeRequested, returnTo, router]);
 
   useEffect(() => {
     if (!editId || !editing.data) {
