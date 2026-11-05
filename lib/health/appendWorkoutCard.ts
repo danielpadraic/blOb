@@ -14,6 +14,15 @@ import { WORKOUT_CARD_VERSION } from '@/lib/health/workoutProofCard';
 
 export { mediaWithExtraCard, proofPartWithExtraCard } from '@/lib/health/workoutCardSlide';
 
+/** Each post the card was written onto, so the open Live can be patched in place instead of refetched. */
+export type CardPostPatch = {
+  id: string;
+  media_urls: string[];
+  checkin_stats: CheckinProofStats;
+};
+
+export type CardPostPatchFn = (post: CardPostPatch) => void;
+
 type CheckinCardRow = {
   id: string;
   user_id: string;
@@ -75,7 +84,12 @@ async function livePostsFor(userId: string, checkinIds: string[]): Promise<LiveC
  * twin for the same Chicago day (`period_key`). Selfies and screenshots stay; the card
  * is one extra slide. A missing post is left for a later append — it does not throw.
  */
-async function writeCardOnCheckin(row: CheckinCardRow, proofId: string, cardUrl: string): Promise<void> {
+async function writeCardOnCheckin(
+  row: CheckinCardRow,
+  proofId: string,
+  cardUrl: string,
+  onPostPatched?: CardPostPatchFn,
+): Promise<void> {
   const parts = asParts(row.proof_parts);
   const slotId = vendorProofId(parts, proofId) ?? proofId;
   for (const [id, part] of Object.entries(parts)) {
@@ -134,16 +148,18 @@ async function writeCardOnCheckin(row: CheckinCardRow, proofId: string, cardUrl:
         ? (post.checkin_stats as CheckinProofStats)
         : {};
     const media = mediaWithExtraCard(post.media_urls, cardUrl);
+    const stats = { ...prior, card_url: cardUrl };
     const write = await supabase
       .from('posts')
       .update({
         media_urls: media,
-        checkin_stats: { ...prior, card_url: cardUrl },
+        checkin_stats: stats,
       })
       .eq('id', post.id);
     if (write.error) {
       throw new Error(write.error.message || 'Could not show that workout card.');
     }
+    onPostPatched?.({ id: post.id, media_urls: media, checkin_stats: stats });
   }
   if (siblingError) {
     throw siblingError;
@@ -230,6 +246,7 @@ export async function storeRenderedWorkoutCard(input: {
   challengeId: string;
   proofId: string;
   fileUri: string;
+  onPostPatched?: CardPostPatchFn;
 }): Promise<{ cardUrl: string; siblingCheckinId: string | null }> {
   const path = await uploadChallengeProof({
     uri: input.fileUri,
@@ -247,6 +264,7 @@ export async function storeRenderedWorkoutCard(input: {
     checkinId: input.checkinId,
     proofId: input.proofId,
     cardUrl,
+    onPostPatched: input.onPostPatched,
   });
   return { cardUrl, siblingCheckinId };
 }
@@ -257,6 +275,7 @@ export async function appendWorkoutCardUrl(input: {
   checkinId: string;
   proofId: string;
   cardUrl: string;
+  onPostPatched?: CardPostPatchFn;
 }): Promise<string | null> {
   const loaded = await supabase
     .from('challenge_checkins')
@@ -268,11 +287,11 @@ export async function appendWorkoutCardUrl(input: {
     throw new Error(loaded.error?.message || 'Could not find that check-in.');
   }
   const row = loaded.data as CheckinCardRow;
-  await writeCardOnCheckin(row, input.proofId, input.cardUrl);
+  await writeCardOnCheckin(row, input.proofId, input.cardUrl, input.onPostPatched);
   const sibling = await officialSibling(row);
   if (!sibling) {
     return null;
   }
-  await writeCardOnCheckin(sibling, input.proofId, input.cardUrl);
+  await writeCardOnCheckin(sibling, input.proofId, input.cardUrl, input.onPostPatched);
   return sibling.id;
 }

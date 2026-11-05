@@ -1,11 +1,14 @@
 import {
   cardRepairFor,
+  slotHasWorkoutCardFile,
   type CardRepair,
   type CardRepairScope,
   type StoredActivityLabels,
   type StoredCheckinRow,
 } from '@/lib/health/cardRedraw';
-import { appendWorkoutCardUrl } from '@/lib/health/appendWorkoutCard';
+import { appendWorkoutCardUrl, type CardPostPatchFn } from '@/lib/health/appendWorkoutCard';
+import { isCardInflight } from '@/lib/health/cardInflight';
+import { parseProofParts } from '@/lib/challengeProofs';
 import { supabase } from '@/lib/supabase';
 import { challengeProofUrl, uploadChallengeProof } from '@/utils/upload';
 
@@ -54,6 +57,10 @@ export async function pendingCardRepairs(
   const rows = checkins.data as StoredCheckinRow[];
   const candidates: CardRepair[] = [];
   for (const row of rows) {
+    // A card for this check-in is being drawn or uploaded elsewhere. Drawing it again is a second card.
+    if (isCardInflight(row.id)) {
+      continue;
+    }
     const repair = cardRepairFor(row, undefined, scope);
     if (repair?.challengeId) {
       candidates.push(repair);
@@ -78,6 +85,7 @@ export async function pendingCardRepairs(
   }
   return byUrgency(
     rows
+      .filter((row) => !isCardInflight(row.id))
       .map((row) => cardRepairFor(row, labels, scope))
       .filter((item): item is CardRepair => Boolean(item?.challengeId)),
   ).slice(0, BATCH);
@@ -104,11 +112,23 @@ function byUrgency(items: CardRepair[]): CardRepair[] {
 export async function putRepairedCard(
   item: CardRepair,
   fileUri: string,
+  onPostPatched?: CardPostPatchFn,
 ): Promise<{ url: string; siblingCheckinId: string | null }> {
   const { data: session } = await supabase.auth.getUser();
   const userId = session?.user?.id;
   if (!userId) {
     throw new Error('Not signed in.');
+  }
+  // Another path may have stored the card while this one was drawing. One card per check-in.
+  const current = await supabase
+    .from('challenge_checkins')
+    .select('proof_parts')
+    .eq('id', item.checkinId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  const part = parseProofParts((current.data as { proof_parts?: unknown } | null)?.proof_parts)[item.proofId];
+  if (part && slotHasWorkoutCardFile(part)) {
+    return { url: String(part.cardUrl ?? part.url ?? ''), siblingCheckinId: null };
   }
   const path = await uploadChallengeProof({
     uri: fileUri,
@@ -127,6 +147,7 @@ export async function putRepairedCard(
     checkinId: item.checkinId,
     proofId: item.proofId,
     cardUrl: url,
+    onPostPatched,
   });
   return { url, siblingCheckinId };
 }

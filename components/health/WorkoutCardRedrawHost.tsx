@@ -7,11 +7,14 @@ import {
   type WorkoutCardRequest,
 } from '@/components/challenge/WorkoutProofCardRenderer';
 import { useAuth } from '@/hooks/useAuth';
-import { isHomeSocialFeedKey, liveListKey } from '@/hooks/useFeed';
 import { parseChallengeProofs, type ChallengeProof } from '@/lib/challengeProofs';
 import { challengeClockTz } from '@/lib/checkinPeriod';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
+import { copy } from '@/lib/copy';
+import { postSendNotice } from '@/lib/checkin/sendNotice';
+import { patchFeedPostFields } from '@/lib/liveFeedPatch';
 import { type CardRepair } from '@/lib/health/cardRedraw';
+import { takeCardHandoff } from '@/lib/health/cardInflight';
 import { pendingCardRepairs, putRepairedCard } from '@/lib/health/cardRedrawQueue';
 import { onWorkoutCardRedraw } from '@/lib/health/cardRedrawSignal';
 import { buildWorkoutProofCard } from '@/lib/health/workoutProofCard';
@@ -97,6 +100,10 @@ export function WorkoutCardRedrawHost() {
 
   /** Drop the head of the queue without stamping it, so a skipped card is retried on a later open. */
   const skipHead = useCallback(() => {
+    const failed = activeRef.current?.item;
+    if (failed && takeCardHandoff(failed.challengeId)) {
+      postSendNotice(failed.challengeId, copy('checkin.workoutCardFailed'));
+    }
     activeRef.current = null;
     setRequest(null);
     setQueue((current) => {
@@ -168,16 +175,11 @@ export function WorkoutCardRedrawHost() {
       const { item } = active;
       void (async () => {
         try {
-          const saved = await putRepairedCard(item, fileUri);
-          void queryClient.invalidateQueries({
-            predicate: (query) => isHomeSocialFeedKey(query.queryKey),
-          });
-          void queryClient.invalidateQueries({ queryKey: liveListKey(item.challengeId, userId) });
-          if (saved.siblingCheckinId) {
-            void queryClient.invalidateQueries({
-              predicate: (query) => query.queryKey[0] === 'live',
-            });
-          }
+          // The card lands on the open Live in place. A refetch here would reload the thread.
+          const saved = await putRepairedCard(item, fileUri, (post) =>
+            patchFeedPostFields(queryClient, post.id, post),
+          );
+          takeCardHandoff(item.challengeId);
           activeRef.current = null;
           setQueue((current) => {
             const next = current.filter(
@@ -189,6 +191,9 @@ export function WorkoutCardRedrawHost() {
           });
         } catch {
           // Unstamped, so the next open tries again. Chips and selfies stay.
+          if (takeCardHandoff(item.challengeId)) {
+            postSendNotice(item.challengeId, copy('checkin.workoutCardFailed'));
+          }
           activeRef.current = null;
           setQueue((current) => {
             const next = current.slice(1);
@@ -198,7 +203,7 @@ export function WorkoutCardRedrawHost() {
         }
       })();
     },
-    [noteQueue, queryClient, userId],
+    [noteQueue, queryClient],
   );
 
   const onFailed = useCallback(

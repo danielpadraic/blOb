@@ -1,6 +1,8 @@
 import type { QueryClient } from '@tanstack/react-query';
 
 import { mediaUrlKey } from '@/lib/challengeProofs';
+import { isWorkoutCardStoragePath } from '@/lib/health/postWorkoutCard';
+import { mediaWithExtraCard } from '@/lib/health/workoutCardSlide';
 import {
   isFreshOptimisticReactionKey,
   mergeReactionListsByKey,
@@ -211,7 +213,11 @@ function mergeLiveFeedPost<T extends { id: string }>(post: T, row: FeedPostRow):
   }
   if (media) {
     const existingMedia = asUrlList((post as FeedPostRow).media_urls) ?? [];
-    const merged = unionUrlList(existingMedia, media);
+    const incomingCard = media.find((url) => isWorkoutCardStoragePath(url));
+    const unioned = unionUrlList(existingMedia, media);
+    // One recap card, always the last slide: a redrawn card replaces the one on screen instead of
+    // stacking beside it, and the stills in front of it keep their places.
+    const merged = incomingCard ? mediaWithExtraCard(unioned, incomingCard) : unioned;
     // A stats / card write must never blank stills that are already on screen.
     if (!(media.length === 0 && existingMedia.length > 0)) {
       assign('media_urls', merged, sameUrlList((post as FeedPostRow).media_urls, merged));

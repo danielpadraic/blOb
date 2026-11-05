@@ -79,6 +79,7 @@ import {
 } from '@/lib/challenges/stagedCheckin';
 import { ProofUploadError, runProofUploads } from '@/lib/checkin/parallelUpload';
 import { postSendNotice } from '@/lib/checkin/sendNotice';
+import { beginCardInflight, endCardInflight, watchCardHandoff } from '@/lib/health/cardInflight';
 import { readLocationFix, locationPermissionGrantedThisSession } from '@/lib/locationDevice';
 import { parseLocationPlace } from '@/lib/locationProof';
 import { normalizeCheckinStill } from '@/lib/checkinPhotoOrientation';
@@ -551,6 +552,10 @@ function SubmitWorkoutInner() {
   const reviewPreviousRef = useRef<SlotDraft | null>(null);
   const sendHoldRef = useRef<'photo' | 'done' | null>(null);
   const leftOnSendRef = useRef(false);
+  // A recap draw is running on this screen. Send does not wait for it; see settleCardAfterLeave.
+  const cardDrawingRef = useRef(false);
+  const cardAbandonedRef = useRef(false);
+  const cardInflightIdRef = useRef<string | null>(null);
   const leavingCameraRef = useRef(false);
   const [slotUpload, setSlotUpload] = useState<Record<string, 'up' | 'fail'>>({});
   const unfilledRef = useRef<string[]>([]);
@@ -567,7 +572,6 @@ function SubmitWorkoutInner() {
   /** Context on the check-in post. Never counted toward the proof this challenge requires. */
   const [attachedLift, setAttachedLift] = useState<LiftSessionSummary | null>(null);
   const [liftPickerOpen, setLiftPickerOpen] = useState(false);
-  const recapWaitRef = useRef<((ready: boolean) => void) | null>(null);
   const recapUriRef = useRef<string | null>(null);
   const recapUploadRef = useRef<{
     promise: Promise<{ cardUrl: string; siblingCheckinId: string | null }>;
@@ -1518,6 +1522,43 @@ function SubmitWorkoutInner() {
     keep();
   }
 
+  /**
+   * Leaving never waits on the recap card.
+   * - Still drawing: this screen drops its draw and the app-level redraw host finishes the card from
+   *   the workout summary already saved on the check-in. It patches the same post, one extra last slide.
+   * - Already drawn: its upload and append finish in the background, after the Live rows exist.
+   * Either way a miss is one line on that Live.
+   */
+  function settleCardAfterLeave(
+    checkinId: string | null | undefined,
+    roomIds: Array<string | null | undefined>,
+  ): Promise<void> {
+    if (cardDrawingRef.current) {
+      cardAbandonedRef.current = true;
+      cardDrawingRef.current = false;
+      setCardRequest(null);
+      endCardInflight(cardInflightIdRef.current ?? checkinId);
+      cardInflightIdRef.current = null;
+      watchCardHandoff(roomIds);
+      requestWorkoutCardRedraw();
+      return Promise.resolve();
+    }
+    const roomId = id;
+    // Nobody is waiting on this, so a slow upload gets a long cap before it counts as a miss.
+    return awaitWorkoutCardUpload(checkinId, 45_000)
+      .then((miss) => {
+        if (miss) {
+          if (roomId) {
+            postSendNotice(roomId, miss);
+          }
+          requestWorkoutCardRedraw();
+        }
+      })
+      .catch((error) => {
+        console.error('[blob:workout-card]', error);
+      });
+  }
+
   async function leaveCameraToLive() {
     if (leavingCameraRef.current) {
       return;
@@ -1525,10 +1566,7 @@ function SubmitWorkoutInner() {
     leavingCameraRef.current = true;
     stopAllLiveMedia();
     setCameraPaused(true);
-    const cardMiss = await awaitWorkoutCardUpload(checkinIdRef.current);
-    if (cardMiss) {
-      requestWorkoutCardRedraw();
-    }
+    void settleCardAfterLeave(checkinIdRef.current, [id]);
     setReview(null);
     setSnapPreview(null);
     setCaptureId(null);
@@ -1536,7 +1574,7 @@ function SubmitWorkoutInner() {
     setPreferCamera(false);
     if (id) {
       router.replace(
-        challengeDetailHref(id, 'lobby', undefined, { tab: 'feed', notice: cardMiss }) as never,
+        challengeDetailHref(id, 'lobby', undefined, { tab: 'feed' }) as never,
       );
     }
   }
@@ -1720,9 +1758,12 @@ function SubmitWorkoutInner() {
     Alert.alert('Still needed', names ? `${names}.` : copy('checkin.emptyBob'));
   }
 
-  async function awaitWorkoutCardUpload(checkinId: string | null | undefined): Promise<string | null> {
+  async function awaitWorkoutCardUpload(
+    checkinId: string | null | undefined,
+    capMs = 8000,
+  ): Promise<string | null> {
     const miss = copy('checkin.workoutCardFailed');
-    const capAt = Date.now() + 8000;
+    const capAt = Date.now() + capMs;
     const remaining = () => Math.max(0, capAt - Date.now());
     let job = recapUploadRef.current;
     while (
@@ -1888,19 +1929,6 @@ function SubmitWorkoutInner() {
       let saved: ChallengeCheckin | null = checkinQuery.data ?? null;
       let savedParts = { ...(checkinQuery.data?.proof_parts ?? {}) };
       const failedExtras: string[] = [];
-      const recapBuilding = proofSteps.some((proof) => drafts[proof.id]?.building) || Boolean(cardRequest);
-      if (recapBuilding) {
-        const recapReady = await new Promise<boolean>((resolve) => {
-          const timer = setTimeout(() => resolve(false), 8000);
-          recapWaitRef.current = (ready) => {
-            clearTimeout(timer);
-            resolve(ready);
-          };
-        });
-        if (!recapReady) {
-          failedExtras.push(copy('checkin.workoutCardFailed'));
-        }
-      }
       const pendingSaves: Array<{
         proof: ChallengeProof;
         persistDraft: SlotDraft | undefined;
@@ -2307,8 +2335,10 @@ function SubmitWorkoutInner() {
       // The server has confirmed the check-in. Everything below finishes after Live opens and
       // patches the same post: OCR, the recap card (one extra last slide, never a proof slot),
       // mentions, the workout ledger row, the Wave and the share preferences.
-      const cardLine = copy('checkin.workoutCardFailed');
       const noticeId = id;
+      // Decided before leaving: a card still drawing is handed to the app-level host, a finished one
+      // is awaited out of band. Send never waits for either.
+      void settleCardAfterLeave(checkinId, [id, siblingChallengeId]);
       const finishInBackground = async () => {
         if (uid) {
           void runPostSendOcr({
@@ -2429,11 +2459,6 @@ function SubmitWorkoutInner() {
               // Local row still remembers the last Home / Waves choice.
             }
           }
-        }
-        // The recap upload needs the Live rows, which exist now. Eight seconds, then say so on Live.
-        const cardMiss = await awaitWorkoutCardUpload(checkinId);
-        if (cardMiss && !failedExtras.includes(cardLine)) {
-          postSendNotice(noticeId, cardMiss);
         }
       };
       void finishInBackground().catch((error) => {
@@ -2709,11 +2734,18 @@ function SubmitWorkoutInner() {
     }
     recapFailedRef.current = false;
     recapUploadRef.current = null;
+    cardDrawingRef.current = true;
+    cardAbandonedRef.current = false;
+    cardInflightIdRef.current = checkinIdRef.current;
+    beginCardInflight(checkinIdRef.current);
     setDrafts((current) => ({
       ...current,
       [target.id]: { ...current[target.id], addingRoute: true },
     }));
     const route = await readWorkoutRoute(workout);
+    if (cardAbandonedRef.current) {
+      return;
+    }
     logHealthAttach(workout, route);
     // The snapshot is updated as soon as the track is known, so a failed rasterize still leaves the
     // route on the check-in for the ledger and for Web to redraw.
@@ -2757,7 +2789,13 @@ function SubmitWorkoutInner() {
     (key: string, fileUri: string) => {
       const pending = cardTargetRef.current;
       setCardRequest(null);
+      if (cardAbandonedRef.current) {
+        // Send left mid-draw. The redraw host owns this card now; a second one would double it.
+        return;
+      }
+      cardDrawingRef.current = false;
       if (!pending || !key.startsWith(pending.proofId)) {
+        endCardInflight(cardInflightIdRef.current);
         return;
       }
       const proof = proofSteps.find((item) => item.id === pending.proofId);
@@ -2773,8 +2811,7 @@ function SubmitWorkoutInner() {
       const checkinId = checkinIdRef.current;
       if (!proof || !uid || !checkinId || !id) {
         recapFailedRef.current = true;
-        recapWaitRef.current?.(false);
-        recapWaitRef.current = null;
+        endCardInflight(cardInflightIdRef.current);
         console.error('[blob:workout-card]', new Error('Couldn’t add the workout card.'));
         return;
       }
@@ -2785,19 +2822,18 @@ function SubmitWorkoutInner() {
         challengeId: id,
         proofId: proof.id,
         fileUri,
-      }).then((saved) => {
-        void queryClient.invalidateQueries({
-          predicate: (query) => isHomeSocialFeedKey(query.queryKey),
-        });
-        void queryClient.invalidateQueries({ queryKey: liveListKey(id, uid) });
-        return saved;
+        // The card lands on the post in place. A refetch here would reload the open thread.
+        onPostPatched: (post) => patchFeedPostFields(queryClient, post.id, post),
       });
+      beginCardInflight(checkinId);
       recapUploadRef.current = { promise: upload, proofId: proof.id };
-      void upload.catch((error) => {
-        console.error('[blob:workout-card]', error);
-      });
-      recapWaitRef.current?.(true);
-      recapWaitRef.current = null;
+      void upload
+        .catch((error) => {
+          console.error('[blob:workout-card]', error);
+        })
+        .finally(() => {
+          endCardInflight(checkinId);
+        });
     },
     // persistProof and proofSteps are stable enough for this callback; drafts are set functionally.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2807,6 +2843,11 @@ function SubmitWorkoutInner() {
   const onCardFailed = useCallback((key: string) => {
     const pending = cardTargetRef.current;
     setCardRequest(null);
+    if (cardAbandonedRef.current) {
+      return;
+    }
+    cardDrawingRef.current = false;
+    endCardInflight(cardInflightIdRef.current);
     if (!pending || !key.startsWith(pending.proofId)) {
       return;
     }
@@ -2817,8 +2858,6 @@ function SubmitWorkoutInner() {
       ...current,
       [pending.proofId]: { ...current[pending.proofId], building: false },
     }));
-    recapWaitRef.current?.(false);
-    recapWaitRef.current = null;
   }, []);
 
   overlayOpenRef.current = false;

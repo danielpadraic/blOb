@@ -436,3 +436,40 @@ describe('patchChallengeLiveInsert', () => {
     expect(fetchPost).not.toHaveBeenCalled();
   });
 });
+
+describe('recap card patch', () => {
+  const still = 'https://cdn.test/u/c/pre_selfie-1.jpg';
+  const old = 'https://cdn.test/u/c/workout_card-1.png';
+  const fresh = 'https://cdn.test/u/c/workout_card-2.png';
+
+  it('adds the card as the last slide, keeps the stills, and leaves other posts as they were', () => {
+    const post = { id: 'p1', media_urls: [still], checkin_stats: { duration_sec: 1800, hr_avg: 140 } };
+    const other = { id: 'p2', media_urls: ['https://cdn.test/other.jpg'] };
+    const list = [post, other];
+    const next = patchLiveFeedList(list, {
+      eventType: 'UPDATE',
+      new: { id: 'p1', media_urls: [still, old], checkin_stats: { card_url: old } },
+    }) as typeof list;
+    expect(next[0].media_urls).toEqual([still, old]);
+    expect(next[0].checkin_stats).toMatchObject({ duration_sec: 1800, hr_avg: 140 });
+    expect(next[1]).toBe(other);
+  });
+
+  it('replaces a card already on screen instead of stacking a second one', () => {
+    const list = [{ id: 'p1', media_urls: [still, old] }];
+    const next = patchLiveFeedList(list, {
+      eventType: 'UPDATE',
+      new: { id: 'p1', media_urls: [still, fresh] },
+    }) as typeof list;
+    expect(next[0].media_urls).toEqual([still, fresh]);
+  });
+
+  it('is a no-op when the same card arrives again', () => {
+    const list = [{ id: 'p1', media_urls: [still, old] }];
+    const next = patchLiveFeedList(list, {
+      eventType: 'UPDATE',
+      new: { id: 'p1', media_urls: [still, old] },
+    });
+    expect(next).toBe(list);
+  });
+});

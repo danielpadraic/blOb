@@ -1,3 +1,4 @@
+import { proofPartWithExtraCard } from '@/lib/health/workoutCardSlide';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -181,6 +182,16 @@ describe('which posted cards get drawn again', () => {
     expect(work).toBeNull();
     expect(slotHasWorkoutCardFile({ url: RECAP_URL })).toBe(true);
     expect(slotHasWorkoutCardFile(CARD_SLOT)).toBe(false);
+  });
+
+  it('does not draw a second card once the recap is stored as the extra last slide', () => {
+    const stored = proofPartWithExtraCard(
+      { ...CARD_SLOT, health: { ...WALK, hrSeries: [98, 104, 111] } },
+      RECAP_URL,
+      WORKOUT_CARD_VERSION,
+    );
+    expect(stored.cardUrl).toBe(RECAP_URL);
+    expect(cardRepairFor({ ...CHECKIN, proof_parts: { p_hr: stored } })).toBeNull();
   });
 
   /**

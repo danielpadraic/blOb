@@ -65,6 +65,8 @@ export type ChallengeProofPart = {
    * slots whose card predates the stamp, which is how the repair pass finds them.
    */
   cardVersion?: number | null;
+  /** The one recap card, stored beside the slot photos rather than among them. */
+  cardUrl?: string | null;
 };
 
 /** Extra photos on top of required proofs. Extras are optional and never unlock Send. */
@@ -1252,6 +1254,8 @@ export function parseProofParts(value: unknown): Record<string, ChallengeProofPa
         Number(row.cardVersion ?? row.card_version) > 0
           ? Math.round(Number(row.cardVersion ?? row.card_version))
           : null,
+      // Kept so a slot that already holds its recap is never drawn a second time.
+      ...(typeof row.cardUrl === 'string' && row.cardUrl.trim() ? { cardUrl: row.cardUrl } : null),
     };
   }
   return parts;
