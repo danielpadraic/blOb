@@ -169,3 +169,26 @@ describe('acquireChallengeBoardRealtime', () => {
     expect(keys.some((key) => Array.isArray(key) && key[0] === 'feed')).toBe(false);
   });
 });
+
+describe('Live comments and reactions realtime', () => {
+  beforeEach(() => {
+    resetChallengeBoardRealtimeForTests();
+  });
+
+  it('listens to comments and reactions next to posts', () => {
+    const { host, channel } = mockHost();
+    acquireChallengeBoardRealtime(ID, mockQueryClient(), host, 'me');
+    const tables = channel.handlers.map((row) => row.table);
+    expect(tables).toContain('posts');
+    expect(tables).toContain('comments');
+    expect(tables).toContain('reactions');
+  });
+
+  it('leaves comments and reactions to the Live screen when only the board is open', () => {
+    const { host, channel } = mockHost();
+    acquireChallengeBoardRealtime(ID, mockQueryClient(), host, 'me', { boardOnly: true });
+    const tables = channel.handlers.map((row) => row.table);
+    expect(tables).not.toContain('comments');
+    expect(tables).not.toContain('reactions');
+  });
+});

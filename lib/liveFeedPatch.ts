@@ -1,7 +1,13 @@
 import type { QueryClient } from '@tanstack/react-query';
 
 import { mediaUrlKey } from '@/lib/challengeProofs';
-import { mergeReactionListsByKey } from '@/lib/reactions';
+import {
+  isFreshOptimisticReactionKey,
+  mergeReactionListsByKey,
+  reactionSetKeyFromRow,
+  upsertReactionInList,
+} from '@/lib/reactions';
+import type { Reaction } from '@/lib/types';
 
 type FeedPostRow = {
   id?: string;
@@ -22,6 +28,8 @@ type FeedPostRow = {
   comments?: unknown;
   reactions?: unknown;
 };
+
+export type LiveFeedPostRow = FeedPostRow;
 
 export type LiveFeedRealtimePayload = {
   eventType?: string;
@@ -274,41 +282,105 @@ export function isOptimisticLiveId(id?: string | null): boolean {
   return String(id ?? '').startsWith('optimistic-');
 }
 
+/** Device and server clocks drift, so time only breaks ties and guards bare repeats. */
 const OPTIMISTIC_MATCH_MS = 5000;
+const OPTIMISTIC_TEXT_MATCH_MS = 120_000;
 
-/** Same author + body + created_at ±5s. Used when realtime arrives before onSuccess swaps the id. */
+type OptimisticProbe = {
+  id?: string | null;
+  client_temp_id?: string | null;
+  author_id?: string | null;
+  content?: string | null;
+  media_urls?: unknown;
+  created_at?: string | null;
+};
+
+function bodyKey(value: unknown): string {
+  return String(value ?? '').replace(/\s+/g, ' ').trim();
+}
+
+function mediaKeySet(value: unknown): Set<string> {
+  const keys = new Set<string>();
+  for (const url of asUrlList(value) ?? []) {
+    const key = mediaUrlKey(url);
+    if (key) {
+      keys.add(key);
+    }
+  }
+  return keys;
+}
+
+/**
+ * Which optimistic row is this server row? In order: a client temp id the row carries, a shared
+ * photo, then the same words. Content alone never decides a photo send, and a bare repeat
+ * ("ok", "ok") only matches inside a few seconds. The closest created_at wins among candidates.
+ */
 export function matchOptimisticLiveIndex(
-  list: ReadonlyArray<{
-    id?: string | null;
-    author_id?: string | null;
-    content?: string | null;
-    created_at?: string | null;
-  }>,
-  incoming: {
-    author_id?: string | null;
-    content?: string | null;
-    created_at?: string | null;
-  },
+  list: ReadonlyArray<OptimisticProbe>,
+  incoming: OptimisticProbe,
 ): number {
   const author = String(incoming.author_id ?? '').trim();
-  const body = String(incoming.content ?? '').trim();
-  const at = Date.parse(String(incoming.created_at ?? ''));
-  if (!author || !Number.isFinite(at)) {
+  if (!author) {
     return -1;
   }
-  return list.findIndex((row) => {
-    if (!isOptimisticLiveId(row.id)) {
-      return false;
+  const tempId = String(incoming.client_temp_id ?? '').trim();
+  if (tempId) {
+    const byTemp = list.findIndex(
+      (row) => isOptimisticLiveId(row.id) && (row.id === tempId || row.client_temp_id === tempId),
+    );
+    if (byTemp >= 0) {
+      return byTemp;
     }
-    if (String(row.author_id ?? '').trim() !== author) {
-      return false;
-    }
-    if (String(row.content ?? '').trim() !== body) {
-      return false;
+  }
+  const body = bodyKey(incoming.content);
+  const media = mediaKeySet(incoming.media_urls);
+  const at = Date.parse(String(incoming.created_at ?? ''));
+  let best = -1;
+  let bestGap = Number.POSITIVE_INFINITY;
+  list.forEach((row, index) => {
+    if (!isOptimisticLiveId(row.id) || String(row.author_id ?? '').trim() !== author) {
+      return;
     }
     const rowAt = Date.parse(String(row.created_at ?? ''));
-    return Number.isFinite(rowAt) && Math.abs(rowAt - at) <= OPTIMISTIC_MATCH_MS;
+    const gap = Number.isFinite(at) && Number.isFinite(rowAt) ? Math.abs(rowAt - at) : 0;
+    const rowMedia = mediaKeySet(row.media_urls);
+    let hit = false;
+    if (media.size > 0 && rowMedia.size > 0) {
+      hit = [...media].some((key) => rowMedia.has(key));
+    } else if (media.size === 0 && rowMedia.size === 0) {
+      const rowBody = bodyKey(row.content);
+      hit = rowBody === body && gap <= (body ? OPTIMISTIC_TEXT_MATCH_MS : OPTIMISTIC_MATCH_MS);
+    } else {
+      // One side has a photo and the other does not: the same words are a different send.
+      hit = false;
+    }
+    if (hit && gap < bestGap) {
+      best = index;
+      bestGap = gap;
+    }
   });
+  return best;
+}
+
+/** True when this INSERT would add a new row, so the caller should hydrate it first. */
+export function liveInsertWouldAppend(current: unknown, row?: FeedPostRow | null): boolean {
+  if (!Array.isArray(current) || !row?.id || row.deleted_at) {
+    return false;
+  }
+  if (current.some((post) => post && post.id === row.id)) {
+    return false;
+  }
+  const checkinId = liveCheckinKey(row.checkin_id);
+  if (checkinId && findOldestIndexByCheckinId(current, checkinId) >= 0) {
+    return false;
+  }
+  return matchOptimisticLiveIndex(current, row) < 0;
+}
+
+/** A neutral name for a person we could not look up. Never another person's name. */
+export function stubLiveAuthor(authorId?: string | null): NonNullable<FeedPostRow['author']> | undefined {
+  const id = String(authorId ?? '').trim();
+  return id ? { id, display_name: 'Member' } : undefined;
 }
 
 /** One row per posts.id. First write wins so a refetch cannot reprint the bubble. */
@@ -324,6 +396,16 @@ export function uniqueLivePostsById<T extends { id?: string | null }>(posts: rea
     }
   }
   return [...seen.values()];
+}
+
+function withLiveInsertDefaults<T extends FeedPostRow>(row: T): T {
+  const author = row.author ?? stubLiveAuthor(row.author_id);
+  return {
+    ...row,
+    ...(author ? { author } : {}),
+    comments: Array.isArray(row.comments) ? row.comments : [],
+    reactions: Array.isArray(row.reactions) ? row.reactions : [],
+  };
 }
 
 function finishLiveList<T extends { id: string }>(list: T[]): T[] {
@@ -514,7 +596,10 @@ export function patchLiveFeedList(current: unknown, payload: LiveFeedRealtimePay
         );
         return finishLiveList(patched);
       }
-      return finishLiveList([...current, next]);
+      if (next?.deleted_at) {
+        return current;
+      }
+      return finishLiveList([...current, withLiveInsertDefaults(next as FeedPostRow)]);
     }
     return current;
   } catch (error) {
@@ -584,4 +669,398 @@ export function patchFeedPostFields(
     return current;
   });
   }
+}
+
+type LiveAuthor = NonNullable<FeedPostRow['author']>;
+
+export type LiveCommentRow = {
+  id?: string;
+  post_id?: string | null;
+  author_id?: string | null;
+  parent_id?: string | null;
+  content?: string | null;
+  created_at?: string | null;
+  edited_at?: string | null;
+  deleted_at?: string | null;
+};
+
+export type LiveReactionRow = {
+  id?: string;
+  user_id?: string | null;
+  post_id?: string | null;
+  comment_id?: string | null;
+  reaction_type?: string | null;
+  created_at?: string | null;
+};
+
+export type LiveSocialPayload<Row> = {
+  eventType?: string;
+  new?: Row | null;
+  old?: Row | null;
+};
+
+type LiveSocialPost = {
+  id: string;
+  author_id?: string | null;
+  author?: LiveAuthor | null;
+  comments?: Array<{
+    id: string;
+    post_id?: string | null;
+    author_id?: string | null;
+    author?: LiveAuthor | null;
+    parent_id?: string | null;
+    content?: string | null;
+    created_at?: string | null;
+    edited_at?: string | null;
+    reactions?: Reaction[];
+  }> | null;
+  reactions?: Reaction[] | null;
+};
+
+function isStubAuthor(author?: LiveAuthor | null): boolean {
+  const name = String(author?.display_name ?? author?.username ?? '').trim();
+  return !name || name === 'Member' || name === 'Someone';
+}
+
+function knownAuthor(list: LiveSocialPost[], authorId: string): LiveAuthor | undefined {
+  for (const post of list) {
+    if (post?.author_id === authorId && post.author && !isStubAuthor(post.author)) {
+      return post.author;
+    }
+    for (const comment of post?.comments ?? []) {
+      if (comment?.author_id === authorId && comment.author && !isStubAuthor(comment.author)) {
+        return comment.author;
+      }
+    }
+  }
+  return undefined;
+}
+
+/** Comment writes by someone else. Posts that are not in this list are left alone. */
+export function patchLiveCommentList(
+  current: unknown,
+  payload: LiveSocialPayload<LiveCommentRow>,
+): unknown {
+  try {
+    if (!Array.isArray(current)) {
+      return current;
+    }
+    const list = current as LiveSocialPost[];
+    const event = String(payload.eventType ?? '').toUpperCase();
+    const row = payload.new ?? null;
+    const removedId = String(payload.old?.id ?? row?.id ?? '').trim();
+
+    if (event === 'DELETE' || (event === 'UPDATE' && row?.deleted_at)) {
+      if (!removedId) {
+        return current;
+      }
+      let changed = false;
+      const next = list.map((post) => {
+        if (!post?.comments?.some((comment) => comment.id === removedId)) {
+          return post;
+        }
+        changed = true;
+        return {
+          ...post,
+          comments: post.comments.filter(
+            (comment) => comment.id !== removedId && comment.parent_id !== removedId,
+          ),
+        };
+      });
+      return changed ? next : current;
+    }
+
+    const id = String(row?.id ?? '').trim();
+    const postId = String(row?.post_id ?? '').trim();
+    if (!row || !id) {
+      return current;
+    }
+
+    if (event === 'UPDATE') {
+      let changed = false;
+      const next = list.map((post) => {
+        const at = post?.comments?.findIndex((comment) => comment.id === id) ?? -1;
+        if (at < 0 || !post.comments) {
+          return post;
+        }
+        const existing = post.comments[at]!;
+        const content = row.content ?? existing.content;
+        const edited = row.edited_at ?? existing.edited_at;
+        if (content === existing.content && edited === existing.edited_at) {
+          return post;
+        }
+        changed = true;
+        const comments = post.comments.slice();
+        comments[at] = { ...existing, content, edited_at: edited };
+        return { ...post, comments };
+      });
+      return changed ? next : current;
+    }
+
+    if (!postId || row.deleted_at) {
+      return current;
+    }
+    const postIndex = list.findIndex((post) => post?.id === postId);
+    if (postIndex < 0) {
+      return current;
+    }
+    const post = list[postIndex]!;
+    const comments = post.comments ?? [];
+    if (comments.some((comment) => comment.id === id)) {
+      return current;
+    }
+    const optimisticAt = comments.findIndex(
+      (comment) =>
+        comment.id.startsWith('optimistic-comment-') &&
+        String(comment.author_id ?? '') === String(row.author_id ?? '') &&
+        bodyKey(comment.content) === bodyKey(row.content) &&
+        (comment.parent_id ?? null) === (row.parent_id ?? null),
+    );
+    let nextComments: NonNullable<LiveSocialPost['comments']>;
+    if (optimisticAt >= 0) {
+      nextComments = comments.slice();
+      nextComments[optimisticAt] = {
+        ...comments[optimisticAt]!,
+        id,
+        parent_id: row.parent_id ?? null,
+        created_at: row.created_at ?? comments[optimisticAt]!.created_at,
+      };
+    } else {
+      const authorId = String(row.author_id ?? '').trim();
+      const author = knownAuthor(list, authorId) ?? stubLiveAuthor(authorId);
+      nextComments = [
+        ...comments,
+        {
+          id,
+          post_id: postId,
+          author_id: row.author_id ?? null,
+          parent_id: row.parent_id ?? null,
+          content: row.content ?? '',
+          created_at: row.created_at ?? new Date().toISOString(),
+          edited_at: row.edited_at ?? null,
+          ...(author ? { author } : {}),
+          reactions: [],
+        },
+      ];
+    }
+    const next = list.slice();
+    next[postIndex] = { ...post, comments: nextComments };
+    return next;
+  } catch (error) {
+    logMergeFail('comment', error, { commentId: payload?.new?.id ?? payload?.old?.id ?? null });
+    return current;
+  }
+}
+
+/** Reaction writes by someone else, on a post or on one of its comments. */
+export function patchLiveReactionList(
+  current: unknown,
+  payload: LiveSocialPayload<LiveReactionRow>,
+  viewerId?: string | null,
+): unknown {
+  try {
+    if (!Array.isArray(current)) {
+      return current;
+    }
+    const list = current as LiveSocialPost[];
+    const event = String(payload.eventType ?? '').toUpperCase();
+
+    if (event === 'DELETE') {
+      const removedId = String(payload.old?.id ?? '').trim();
+      if (!removedId) {
+        return current;
+      }
+      let changed = false;
+      const next = list.map((post) => {
+        let postChanged = false;
+        let reactions = post?.reactions;
+        if (reactions?.some((reaction) => reaction.id === removedId)) {
+          reactions = reactions.filter((reaction) => reaction.id !== removedId);
+          postChanged = true;
+        }
+        let comments = post?.comments;
+        if (comments?.some((comment) => comment.reactions?.some((reaction) => reaction.id === removedId))) {
+          comments = comments.map((comment) =>
+            comment.reactions?.some((reaction) => reaction.id === removedId)
+              ? { ...comment, reactions: comment.reactions.filter((reaction) => reaction.id !== removedId) }
+              : comment,
+          );
+          postChanged = true;
+        }
+        if (!postChanged) {
+          return post;
+        }
+        changed = true;
+        return { ...post, reactions, comments };
+      });
+      return changed ? next : current;
+    }
+
+    const row = payload.new;
+    const userId = String(row?.user_id ?? '').trim();
+    const type = String(row?.reaction_type ?? '').trim();
+    if (!row?.id || !userId || !type || (event !== 'INSERT' && event !== 'UPDATE')) {
+      return current;
+    }
+    const reaction: Reaction = {
+      id: row.id,
+      user_id: userId,
+      post_id: row.post_id ?? null,
+      comment_id: row.comment_id ?? null,
+      reaction_type: type as Reaction['reaction_type'],
+      created_at: row.created_at ?? new Date().toISOString(),
+    };
+    // The viewer's own tap is already on screen. A late echo must not undo a fast un-tap.
+    if (viewerId && userId === viewerId && isFreshOptimisticReactionKey(reactionSetKeyFromRow(reaction))) {
+      return current;
+    }
+    const commentId = String(row.comment_id ?? '').trim();
+    const postId = String(row.post_id ?? '').trim();
+    let changed = false;
+    const next = list.map((post) => {
+      if (commentId) {
+        if (!post?.comments?.some((comment) => comment.id === commentId)) {
+          return post;
+        }
+        const comments = post.comments.map((comment) => {
+          if (comment.id !== commentId) {
+            return comment;
+          }
+          const merged = upsertReactionInList(comment.reactions ?? [], reaction);
+          if (sameJson(merged, comment.reactions ?? [])) {
+            return comment;
+          }
+          changed = true;
+          return { ...comment, reactions: merged };
+        });
+        return changed ? { ...post, comments } : post;
+      }
+      if (!postId || post?.id !== postId) {
+        return post;
+      }
+      const merged = upsertReactionInList(post.reactions ?? [], reaction);
+      if (sameJson(merged, post.reactions ?? [])) {
+        return post;
+      }
+      changed = true;
+      return { ...post, reactions: merged };
+    });
+    return changed ? next : current;
+  } catch (error) {
+    logMergeFail('reaction', error, { reactionId: payload?.new?.id ?? payload?.old?.id ?? null });
+    return current;
+  }
+}
+
+/** Swap a stub name for the real profile on every comment and post by that person. */
+export function patchLiveAuthorList(current: unknown, authorId: string, author: LiveAuthor): unknown {
+  if (!Array.isArray(current) || !authorId || isStubAuthor(author)) {
+    return current;
+  }
+  const list = current as LiveSocialPost[];
+  let changed = false;
+  const next = list.map((post) => {
+    let postNext = post;
+    if (post?.author_id === authorId && isStubAuthor(post.author)) {
+      postNext = { ...postNext, author };
+      changed = true;
+    }
+    if (post?.comments?.some((comment) => comment.author_id === authorId && isStubAuthor(comment.author))) {
+      postNext = {
+        ...postNext,
+        comments: post.comments.map((comment) =>
+          comment.author_id === authorId && isStubAuthor(comment.author) ? { ...comment, author } : comment,
+        ),
+      };
+      changed = true;
+    }
+    return postNext;
+  });
+  return changed ? next : current;
+}
+
+type LiveCacheClient = Pick<QueryClient, 'setQueriesData'> &
+  Partial<Pick<QueryClient, 'getQueriesData'>>;
+
+function mapLiveLists(
+  queryClient: Pick<QueryClient, 'setQueriesData'>,
+  challengeId: string,
+  update: (list: unknown) => unknown,
+): boolean {
+  let matched = false;
+  queryClient.setQueriesData({ queryKey: ['live', challengeId] }, (current) => {
+    if (!Array.isArray(current)) {
+      return current;
+    }
+    const next = update(current);
+    if (next !== current) {
+      matched = true;
+    }
+    return next;
+  });
+  return matched;
+}
+
+export function patchChallengeLiveComment(
+  queryClient: Pick<QueryClient, 'setQueriesData'>,
+  challengeId: string,
+  payload: LiveSocialPayload<LiveCommentRow>,
+): boolean {
+  return mapLiveLists(queryClient, challengeId, (list) => patchLiveCommentList(list, payload));
+}
+
+export function patchChallengeLiveReaction(
+  queryClient: Pick<QueryClient, 'setQueriesData'>,
+  challengeId: string,
+  payload: LiveSocialPayload<LiveReactionRow>,
+  viewerId?: string | null,
+): boolean {
+  return mapLiveLists(queryClient, challengeId, (list) => patchLiveReactionList(list, payload, viewerId));
+}
+
+export function patchChallengeLiveAuthor(
+  queryClient: Pick<QueryClient, 'setQueriesData'>,
+  challengeId: string,
+  authorId: string,
+  author: LiveAuthor,
+): boolean {
+  return mapLiveLists(queryClient, challengeId, (list) => patchLiveAuthorList(list, authorId, author));
+}
+
+/**
+ * A realtime post INSERT paints with its author and social data. It fetches that one post
+ * first; a failed fetch still shows the row, under a neutral name.
+ */
+export async function patchChallengeLiveInsert(
+  queryClient: LiveCacheClient,
+  challengeId: string,
+  payload: LiveFeedRealtimePayload,
+  fetchPost: (postId: string) => Promise<FeedPostRow | null>,
+): Promise<boolean> {
+  const row = payload.new;
+  const event = String(payload.eventType ?? '').toUpperCase();
+  const id = String(row?.id ?? '').trim();
+  if (event !== 'INSERT' || !row || !id) {
+    return patchChallengeLiveFeed(queryClient, challengeId, payload);
+  }
+  if (typeof queryClient.getQueriesData === 'function') {
+    const lists = queryClient
+      .getQueriesData<unknown>({ queryKey: ['live', challengeId] })
+      .map(([, data]) => data)
+      .filter(Array.isArray);
+    if (lists.length > 0 && !lists.some((list) => liveInsertWouldAppend(list, row))) {
+      return patchChallengeLiveFeed(queryClient, challengeId, payload);
+    }
+  }
+  let hydrated: FeedPostRow | null = null;
+  try {
+    hydrated = await fetchPost(id);
+  } catch (error) {
+    logMergeFail('insert-fetch', error, { postId: id });
+  }
+  const usable = hydrated && hydrated.id === id && !hydrated.deleted_at ? hydrated : null;
+  return patchChallengeLiveFeed(queryClient, challengeId, {
+    eventType: 'INSERT',
+    new: usable ? { ...row, ...usable } : row,
+  });
 }

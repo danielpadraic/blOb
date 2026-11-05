@@ -7,7 +7,7 @@ import {
   type InfiniteData,
   type QueryClient,
 } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 
 import { clipPostsQueryKey } from '@/lib/clipPost';
@@ -181,6 +181,8 @@ function isCircleScope(scope: FeedScope): boolean {
 type PostPage = {
   limit?: number;
   before?: HomeFeedCursor | null;
+  /** Out: rows the server returned before moderation filtering, and the oldest created_at. */
+  meta?: { raw: number; oldest: string | null };
 };
 
 export type HomeFeedPage = {
@@ -236,6 +238,11 @@ async function queryPosts(scope: FeedScope, page?: PostPage): Promise<PostWithMe
   const { data, error } = result;
   if (error) {
     throw new Error(rawFeedError(error));
+  }
+  if (page?.meta) {
+    const rawRows = (data ?? []) as unknown as Array<{ created_at?: string | null }>;
+    page.meta.raw = rawRows.length;
+    page.meta.oldest = rawRows.length ? (rawRows[rawRows.length - 1]?.created_at ?? null) : null;
   }
   return dedupeLivePostsByCheckinId(
     ((data ?? []) as unknown as PostWithMeta[])
@@ -1259,6 +1266,7 @@ async function fetchPosts(input: {
   circleId?: string | null;
   userId?: string;
   queryClient?: QueryClient;
+  page?: PostPage;
 }): Promise<PostWithMeta[]> {
   const circleId = String(input.circleId ?? '').trim();
   if (circleId) {
@@ -1274,7 +1282,7 @@ async function fetchPosts(input: {
   }
 
   if (input.challengeId) {
-    const rows = await queryPosts({ kind: 'challenge', challengeId: input.challengeId });
+    const rows = await queryPosts({ kind: 'challenge', challengeId: input.challengeId }, input.page);
     let hydrated = rows;
     try {
       hydrated = await hydrateAuthors(await withSocial(rows, input.userId));
@@ -1394,6 +1402,13 @@ function unionCheckinMedia(existing: unknown, incoming: string[]): string[] {
 }
 
 /** Home route. Scope is always home — never a leftover circleId. */
+const LIVE_PAGE_SIZE = 50;
+const liveEarlierMeta = new Map<string, { cursor: string | null; hasMore: boolean }>();
+
+function liveEarlierKey(key: readonly unknown[]): string {
+  return key.map((part) => String(part ?? '')).join('|');
+}
+
 export function useHomeFeed() {
   return useFeed();
 }
@@ -1445,6 +1460,10 @@ export function useFeed(challengeId?: string | null) {
     },
   });
 
+  const [, bumpEarlier] = useReducer((count: number) => count + 1, 0);
+  const [earlierBusy, setEarlierBusy] = useState(false);
+  const earlierFlight = useRef(false);
+
   const challengeQuery = useQuery({
     queryKey: challengeId ? liveListKey(challengeId, user?.id) : feedListKey('challenge', user?.id),
     enabled: !home,
@@ -1454,17 +1473,65 @@ export function useFeed(challengeId?: string | null) {
     refetchOnReconnect: false,
     refetchInterval: false,
     queryFn: async () => {
+      const meta = { raw: 0, oldest: null as string | null };
       const posts = await fetchPosts({
         challengeId,
         userId: user?.id,
         queryClient,
+        page: { meta },
       });
       const incoming = uniqueLivePostsById(dedupeLivePostsByCheckinId(posts));
       const key = challengeId ? liveListKey(challengeId, user?.id) : feedListKey('challenge', user?.id);
       const prev = queryClient.getQueryData<PostWithMeta[]>(key);
+      const marker = liveEarlierKey(key);
+      // The first read of a room decides whether older posts exist. A refetch keeps what
+      // "Load earlier" already learned.
+      if (!prev?.length || !liveEarlierMeta.has(marker)) {
+        liveEarlierMeta.set(marker, {
+          cursor: meta.oldest,
+          hasMore: meta.raw >= LIVE_PAGE_SIZE,
+        });
+      }
       return mergeLiveFeedSnapshot(Array.isArray(prev) ? prev : undefined, incoming);
     },
   });
+
+  const loadEarlier = useCallback(async () => {
+    if (home || !challengeId || earlierFlight.current) {
+      return;
+    }
+    const key = liveListKey(challengeId, user?.id);
+    const marker = liveEarlierKey(key);
+    const state = liveEarlierMeta.get(marker);
+    if (!state?.hasMore || !state.cursor) {
+      return;
+    }
+    earlierFlight.current = true;
+    setEarlierBusy(true);
+    try {
+      const meta = { raw: 0, oldest: null as string | null };
+      const posts = await fetchPosts({
+        challengeId,
+        userId: user?.id,
+        queryClient,
+        page: { before: { createdAt: state.cursor, id: '' }, meta, limit: LIVE_PAGE_SIZE },
+      });
+      queryClient.setQueryData<PostWithMeta[]>(key, (current) =>
+        mergeLiveFeedSnapshot(
+          Array.isArray(current) ? current : undefined,
+          uniqueLivePostsById(dedupeLivePostsByCheckinId(posts)),
+        ),
+      );
+      liveEarlierMeta.set(marker, {
+        cursor: meta.oldest ?? state.cursor,
+        hasMore: meta.raw >= LIVE_PAGE_SIZE && Boolean(meta.oldest),
+      });
+    } finally {
+      earlierFlight.current = false;
+      setEarlierBusy(false);
+      bumpEarlier();
+    }
+  }, [challengeId, home, queryClient, user?.id]);
 
   const homePosts = useMemo(
     () =>
@@ -1544,11 +1611,17 @@ export function useFeed(challengeId?: string | null) {
     };
   }
 
+  const earlier = challengeId
+    ? liveEarlierMeta.get(liveEarlierKey(liveListKey(challengeId, user?.id)))
+    : undefined;
   return {
     ...challengeQuery,
-    fetchNextPage: async () => challengeQuery,
-    hasNextPage: false,
-    isFetchingNextPage: false,
+    fetchNextPage: async () => {
+      await loadEarlier();
+      return challengeQuery;
+    },
+    hasNextPage: Boolean(earlier?.hasMore),
+    isFetchingNextPage: earlierBusy,
     warning: null,
   };
 }

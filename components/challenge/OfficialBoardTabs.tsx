@@ -28,7 +28,7 @@ function OfficialMonthBoard({
   viewerId?: string | null;
   joined: boolean;
 }) {
-  useChallengeBoardRealtime(challengeId);
+  useChallengeBoardRealtime(challengeId, { boardOnly: true });
   const challengeQuery = useChallenge(challengeId);
   const challenge = challengeQuery.data?.id === challengeId ? challengeQuery.data : null;
   const roster = useChallengeParticipants(challengeId);

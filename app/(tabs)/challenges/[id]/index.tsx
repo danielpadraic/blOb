@@ -1420,6 +1420,9 @@ export default function ChallengeDetailScreen() {
           placeholder={isCalloutObserver ? CALLOUT_CHEER_PLACEHOLDER : undefined}
           footerReserve={stickyJoin ? stickyBlock : 0}
           onFirstPaint={() => setLivePainted(true)}
+          hasEarlier={Boolean(feed.hasNextPage)}
+          loadingEarlier={Boolean(feed.isFetchingNextPage)}
+          onLoadEarlier={() => feed.fetchNextPage()}
           onRefresh={() => void onRefresh()}
           onRetry={() => void feed.refetch()}
           onCompose={(input) => createPost.mutateAsync(input)}

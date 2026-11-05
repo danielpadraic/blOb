@@ -150,6 +150,10 @@ type LiveThreadProps = {
   focused?: boolean;
   /** Fires after this visit’s first list frame (or a still empty list). Tour waits on this. */
   onFirstPaint?: () => void;
+  /** Older posts exist. Shows "Load earlier" at the top of the thread. */
+  hasEarlier?: boolean;
+  loadingEarlier?: boolean;
+  onLoadEarlier?: () => Promise<unknown> | void;
   onRefresh?: () => void;
   onRetry?: () => void;
   onCompose: (input: ComposeInput) => Promise<unknown> | void;
@@ -185,6 +189,9 @@ export function LiveThread({
   readCursorChallengeId,
   focused = true,
   onFirstPaint,
+  hasEarlier,
+  loadingEarlier,
+  onLoadEarlier,
   onRefresh,
   onRetry,
   onCompose,
@@ -296,6 +303,12 @@ export function LiveThread({
   const viewportHRef = useRef(0);
   /** Last reported offset, used to tell a user's upward scroll from our own downward pin. */
   const lastOffsetRef = useRef(0);
+  const contentHeightRef = useRef(0);
+  // "Load earlier" adds rows above the viewport. Web has no native anchor, so the offset is
+  // re-derived from the height the content gained; native uses maintainVisibleContentPosition.
+  const prependRef = useRef<{ offset: number; height: number } | null>(null);
+  const [holdAnchor, setHoldAnchor] = useState(false);
+  const [earlierFailed, setEarlierFailed] = useState(false);
   const emptyList = rows.length === 0;
   const listContentStyle = useMemo(
     () => ({
@@ -791,6 +804,28 @@ export function LiveThread({
     }
   }, [logLive, unreadAbove.oldestIndex]);
 
+  const onLoadEarlierPress = useCallback(async () => {
+    if (!onLoadEarlier || loadingEarlier) {
+      return;
+    }
+    setEarlierFailed(false);
+    // The reader is at the top of the thread. Nothing below may pull them to the newest row.
+    userLeftEndRef.current = true;
+    atEndRef.current = false;
+    firstPaintPendingRef.current = false;
+    prependRef.current = { offset: lastOffsetRef.current, height: contentHeightRef.current };
+    setHoldAnchor(true);
+    try {
+      await onLoadEarlier();
+    } catch {
+      setEarlierFailed(true);
+    }
+    setTimeout(() => {
+      prependRef.current = null;
+      setHoldAnchor(false);
+    }, 1500);
+  }, [loadingEarlier, onLoadEarlier]);
+
   const onScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
@@ -1175,7 +1210,21 @@ export function LiveThread({
             viewportHRef.current = event.nativeEvent.layout.height;
             finishFirstPaintPin();
           }}
-          onContentSizeChange={() => {
+          maintainVisibleContentPosition={
+            holdAnchor && Platform.OS !== 'web' ? { minIndexForVisible: 0 } : undefined
+          }
+          onContentSizeChange={(_width, height) => {
+            contentHeightRef.current = height;
+            const pending = prependRef.current;
+            if (pending) {
+              if (Platform.OS === 'web' && height !== pending.height) {
+                listRef.current?.scrollToOffset({
+                  offset: Math.max(pending.offset + (height - pending.height), 0),
+                  animated: false,
+                });
+              }
+              return;
+            }
             if (userLeftEndRef.current) {
               return;
             }
@@ -1195,11 +1244,40 @@ export function LiveThread({
           contentContainerStyle={listContentStyle}
           ListEmptyComponent={renderQuietEmpty}
           ListHeaderComponent={
-            missingComment ? (
-              <View style={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 2 }}>
-                <AppText className="text-[13px]" style={{ color: THEME.textMuted }}>
-                  {COMMENT_UNAVAILABLE}
-                </AppText>
+            missingComment || hasEarlier ? (
+              <View>
+                {hasEarlier ? (
+                  <View style={{ alignItems: 'center', paddingTop: 8, paddingBottom: 6 }}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Load earlier messages"
+                      disabled={Boolean(loadingEarlier)}
+                      onPress={() => void onLoadEarlierPress()}
+                      style={{
+                        minHeight: 36,
+                        paddingHorizontal: 16,
+                        justifyContent: 'center',
+                        borderRadius: 999,
+                        backgroundColor: THEME.accentSoft,
+                        opacity: loadingEarlier ? 0.6 : 1,
+                      }}>
+                      <AppText className="text-[13px] font-semibold" style={{ color: THEME.accent }}>
+                        {loadingEarlier
+                          ? 'Loading…'
+                          : earlierFailed
+                            ? 'Couldn’t load. Try again'
+                            : 'Load earlier'}
+                      </AppText>
+                    </Pressable>
+                  </View>
+                ) : null}
+                {missingComment ? (
+                  <View style={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: 2 }}>
+                    <AppText className="text-[13px]" style={{ color: THEME.textMuted }}>
+                      {COMMENT_UNAVAILABLE}
+                    </AppText>
+                  </View>
+                ) : null}
               </View>
             ) : null
           }

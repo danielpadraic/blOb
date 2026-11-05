@@ -1,10 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   dedupeLivePostsByCheckinId,
   matchOptimisticLiveIndex,
   mergeLiveFeedSnapshot,
+  patchChallengeLiveInsert,
+  patchLiveAuthorList,
+  patchLiveCommentList,
   patchLiveFeedList,
+  patchLiveReactionList,
   uniqueLivePostsById,
   upsertLiveFeedPost,
 } from '@/lib/liveFeedPatch';
@@ -258,5 +262,177 @@ describe('mergeLiveFeedSnapshot', () => {
   it('returns the incoming list on first paint when nothing is on screen yet', () => {
     const incoming = [A, B];
     expect(mergeLiveFeedSnapshot(undefined, incoming)[0]).toBe(A);
+  });
+});
+
+describe('optimistic row match', () => {
+  const at = '2026-09-10T17:21:00.000Z';
+  const near = '2026-09-10T17:21:02.000Z';
+  const photo = 'https://cdn.test/p/one.jpg';
+
+  it('matches a photo-only send by media, not by empty content', () => {
+    const list = [
+      { id: 'optimistic-1', author_id: 'me', content: null, media_urls: [photo], created_at: at },
+    ];
+    expect(
+      matchOptimisticLiveIndex(list, {
+        author_id: 'me',
+        content: null,
+        media_urls: [`${photo}?token=x`],
+        created_at: near,
+      }),
+    ).toBe(0);
+  });
+
+  it('matches by client temp id even when the words were edited', () => {
+    const list = [{ id: 'optimistic-7', author_id: 'me', content: 'draft', created_at: at }];
+    expect(
+      matchOptimisticLiveIndex(list, {
+        author_id: 'me',
+        content: 'draft (edited)',
+        client_temp_id: 'optimistic-7',
+        created_at: near,
+      }),
+    ).toBe(0);
+  });
+
+  it('does not match a photo send to a text-only row or another author', () => {
+    const list = [{ id: 'optimistic-2', author_id: 'me', content: 'hi', media_urls: [photo], created_at: at }];
+    expect(matchOptimisticLiveIndex(list, { author_id: 'me', content: 'hi', created_at: near })).toBe(-1);
+    expect(
+      matchOptimisticLiveIndex(list, { author_id: 'you', content: 'hi', media_urls: [photo], created_at: near }),
+    ).toBe(-1);
+  });
+
+  it('does not collapse two quick identical photo-less repeats outside the window', () => {
+    const list = [{ id: 'optimistic-3', author_id: 'me', content: null, created_at: at }];
+    expect(
+      matchOptimisticLiveIndex(list, { author_id: 'me', content: null, created_at: '2026-09-10T17:25:00.000Z' }),
+    ).toBe(-1);
+  });
+});
+
+describe('Live social patches', () => {
+  const post = {
+    id: 'p1',
+    author_id: 'me',
+    created_at: '2026-09-10T17:00:00.000Z',
+    author: { id: 'me', display_name: 'Me' },
+    comments: [] as Array<Record<string, unknown>>,
+    reactions: [] as Array<Record<string, unknown>>,
+  };
+
+  it('appends another person\'s comment with a neutral author, then fills the real one', () => {
+    const next = patchLiveCommentList([post], {
+      eventType: 'INSERT',
+      new: { id: 'c1', post_id: 'p1', author_id: 'u2', content: 'nice', created_at: '2026-09-10T17:01:00.000Z' },
+    }) as typeof post[];
+    expect(next[0].comments).toHaveLength(1);
+    expect((next[0].comments[0] as { author?: { display_name?: string } }).author?.display_name).toBe('Member');
+    const named = patchLiveAuthorList(next, 'u2', { id: 'u2', display_name: 'Sam' }) as typeof post[];
+    expect((named[0].comments[0] as { author?: { display_name?: string } }).author?.display_name).toBe('Sam');
+  });
+
+  it('ignores a comment for a post that is not in this Live and a repeat id', () => {
+    const list = [post];
+    expect(
+      patchLiveCommentList(list, { eventType: 'INSERT', new: { id: 'c9', post_id: 'other', author_id: 'u2', content: 'x' } }),
+    ).toBe(list);
+    const once = patchLiveCommentList(list, {
+      eventType: 'INSERT',
+      new: { id: 'c1', post_id: 'p1', author_id: 'u2', content: 'x' },
+    });
+    const twice = patchLiveCommentList(once, {
+      eventType: 'INSERT',
+      new: { id: 'c1', post_id: 'p1', author_id: 'u2', content: 'x' },
+    });
+    expect(twice).toBe(once);
+  });
+
+  it('swaps the viewer optimistic comment instead of doubling it', () => {
+    const list = [
+      {
+        ...post,
+        comments: [
+          { id: 'optimistic-comment-1', post_id: 'p1', author_id: 'me', content: 'hey', parent_id: null },
+        ],
+      },
+    ];
+    const next = patchLiveCommentList(list, {
+      eventType: 'INSERT',
+      new: { id: 'c2', post_id: 'p1', author_id: 'me', content: 'hey', parent_id: null },
+    }) as typeof list;
+    expect(next[0].comments.map((row) => row.id)).toEqual(['c2']);
+  });
+
+  it('removes a deleted comment', () => {
+    const list = [{ ...post, comments: [{ id: 'c1', post_id: 'p1', author_id: 'u2', content: 'x' }] }];
+    const next = patchLiveCommentList(list, { eventType: 'DELETE', old: { id: 'c1', post_id: 'p1' } }) as typeof list;
+    expect(next[0].comments).toEqual([]);
+  });
+
+  it('adds and removes another person\'s reaction on a post', () => {
+    const added = patchLiveReactionList(
+      [post],
+      { eventType: 'INSERT', new: { id: 'r1', post_id: 'p1', user_id: 'u2', reaction_type: 'like' } },
+      'me',
+    ) as typeof post[];
+    expect(added[0].reactions).toHaveLength(1);
+    const removed = patchLiveReactionList(added, { eventType: 'DELETE', old: { id: 'r1' } }, 'me') as typeof post[];
+    expect(removed[0].reactions).toHaveLength(0);
+  });
+
+  it('ignores a reaction for a post that is not in this Live', () => {
+    const list = [post];
+    expect(
+      patchLiveReactionList(list, { eventType: 'INSERT', new: { id: 'r1', post_id: 'zzz', user_id: 'u2', reaction_type: 'like' } }, 'me'),
+    ).toBe(list);
+  });
+});
+
+describe('patchChallengeLiveInsert', () => {
+  const key = ['live', 'ch1', 'me'];
+  function client(initial: unknown[]) {
+    const store = new Map<string, unknown>([[JSON.stringify(key), initial]]);
+    return {
+      store,
+      getQueriesData: vi.fn(() => [[key, store.get(JSON.stringify(key))]]),
+      setQueriesData: vi.fn((_filter: unknown, updater: (data: unknown) => unknown) => {
+        store.set(JSON.stringify(key), updater(store.get(JSON.stringify(key))));
+      }),
+    };
+  }
+  const row = { id: 'n1', author_id: 'u2', challenge_id: 'ch1', content: 'yo', created_at: '2026-09-10T17:00:00.000Z' };
+
+  it('paints the fetched author and social data', async () => {
+    const qc = client([]);
+    await patchChallengeLiveInsert(qc as never, 'ch1', { eventType: 'INSERT', new: row }, async () => ({
+      ...row,
+      author: { id: 'u2', display_name: 'Sam' },
+      reactions: [{ id: 'r1', post_id: 'n1', user_id: 'u3', reaction_type: 'like' }],
+      comments: [],
+    }) as never);
+    const list = qc.store.get(JSON.stringify(key)) as Array<Record<string, any>>;
+    expect(list).toHaveLength(1);
+    expect(list[0].author.display_name).toBe('Sam');
+    expect(list[0].reactions).toHaveLength(1);
+  });
+
+  it('falls back to a neutral name when the fetch fails', async () => {
+    const qc = client([]);
+    await patchChallengeLiveInsert(qc as never, 'ch1', { eventType: 'INSERT', new: row }, async () => {
+      throw new Error('offline');
+    });
+    const list = qc.store.get(JSON.stringify(key)) as Array<Record<string, any>>;
+    expect(list).toHaveLength(1);
+    expect(list[0].author.display_name).toBe('Member');
+    expect(list[0].reactions).toEqual([]);
+  });
+
+  it('does not fetch for a row already on screen', async () => {
+    const qc = client([{ ...row, author: { id: 'u2', display_name: 'Sam' } }]);
+    const fetchPost = vi.fn(async () => null);
+    await patchChallengeLiveInsert(qc as never, 'ch1', { eventType: 'INSERT', new: row }, fetchPost);
+    expect(fetchPost).not.toHaveBeenCalled();
   });
 });

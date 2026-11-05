@@ -2,7 +2,19 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import type { QueryClient } from '@tanstack/react-query';
 
 import { reportAppError } from '@/lib/appErrors';
-import { patchChallengeLiveFeed } from '@/lib/liveFeedPatch';
+import {
+  patchChallengeLiveAuthor,
+  patchChallengeLiveComment,
+  patchChallengeLiveFeed,
+  patchChallengeLiveInsert,
+  patchChallengeLiveReaction,
+  type LiveCommentRow,
+  type LiveFeedPostRow,
+  type LiveReactionRow,
+  type LiveSocialPayload,
+} from '@/lib/liveFeedPatch';
+import { fetchSilencedAuthorIds } from '@/lib/moderation';
+import { fetchPublicProfilesByIds } from '@/lib/social';
 import { supabase } from '@/lib/supabase';
 
 const UUID_RE =
@@ -10,7 +22,37 @@ const UUID_RE =
 
 export const CHALLENGE_BOARD_CHANNEL_PREFIX = 'challenge-board:';
 
-type BoardQueryClient = Pick<QueryClient, 'invalidateQueries' | 'setQueriesData'>;
+type BoardQueryClient = Pick<QueryClient, 'invalidateQueries' | 'setQueriesData'> &
+  Partial<Pick<QueryClient, 'getQueriesData'>>;
+
+/** Who is looking. Their own taps are already on screen; their mutes hide other people's replies. */
+export type BoardViewer = { id?: string | null; /** Skip comments + reactions (a scoring-only board has no Live). */ boardOnly?: boolean };
+
+type BoardFetchers = {
+  fetchPost: (postId: string, viewerId?: string | null) => Promise<Record<string, unknown> | null>;
+  fetchAuthor: (authorId: string) => Promise<Record<string, unknown> | null>;
+  silenced: (viewerId?: string | null) => Promise<Set<string>>;
+};
+
+const defaultFetchers: BoardFetchers = {
+  // Loaded on first use so the realtime module does not pull the whole feed layer in with it.
+  fetchPost: async (postId, viewerId) => {
+    const { fetchPostsByIds } = await import('@/hooks/useFeed');
+    const rows = await fetchPostsByIds([postId], viewerId ?? undefined);
+    return (rows[0] as unknown as Record<string, unknown> | undefined) ?? null;
+  },
+  fetchAuthor: async (authorId) => {
+    const rows = await fetchPublicProfilesByIds([authorId]);
+    return (rows[0] as unknown as Record<string, unknown> | undefined) ?? null;
+  },
+  silenced: (viewerId) => fetchSilencedAuthorIds(viewerId),
+};
+
+let fetchers: BoardFetchers = defaultFetchers;
+
+export function setChallengeBoardFetchersForTests(next?: Partial<BoardFetchers>): void {
+  fetchers = next ? { ...defaultFetchers, ...next } : defaultFetchers;
+}
 
 export type ChallengeBoardRealtimeHost = {
   channel: (name: string) => RealtimeChannel;
@@ -22,6 +64,7 @@ type BoardFlight = {
   challengeId: string;
   channel: RealtimeChannel;
   refs: number;
+  viewer: BoardViewer;
 };
 
 const flights = new Map<string, BoardFlight>();
@@ -73,6 +116,7 @@ function bindBoardChannel(
   channel: RealtimeChannel,
   challengeId: string,
   queryClient: BoardQueryClient,
+  viewer: BoardViewer,
 ): void {
   const refreshBoard = () => {
     void queryClient.invalidateQueries({ queryKey: ['challenge-participants', challengeId] });
@@ -88,7 +132,57 @@ function bindBoardChannel(
     old?: { id?: string; checkin_id?: string | null };
   }) => {
     // Stats / media / card writes patch in place. A feed invalidate remounts Live.
-    patchChallengeLiveFeed(queryClient, challengeId, payload);
+    // A new post fetches its author and social data first, then patches.
+    void patchChallengeLiveInsert(
+      queryClient,
+      challengeId,
+      payload,
+      async (postId) => ((await fetchers.fetchPost(postId, viewer.id)) as LiveFeedPostRow | null) ?? null,
+    ).catch((error) => logBoard(challengeId, 'insert', error));
+  };
+  // comments and reactions carry post_id, not challenge_id, so they cannot be filtered on the
+  // server. Anything for a post that is not in this Live list is dropped on arrival.
+  const silencedSet = async (): Promise<Set<string>> => {
+    try {
+      return await fetchers.silenced(viewer.id);
+    } catch {
+      return new Set();
+    }
+  };
+  const onComment = async (payload: LiveSocialPayload<LiveCommentRow>) => {
+    try {
+      const event = String(payload.eventType ?? '').toUpperCase();
+      const authorId = String(payload.new?.author_id ?? '').trim();
+      if (event === 'INSERT' && authorId && authorId !== viewer.id && (await silencedSet()).has(authorId)) {
+        return;
+      }
+      const placed = patchChallengeLiveComment(queryClient, challengeId, payload);
+      if (!placed || event !== 'INSERT' || !authorId) {
+        return;
+      }
+      const author = await fetchers.fetchAuthor(authorId).catch(() => null);
+      if (author) {
+        patchChallengeLiveAuthor(
+          queryClient,
+          challengeId,
+          authorId,
+          author as Parameters<typeof patchChallengeLiveAuthor>[3],
+        );
+      }
+    } catch (error) {
+      logBoard(challengeId, 'comment', error);
+    }
+  };
+  const onReaction = async (payload: LiveSocialPayload<LiveReactionRow>) => {
+    try {
+      const reactor = String(payload.new?.user_id ?? '').trim();
+      if (reactor && reactor !== viewer.id && (await silencedSet()).has(reactor)) {
+        return;
+      }
+      patchChallengeLiveReaction(queryClient, challengeId, payload, viewer.id);
+    } catch (error) {
+      logBoard(challengeId, 'reaction', error);
+    }
   };
   const refreshSettlement = () => {
     // Presence / participant_count / "In 0" patches the challenges row. Do not
@@ -162,12 +256,17 @@ function bindBoardChannel(
         filter: `challenge_id=eq.${challengeId}`,
       },
       refreshSettlement,
-    )
-    .subscribe((status) => {
-      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        logBoard(challengeId, status);
-      }
-    });
+    );
+  if (!viewer.boardOnly) {
+    channel
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, onComment)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reactions' }, onReaction);
+  }
+  channel.subscribe((status) => {
+    if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+      logBoard(challengeId, status);
+    }
+  });
 }
 
 /**
@@ -178,6 +277,8 @@ export function acquireChallengeBoardRealtime(
   challengeId: string,
   queryClient: BoardQueryClient,
   host?: ChallengeBoardRealtimeHost,
+  viewerId?: string | null,
+  options?: { boardOnly?: boolean },
 ): RealtimeChannel | null {
   const id = challengeId.trim();
   try {
@@ -189,12 +290,14 @@ export function acquireChallengeBoardRealtime(
     const held = flights.get(id);
     if (held) {
       held.refs += 1;
+      held.viewer.id = viewerId ?? held.viewer.id;
       return held.channel;
     }
+    const viewer: BoardViewer = { id: viewerId ?? null, boardOnly: Boolean(options?.boardOnly) };
 
     const existing = findExistingChannel(id, client);
     if (existing && isRealtimeChannelLive(existing)) {
-      flights.set(id, { challengeId: id, channel: existing, refs: 1 });
+      flights.set(id, { challengeId: id, channel: existing, refs: 1, viewer });
       return existing;
     }
     if (existing) {
@@ -207,12 +310,12 @@ export function acquireChallengeBoardRealtime(
 
     const channel = client.channel(challengeBoardChannelName(id));
     if (isRealtimeChannelLive(channel)) {
-      flights.set(id, { challengeId: id, channel, refs: 1 });
+      flights.set(id, { challengeId: id, channel, refs: 1, viewer });
       return channel;
     }
 
     try {
-      bindBoardChannel(channel, id, queryClient);
+      bindBoardChannel(channel, id, queryClient, viewer);
     } catch (error) {
       logBoard(id, 'subscribe', error);
       reportAppError({
@@ -227,7 +330,7 @@ export function acquireChallengeBoardRealtime(
       }
       return null;
     }
-    flights.set(id, { challengeId: id, channel, refs: 1 });
+    flights.set(id, { challengeId: id, channel, refs: 1, viewer });
     return channel;
   } catch (error) {
     logBoard(id, 'subscribe', error);
