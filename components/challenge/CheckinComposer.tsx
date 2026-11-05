@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import {
   Alert,
   FlatList,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -588,14 +587,13 @@ export function CheckinComposer({
 
   return (
     <KeyboardFormContext.Provider value={formApi}>
-    <KeyboardAvoidingView
+    <View
       className="flex-1"
       style={{
         flex: 1,
         backgroundColor: THEME.background,
-      }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={0}>
+        marginBottom: keyboardOverlap,
+      }}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Close"
@@ -626,7 +624,6 @@ export function CheckinComposer({
         }}
         keyboardShouldPersistTaps="always"
         keyboardDismissMode="none"
-        automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
         showsVerticalScrollIndicator={false}
         onScroll={(event) => {
           scrollY.current = event.nativeEvent.contentOffset.y;
@@ -1091,7 +1088,7 @@ export function CheckinComposer({
           </View>
         </KeyboardField>
       </View>
-    </KeyboardAvoidingView>
+    </View>
     </KeyboardFormContext.Provider>
   );
 }

@@ -1,15 +1,15 @@
 import { useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, View } from 'react-native';
+import { Alert, Pressable, ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChallengePhotoField } from '@/components/challenge/create/ChallengePhotoField';
-import { createStickyFooterPad } from '@/components/challenge/create/wizardUi';
 import { CircleInviteSheet } from '@/components/circles/CircleInviteSheet';
 import { CircleVisibilityPicker } from '@/components/circles/CircleVisibilityPicker';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { useKeyboardOverlap } from '@/components/ui/KeyboardFormShell';
+import { KeyboardFormContext } from '@/components/ui/KeyboardFormShell';
+import { useKeyboardFooterLift } from '@/components/ui/useKeyboardFooterLift';
 import { Screen } from '@/components/ui/Screen';
 import { AppText } from '@/components/ui/AppText';
 import { TAB_ROOT_EDGES } from '@/components/wallet/TabChrome';
@@ -26,8 +26,7 @@ export default function CreateCircleScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const create = useCreateCircle();
-  const keyboardOverlap = useKeyboardOverlap();
-  const keyboardOpen = keyboardOverlap > 0;
+  const lift = useKeyboardFooterLift(tabBarLift(insets.bottom, 'sticky') + 8);
   const [name, setName] = useState('');
   const [focus, setFocus] = useState('');
   const [description, setDescription] = useState('');
@@ -80,12 +79,9 @@ export default function CreateCircleScreen() {
   return (
     <Screen padded={false} edges={TAB_ROOT_EDGES} keyboardAvoiding={false}>
       <Stack.Screen options={{ headerShown: false, gestureEnabled: true, fullScreenGestureEnabled: true }} />
+      <KeyboardFormContext.Provider value={lift.formApi}>
       <View
-        className="flex-1"
-        style={{
-          backgroundColor: THEME.background,
-          marginBottom: Platform.OS === 'web' ? keyboardOverlap : 0,
-        }}>
+        style={[{ backgroundColor: THEME.background }, lift.liftStyle]}>
         <View className="flex-row items-center justify-between px-4 pt-3 pb-2">
           <AppText className="text-[18px] font-extrabold text-charcoal">{copy('circles.createTitle')}</AppText>
           <Pressable
@@ -98,6 +94,9 @@ export default function CreateCircleScreen() {
           </Pressable>
         </View>
         <ScrollView
+          ref={lift.scrollRef}
+          onScroll={lift.onScroll}
+          scrollEventThrottle={16}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24, gap: 14 }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag">
@@ -131,12 +130,15 @@ export default function CreateCircleScreen() {
           <CircleVisibilityPicker value={visibility} onChange={setVisibility} />
         </ScrollView>
         <View
+          ref={lift.footerRef}
+          collapsable={false}
+          onLayout={lift.onFooterLayout}
           className="gap-2 px-4 pt-2"
           style={{
             backgroundColor: THEME.surface,
             borderTopWidth: 1,
             borderTopColor: THEME.border,
-            paddingBottom: createStickyFooterPad(keyboardOpen, tabBarLift(insets.bottom, 'sticky') + 8),
+            paddingBottom: lift.footerPad,
           }}>
           <Button
             title={copy('circles.create')}
@@ -145,6 +147,7 @@ export default function CreateCircleScreen() {
           />
         </View>
       </View>
+      </KeyboardFormContext.Provider>
       <CircleInviteSheet
         visible={Boolean(created)}
         circleId={created?.id ?? ''}

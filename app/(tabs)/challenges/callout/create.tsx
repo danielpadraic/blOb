@@ -11,6 +11,8 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Chip, ChipRow } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
+import { KeyboardFormContext } from '@/components/ui/KeyboardFormShell';
+import { useKeyboardFooterLift } from '@/components/ui/useKeyboardFooterLift';
 import { Screen } from '@/components/ui/Screen';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { AppText } from '@/components/ui/AppText';
@@ -66,6 +68,7 @@ const DEADLINES: { id: CalloutDeadlinePreset; label: string }[] = [
 export default function CreateCalloutScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const lift = useKeyboardFooterLift(tabBarLift(insets.bottom, 'sticky'));
   const params = useLocalSearchParams<{ username?: string; rematch?: string }>();
   const handle = Array.isArray(params.username) ? params.username[0] : params.username;
   const rematchId = Array.isArray(params.rematch) ? params.rematch[0] : params.rematch;
@@ -169,8 +172,13 @@ export default function CreateCalloutScreen() {
   }
 
   return (
-    <Screen padded={false}>
+    <Screen padded={false} keyboardAvoiding={false}>
+      <KeyboardFormContext.Provider value={lift.formApi}>
+      <View style={lift.liftStyle}>
       <ScrollView
+        ref={lift.scrollRef}
+        onScroll={lift.onScroll}
+        scrollEventThrottle={16}
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24 }}
         keyboardShouldPersistTaps="handled">
@@ -452,12 +460,15 @@ export default function CreateCalloutScreen() {
       ) : null}
       </ScrollView>
       <View
+        ref={lift.footerRef}
+        collapsable={false}
+        onLayout={lift.onFooterLayout}
         className="gap-2 px-4 pt-2"
         style={{
           backgroundColor: THEME.surface,
           borderTopWidth: 1,
           borderTopColor: THEME.border,
-          paddingBottom: tabBarLift(insets.bottom, 'sticky'),
+          paddingBottom: lift.footerPad,
         }}>
         {sendWhy ? (
           <AppText className="text-[13px] leading-5 text-muted">{sendWhy}</AppText>
@@ -471,6 +482,8 @@ export default function CreateCalloutScreen() {
         />
         <Button title="Cancel" variant="ghost" onPress={() => router.back()} />
       </View>
+      </View>
+      </KeyboardFormContext.Provider>
     </Screen>
   );
 }
