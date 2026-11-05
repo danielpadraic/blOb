@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, Platform, Pressable, TextInput, View } from 'react-native';
+import { AppState, Platform, Pressable, TextInput, useWindowDimensions, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -13,7 +13,7 @@ import { TimedRowCard } from '@/components/lift/TimedRowCard';
 import { LiftHealthKitSheet } from '@/components/lift/LiftHealthKitSheet';
 import { LiftShareSheet, type LiftShareChoice } from '@/components/lift/LiftShareSheet';
 import { OverloadSheet } from '@/components/lift/OverloadSheet';
-import { KeyboardFormShell, useKeyboardForm } from '@/components/ui/KeyboardFormShell';
+import { KeyboardFormShell, useKeyboardForm, useKeyboardHeight } from '@/components/ui/KeyboardFormShell';
 import { MascotState } from '@/components/mascot/MascotState';
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
@@ -35,7 +35,9 @@ import {
   useShareLiftSession,
 } from '@/hooks/useLift';
 import { canCompleteSession, firstLeftoverTarget, sessionWeightMoved } from '@/lib/lift/complete';
+import { isWideDashboardWindow } from '@/lib/dashboard/wide';
 import { liftLoggingClosedPad } from '@/lib/lift/footerPad';
+import { setLiveComposerKeyboardOpen } from '@/lib/liveComposerKeyboard';
 import { rankHealthKitWorkouts } from '@/lib/lift/healthkit';
 import { bumpSessionInPlace, canOverloadSession, overloadChipLabel } from '@/lib/lift/overload';
 import { hasShareableWork, sessionCardioSeconds } from '@/lib/lift/recap';
@@ -121,6 +123,14 @@ export default function LiftSessionScreen() {
 function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolean }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const barShown = !isWideDashboardWindow(windowWidth, Platform.OS);
+  const keyboardUp = useKeyboardHeight() > 100;
+  // The pill steps aside while typing so the row sits on the keys with nothing between them.
+  useEffect(() => {
+    setLiveComposerKeyboardOpen(keyboardUp);
+    return () => setLiveComposerKeyboardOpen(false);
+  }, [keyboardUp]);
   const { user } = useAuth();
   const loaded = useLiftSession(id);
   const customs = useCustomExercises();
@@ -771,7 +781,7 @@ function LiftSessionInner({ id, fromHistory }: { id: string; fromHistory: boolea
       <KeyboardFormShell
         padded
         protectFieldFocus
-        closedFooterPad={liftLoggingClosedPad(insets.bottom, Platform.OS)}
+        closedFooterPad={liftLoggingClosedPad(insets.bottom, barShown, keyboardUp)}
         footerBackground={THEME.surface}
         footer={
           readOnly ? (

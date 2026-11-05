@@ -182,13 +182,13 @@ export function isLiveCameraPath(pathname: string | null | undefined): boolean {
   return path.includes('/capture') || path.includes('/submit');
 }
 
-/** Logging, a saved lift, and the timer. The footer is the bottom row, so the pill tab stays out of the way. */
-export function isLiftSessionPath(pathname: string | null | undefined): boolean {
+/**
+ * The interval timer logs nothing and owns the whole screen, so the pill stays out of the way.
+ * Logging and a saved lift keep the pill: their footer row seats on it.
+ */
+export function isLiftTimerPath(pathname: string | null | undefined): boolean {
   const path = String(pathname ?? '').split('?')[0].replace(/\/$/, '');
-  if (/\/lift\/timer$/i.test(path)) {
-    return true;
-  }
-  return /\/lift\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(path);
+  return /\/lift\/timer$/i.test(path);
 }
 
 let primed: MediaStream | null = null;
