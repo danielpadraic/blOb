@@ -71,7 +71,14 @@ import { runPostSendOcr } from '@/lib/health/runPostSendOcr';
 import { attachHonorCardToCheckin } from '@/lib/checkin/attachHonorCard';
 import { buildHonorProofCard } from '@/lib/checkin/honorCard';
 import type { CheckinProofStats } from '@/lib/checkin/proofStats';
-import { saveCheckinMetricValues, submitLocationProof } from '@/lib/challenges/stagedCheckin';
+import {
+  preuploadCheckinProof,
+  saveCheckinMetricValues,
+  submitLocationProof,
+  type SaveCheckinProofInput,
+} from '@/lib/challenges/stagedCheckin';
+import { ProofUploadError, runProofUploads } from '@/lib/checkin/parallelUpload';
+import { postSendNotice } from '@/lib/checkin/sendNotice';
 import { readLocationFix, locationPermissionGrantedThisSession } from '@/lib/locationDevice';
 import { parseLocationPlace } from '@/lib/locationProof';
 import { normalizeCheckinStill } from '@/lib/checkinPhotoOrientation';
@@ -543,6 +550,7 @@ function SubmitWorkoutInner() {
   const [cameraPaused, setCameraPaused] = useState(false);
   const reviewPreviousRef = useRef<SlotDraft | null>(null);
   const sendHoldRef = useRef<'photo' | 'done' | null>(null);
+  const leftOnSendRef = useRef(false);
   const leavingCameraRef = useRef(false);
   const [slotUpload, setSlotUpload] = useState<Record<string, 'up' | 'fail'>>({});
   const unfilledRef = useRef<string[]>([]);
@@ -711,6 +719,10 @@ function SubmitWorkoutInner() {
   ]);
 
   useEffect(() => {
+    // A Send in flight owns the exit: it opens this challenge's Live, never the Overview tab.
+    if (sendLock || leftOnSendRef.current) {
+      return;
+    }
     if (!id || !challenge || !checkinQuery.isFetched || isProxy) {
       return;
     }
@@ -755,6 +767,7 @@ function SubmitWorkoutInner() {
     siblingCheckin.data,
     siblingCheckin.isFetched,
     router,
+    sendLock,
   ]);
   /**
    * Challenges with no stored proofs get theirs synthesized, and makeProof mints a fresh id each
@@ -1097,7 +1110,12 @@ function SubmitWorkoutInner() {
   ).length;
   const allReady = blockingProofs.length > 0 && filledCount === blockingProofs.length;
   const busy = sendLock || submitCheckin.isPending;
-  const hasRequiredAttached = honorOnly || filledCount > 0;
+  // A required proof already stored on the server counts too, so reopening a started check-in
+  // never greys Send while the slot shows its file.
+  const savedRequiredCount = blockingProofs.filter((proof) =>
+    partSatisfies(proof, checkinQuery.data?.proof_parts?.[proof.id], { sessionDistance }),
+  ).length;
+  const hasRequiredAttached = honorOnly || filledCount > 0 || savedRequiredCount > 0;
   const requiredLogMissing =
     comparableHonor && comparableConfig
       ? comparableRequiredTextMissing(comparableConfig, logDraft.text)
@@ -1355,23 +1373,13 @@ function SubmitWorkoutInner() {
     }).catch(() => undefined);
   }
 
-  async function persistProof(proof: ChallengeProof, draft?: SlotDraft, notes?: string | null) {
-    if (!id) {
-      return;
-    }
-    setError(null);
-    setFailKind(null);
-    if (isLikelyOffline()) {
-      setFailKind('offline');
-      setError(CHECKIN_REACH_STAY);
-      throw new Error(CHECKIN_REACH_STAY);
-    }
+  function buildProofPayload(proof: ChallengeProof, draft?: SlotDraft, notes?: string | null) {
     const stills = slotStillUris(draft);
     const urls = stills;
     const uri = urls[0] ?? draft?.uri;
     const blob = draft?.blob ?? getHeldCheckinBlob(uri);
-    const payload = {
-      challengeId: id,
+    const payload: SaveCheckinProofInput = {
+      challengeId: id as string,
       proof,
       uri,
       urls,
@@ -1389,6 +1397,29 @@ function SubmitWorkoutInner() {
       notes,
       ...(isProxy ? { forUserId: proxyForId } : null),
     };
+    return { payload, stills, urls, uri, blob };
+  }
+
+  /** `prepared` is the same payload after its files were uploaded ahead of the save. */
+  async function persistProof(
+    proof: ChallengeProof,
+    draft?: SlotDraft,
+    notes?: string | null,
+    prepared?: SaveCheckinProofInput,
+  ) {
+    if (!id) {
+      return;
+    }
+    setError(null);
+    setFailKind(null);
+    if (isLikelyOffline()) {
+      setFailKind('offline');
+      setError(CHECKIN_REACH_STAY);
+      throw new Error(CHECKIN_REACH_STAY);
+    }
+    const built = buildProofPayload(proof, draft, notes);
+    const { urls, uri, blob } = built;
+    const payload = prepared ?? built.payload;
     try {
       if (pastDay && uid && proof) {
         const kept = await saveOfficialPeriodProof({
@@ -1812,7 +1843,8 @@ function SubmitWorkoutInner() {
     const attachedNow =
       honorOnly ||
       proofSteps.some((proof) =>
-        partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }),
+        partSatisfies(proof, slotPart(proof, drafts[proof.id], distanceUnit), { sessionDistance }) ||
+        partSatisfies(proof, mergedParts[proof.id], { sessionDistance }),
       );
     if (!honorOnly && !attachedNow) {
       explainSendBlocked();
@@ -1869,6 +1901,12 @@ function SubmitWorkoutInner() {
           failedExtras.push(copy('checkin.workoutCardFailed'));
         }
       }
+      const pendingSaves: Array<{
+        proof: ChallengeProof;
+        persistDraft: SlotDraft | undefined;
+        healthPending: boolean;
+        prepared?: SaveCheckinProofInput;
+      }> = [];
       for (const proof of proofSteps) {
         if (proof.method === 'honor') {
           continue;
@@ -1907,8 +1945,52 @@ function SubmitWorkoutInner() {
         if (!partSatisfies(proof, persistPart, { sessionDistance }) && !healthPending) {
           continue;
         }
+        pendingSaves.push({ proof, persistDraft, healthPending });
+      }
+      // Every required file uploads at the same time. The slot rows are written one after another
+      // only once all the files are stored, so a slot is never marked done without its file.
+      if (!pastDay && pendingSaves.length > 0) {
+        const softKeys = new Set<string>();
+        const prepared = await runProofUploads(
+          pendingSaves.map((item) => {
+            const soft =
+              item.healthPending && partSatisfies(item.proof, savedParts[item.proof.id], { sessionDistance });
+            if (soft) {
+              softKeys.add(item.proof.id);
+            }
+            return {
+              key: item.proof.id,
+              label: proofDisplayName(item.proof),
+              run: async (): Promise<SaveCheckinProofInput | null> => {
+                try {
+                  return await preuploadCheckinProof(
+                    buildProofPayload(item.proof, item.persistDraft, body).payload,
+                  );
+                } catch (uploadError) {
+                  if (soft) {
+                    logCheckinPhase('save', 'health-soft-fail', getErrorMessage(uploadError));
+                    return null;
+                  }
+                  throw uploadError;
+                }
+              },
+            };
+          }),
+        );
+        for (const item of pendingSaves) {
+          item.prepared = prepared.get(item.proof.id) ?? undefined;
+        }
+        for (let index = pendingSaves.length - 1; index >= 0; index -= 1) {
+          const item = pendingSaves[index];
+          if (softKeys.has(item.proof.id) && !item.prepared) {
+            failedExtras.push(copy('checkin.workoutFailed'));
+            pendingSaves.splice(index, 1);
+          }
+        }
+      }
+      for (const { proof, persistDraft, healthPending, prepared } of pendingSaves) {
         try {
-          const row = await persistProof(proof, persistDraft, body);
+          const row = await persistProof(proof, persistDraft, body, prepared);
           if (row) {
             saved = row;
           }
@@ -1927,38 +2009,47 @@ function SubmitWorkoutInner() {
       const uploadedExtras: CheckinExtra[] = [];
       const extraUrls: string[] = [];
       if (uid) {
-        for (const [index, extra] of extras.entries()) {
-          if (extra.remoteUrl) {
-            if (isLocalWorkoutRaster(extra.remoteUrl) || isWorkoutCardStoragePath(extra.remoteUrl)) {
-              continue;
+        // Extra photos upload together too. Each keeps its place; one failing never blocks Send.
+        const settledExtras = await Promise.all(
+          extras.map(async (extra, index): Promise<{ extra: CheckinExtra; url: string } | { failed: string } | null> => {
+            if (extra.remoteUrl) {
+              if (isLocalWorkoutRaster(extra.remoteUrl) || isWorkoutCardStoragePath(extra.remoteUrl)) {
+                return null;
+              }
+              return { extra, url: extra.remoteUrl };
             }
-            extraUrls.push(extra.remoteUrl);
-            uploadedExtras.push(extra);
+            if (extra.kind === 'gif') {
+              return { extra: { ...extra, remoteUrl: extra.uri }, url: extra.uri };
+            }
+            if (isLocalWorkoutRaster(extra.uri) || isWorkoutCardStoragePath(extra.uri)) {
+              return null;
+            }
+            try {
+              const remoteUrl = await uploadPostAttachment({
+                uri: extra.uri,
+                userId: uid,
+                fileStem: `checkin-extra-${Date.now()}-${index}`,
+                mimeType: extra.mimeType ?? extra.blob?.type,
+                blob: extra.blob,
+                originalName: extra.name,
+              });
+              return { extra: { ...extra, remoteUrl }, url: remoteUrl };
+            } catch (uploadError) {
+              console.log('[blob:checkin-extra]', getErrorMessage(uploadError));
+              return { failed: extra.name ?? 'Photo' };
+            }
+          }),
+        );
+        for (const item of settledExtras) {
+          if (!item) {
             continue;
           }
-          if (extra.kind === 'gif') {
-            extraUrls.push(extra.uri);
-            uploadedExtras.push({ ...extra, remoteUrl: extra.uri });
+          if ('failed' in item) {
+            failedExtras.push(item.failed);
             continue;
           }
-          if (isLocalWorkoutRaster(extra.uri) || isWorkoutCardStoragePath(extra.uri)) {
-            continue;
-          }
-          try {
-            const remoteUrl = await uploadPostAttachment({
-              uri: extra.uri,
-              userId: uid,
-              fileStem: `checkin-extra-${Date.now()}-${index}`,
-              mimeType: extra.mimeType ?? extra.blob?.type,
-              blob: extra.blob,
-              originalName: extra.name,
-            });
-            extraUrls.push(remoteUrl);
-            uploadedExtras.push({ ...extra, remoteUrl });
-          } catch (uploadError) {
-            failedExtras.push(extra.name ?? 'Photo');
-            console.log('[blob:checkin-extra]', getErrorMessage(uploadError));
-          }
+          extraUrls.push(item.url);
+          uploadedExtras.push(item.extra);
         }
         if (uploadedExtras.length) {
           setExtras(uploadedExtras);
@@ -2033,30 +2124,6 @@ function SubmitWorkoutInner() {
         return;
       }
       const checkinId = sending ? submitted?.id : saved?.id;
-      // Ledger row for the workout, keyed to this check-in. Best-effort: the check-in already landed.
-      if (checkinId && uid) {
-        for (const proof of proofSteps) {
-          const health = draftWithReadStats(proof, drafts[proof.id])?.health;
-          if (!health) {
-            continue;
-          }
-          try {
-            await saveWorkoutSession({
-              userId: subjectId || uid,
-              challengeId: id,
-              checkinId,
-              health,
-              proofUrl: savedParts[proof.id]?.url ?? null,
-              activityLabel: workoutOcr.entries[proof.id]?.activityLabel ?? null,
-            });
-          } catch (caught) {
-            // The check-in has already landed. Losing the ledger row must not strand them on this
-            // screen with an error about work that succeeded.
-            console.log('[blob:workout-session]', getErrorMessage(caught));
-          }
-          break;
-        }
-      }
       let postId: string | undefined;
       if (checkinId) {
         try {
@@ -2179,23 +2246,6 @@ function SubmitWorkoutInner() {
         if (wantedHealth && !savedHealth && !failedExtras.includes(copy('checkin.workoutFailed'))) {
           failedExtras.push(copy('checkin.workoutFailed'));
         }
-        const mentionIds = [
-          ...new Set(caption.chips.map((chip) => chip.userId).filter((chipId) => chipId && chipId !== user?.id)),
-        ];
-        if (postId && mentionIds.length > 0 && uid) {
-          const mentionRows = mentionIds.map((mentioned_user_id) => ({
-            post_id: postId,
-            mentioned_user_id,
-            author_id: uid,
-          }));
-          let mentionWrite = await supabase.from('post_mentions').insert(mentionRows);
-          if (mentionWrite.error && !isMissingRelationError(mentionWrite.error)) {
-            mentionWrite = await supabase.from('post_mentions').insert(mentionRows);
-          }
-          if (mentionWrite.error && !isMissingRelationError(mentionWrite.error)) {
-            throw new Error(getErrorMessage(mentionWrite.error));
-          }
-        }
       }
       let pairPostIds: string[] = postId ? [postId] : [];
       if (officialCoin && uid && !isProxy) {
@@ -2242,49 +2292,7 @@ function SubmitWorkoutInner() {
           }
         }
       }
-      if (!cameraTrio && shareWave && uid && !wavePublishedRef.current && !isTeacher3DayChallenge(challenge)) {
-        const wave = pickCheckinWaveSource({
-          proofs: proofSteps,
-          parts: savedParts,
-          drafts,
-          captions: proofCaptions,
-          extras: uploadedExtras,
-        });
-        if (wave) {
-          try {
-            const published = await publishCheckinWave({
-              userId: uid,
-              challengeId: id,
-              wave,
-              audience: profile?.default_post_audience,
-            });
-            if (published) {
-              wavePublishedRef.current = true;
-            }
-          } catch {
-            // Wave is extra; lobby check-in already landed.
-          }
-        }
-        void queryClient.invalidateQueries({ queryKey: ['stories'] });
-      }
-      if (uid) {
-        const nextPrefs = { home: shareHome, wave: shareWave };
-        await writeLocalSharePrefs(uid, nextPrefs);
-        if (!lobbyLocked) {
-          try {
-            await updateProfile.mutateAsync({
-              checkin_share_home: nextPrefs.home,
-              checkin_share_wave: nextPrefs.wave,
-            });
-          } catch {
-            // Local row still remembers the last Home / Waves choice.
-          }
-        }
-      }
-      await successHaptic();
-      // The recap upload has to finish after the Live rows exist. Eight seconds, then
-      // say so and still open this Live. The error is logged; it is not discarded.
-      const cardMiss = await awaitWorkoutCardUpload(checkinId);
+      void successHaptic();
       if (comparableHonor) {
         void queryClient.invalidateQueries({ queryKey: liveListKey(id) });
         void queryClient.invalidateQueries({ queryKey: ['challenge-participants', id] });
@@ -2296,46 +2304,143 @@ function SubmitWorkoutInner() {
         });
         void queryClient.invalidateQueries({ queryKey: liveListKey(id, uid) });
       }
+      // The server has confirmed the check-in. Everything below finishes after Live opens and
+      // patches the same post: OCR, the recap card (one extra last slide, never a proof slot),
+      // mentions, the workout ledger row, the Wave and the share preferences.
       const cardLine = copy('checkin.workoutCardFailed');
-      if (cardMiss) {
-        if (!failedExtras.includes(cardLine)) {
-          failedExtras.push(cardMiss);
+      const noticeId = id;
+      const finishInBackground = async () => {
+        if (uid) {
+          void runPostSendOcr({
+            challengeId: id,
+            postId,
+            postIds: pairPostIds,
+            siblingChallengeId,
+            periodKey: checkinPeriodKey(challenge),
+            timeZone: challengeClockTz(challenge),
+            slots: proofSteps.map((proof) => {
+              const draft = draftWithReadStats(proof, drafts[proof.id]);
+              const saved = savedParts[proof.id];
+              return {
+                proof,
+                urls: uniqueProofUrls([
+                  ...(Array.isArray(saved?.urls) ? saved.urls : []),
+                  saved?.url,
+                  ...slotStillUris(draft),
+                ]),
+                caption: proofCaptions[proof.id] ?? saved?.caption ?? null,
+                mimeType: draft?.mimeType,
+                health: draft?.health ?? saved?.health ?? null,
+                healthWorkoutId: draft?.healthWorkoutId ?? saved?.healthWorkoutId ?? null,
+              };
+            }),
+            queryClient,
+          }).catch((error) => {
+            console.error('[blob:ocr]', error);
+          });
         }
-      } else {
-        const cardIndex = failedExtras.indexOf(cardLine);
-        if (cardIndex >= 0) {
-          failedExtras.splice(cardIndex, 1);
+        try {
+          // Ledger row for the workout, keyed to this check-in. Best-effort: the check-in already landed.
+          if (checkinId && uid) {
+            for (const proof of proofSteps) {
+              const health = draftWithReadStats(proof, drafts[proof.id])?.health;
+              if (!health) {
+                continue;
+              }
+              try {
+                await saveWorkoutSession({
+                  userId: subjectId || uid,
+                  challengeId: id,
+                  checkinId,
+                  health,
+                  proofUrl: savedParts[proof.id]?.url ?? null,
+                  activityLabel: workoutOcr.entries[proof.id]?.activityLabel ?? null,
+                });
+              } catch (caught) {
+                // The check-in has already landed. Losing the ledger row must not strand them on this
+                // screen with an error about work that succeeded.
+                console.log('[blob:workout-session]', getErrorMessage(caught));
+              }
+              break;
+            }
+          }
+        } catch (ledgerError) {
+          console.log('[blob:workout-session]', getErrorMessage(ledgerError));
         }
-      }
-      if (uid) {
-        void runPostSendOcr({
-          challengeId: id,
-          postId,
-          postIds: pairPostIds,
-          siblingChallengeId,
-          periodKey: checkinPeriodKey(challenge),
-          timeZone: challengeClockTz(challenge),
-          slots: proofSteps.map((proof) => {
-            const draft = draftWithReadStats(proof, drafts[proof.id]);
-            const saved = savedParts[proof.id];
-            return {
-              proof,
-              urls: uniqueProofUrls([
-                ...(Array.isArray(saved?.urls) ? saved.urls : []),
-                saved?.url,
-                ...slotStillUris(draft),
-              ]),
-              caption: proofCaptions[proof.id] ?? saved?.caption ?? null,
-              mimeType: draft?.mimeType,
-              health: draft?.health ?? saved?.health ?? null,
-              healthWorkoutId: draft?.healthWorkoutId ?? saved?.healthWorkoutId ?? null,
-            };
-          }),
-          queryClient,
-        }).catch((error) => {
-          console.error('[blob:ocr]', error);
-        });
-      }
+        if (checkinId) {
+          const mentionIds = [
+            ...new Set(caption.chips.map((chip) => chip.userId).filter((chipId) => chipId && chipId !== user?.id)),
+          ];
+          if (postId && mentionIds.length > 0 && uid) {
+            try {
+              const mentionRows = mentionIds.map((mentioned_user_id) => ({
+                post_id: postId,
+                mentioned_user_id,
+                author_id: uid,
+              }));
+              let mentionWrite = await supabase.from('post_mentions').insert(mentionRows);
+              if (mentionWrite.error && !isMissingRelationError(mentionWrite.error)) {
+                mentionWrite = await supabase.from('post_mentions').insert(mentionRows);
+              }
+              if (mentionWrite.error && !isMissingRelationError(mentionWrite.error)) {
+                throw new Error(getErrorMessage(mentionWrite.error));
+              }
+            } catch (mentionError) {
+              console.error('[blob:mentions]', mentionError);
+              postSendNotice(noticeId, 'Checked in. Couldn’t tag everyone you mentioned.');
+            }
+          }
+        }
+        if (!cameraTrio && shareWave && uid && !wavePublishedRef.current && !isTeacher3DayChallenge(challenge)) {
+          const wave = pickCheckinWaveSource({
+            proofs: proofSteps,
+            parts: savedParts,
+            drafts,
+            captions: proofCaptions,
+            extras: uploadedExtras,
+          });
+          if (wave) {
+            try {
+              const published = await publishCheckinWave({
+                userId: uid,
+                challengeId: id,
+                wave,
+                audience: profile?.default_post_audience,
+              });
+              if (published) {
+                wavePublishedRef.current = true;
+              }
+            } catch {
+              // Wave is extra; lobby check-in already landed.
+            }
+          }
+          void queryClient.invalidateQueries({ queryKey: ['stories'] });
+        }
+        if (uid) {
+          const nextPrefs = { home: shareHome, wave: shareWave };
+          await writeLocalSharePrefs(uid, nextPrefs);
+          if (!lobbyLocked) {
+            try {
+              await updateProfile.mutateAsync({
+                checkin_share_home: nextPrefs.home,
+                checkin_share_wave: nextPrefs.wave,
+              });
+            } catch {
+              // Local row still remembers the last Home / Waves choice.
+            }
+          }
+        }
+        // The recap upload needs the Live rows, which exist now. Eight seconds, then say so on Live.
+        const cardMiss = await awaitWorkoutCardUpload(checkinId);
+        if (cardMiss && !failedExtras.includes(cardLine)) {
+          postSendNotice(noticeId, cardMiss);
+        }
+      };
+      void finishInBackground().catch((error) => {
+        console.error('[blob:send-background]', error);
+      });
+      // The confirmed Send owns the route. The "already done" guard must not send it to Overview.
+      leftOnSendRef.current = true;
       // A failed extra never rolls back the required slot — warn, do not block.
       const extraWarning = attachmentWarning();
       if (extraWarning) {
@@ -2369,6 +2474,11 @@ function SubmitWorkoutInner() {
         challengeDetailHref(id, 'lobby', postId, { tab: 'feed', notice: extraWarning }),
       );
     } catch (caught) {
+      if (caught instanceof ProofUploadError) {
+        setFailKind('upload');
+        setError(caught.message);
+        return;
+      }
       const kind = classifyCheckinError(caught);
       if (kind === 'already') {
         setFailKind(null);

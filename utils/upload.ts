@@ -184,7 +184,10 @@ export function buildStoragePath(input: {
     if (!input.challengeId || !input.proofType) {
       throw new Error('Proof uploads require a challenge and proof type.');
     }
-    return `${input.userId}/${input.challengeId}/${input.proofType}-${stamp}.${ext}`;
+    // Files of one Send upload together, so the millisecond alone is not unique.
+    // Digits only: the workout and honor card path checks expect `<type>-<digits>.<ext>`.
+    const salt = String(Math.floor(Math.random() * 1_000_000)).padStart(6, '0');
+    return `${input.userId}/${input.challengeId}/${input.proofType}-${stamp}${salt}.${ext}`;
   }
 
   return `${input.userId}/${stamp}.${ext}`;

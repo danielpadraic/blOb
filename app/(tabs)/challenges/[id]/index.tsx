@@ -1,3 +1,4 @@
+import { subscribeSendNotice } from '@/lib/checkin/sendNotice';
 import {
   Stack,
   useFocusEffect,
@@ -511,6 +512,13 @@ export default function ChallengeDetailScreen() {
       setNotice(noticeParam);
     }
   }, [noticeParam]);
+
+  useEffect(() => {
+    if (!id) {
+      return undefined;
+    }
+    return subscribeSendNotice(id, setNotice);
+  }, [id]);
 
   const hostProfile = hostQuery.data;
   const heroHost =

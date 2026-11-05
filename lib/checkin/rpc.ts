@@ -82,15 +82,13 @@ async function resolveProofStillUrls(
   const stills = uniqueProofUrls([input.uri, ...(input.urls ?? [])]).filter(
     (url) => url && !url.startsWith('health:'),
   );
-  const out: string[] = [];
-  for (let i = 0; i < stills.length; i += 1) {
-    const uri = stills[i];
-    if (isRemoteMediaUrl(uri)) {
-      out.push(uri);
-      continue;
-    }
-    out.push(
-      await resolveUrl(
+  // Every still uploads at once. A failure rejects the whole call, so nothing is stored half-way.
+  const out = await Promise.all(
+    stills.map(async (uri, i) => {
+      if (isRemoteMediaUrl(uri)) {
+        return uri;
+      }
+      return resolveUrl(
         await upload({
           uri,
           userId,
@@ -99,10 +97,47 @@ async function resolveProofStillUrls(
           mimeType: input.mimeType,
           blob: i === 0 ? input.blob ?? undefined : undefined,
         }),
-      ),
-    );
-  }
+      );
+    }),
+  );
   return uniqueProofUrls(out);
+}
+
+/**
+ * Uploads this slot's local files and hands back the same input pointing at the stored copies, so
+ * the save RPC afterwards has nothing left to upload. The blob stays on the input so the content
+ * hash is the one the single-step save would have computed.
+ */
+export async function preuploadCheckinProofWithClient(
+  client: CheckinRpcClient,
+  input: SaveCheckinProofInput,
+  upload: UploadCheckinProofFn,
+  resolveUrl: ResolveProofUrlFn,
+): Promise<SaveCheckinProofInput> {
+  const method = input.proof?.method;
+  if (input.clearProof || !method || method === 'honor' || method === 'checkin') {
+    return input;
+  }
+  const stills = uniqueProofUrls([input.uri, ...(input.urls ?? [])]).filter(
+    (url) => url && !url.startsWith('health:'),
+  );
+  if (stills.length === 0 || stills.every(isRemoteMediaUrl)) {
+    return input;
+  }
+  const userId = await currentUserId(client);
+  const uploaded = await resolveProofStillUrls(
+    input,
+    userId,
+    upload,
+    resolveUrl,
+    input.cardVersion != null ? 'workout_card' : captureTypeForMethod(method),
+  );
+  const keepHealthUri = (input.uri ?? '').startsWith('health:');
+  return {
+    ...input,
+    uri: keepHealthUri ? input.uri : uploaded[0] ?? input.uri,
+    urls: uploaded,
+  };
 }
 
 export function parseChallengeCheckin(row: Record<string, unknown>): ChallengeCheckin {

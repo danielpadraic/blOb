@@ -1,4 +1,5 @@
 import {
+  preuploadCheckinProofWithClient,
   saveCheckinProofWithClient,
   saveCheckinMetricValuesWithClient,
   submitCheckinWithClient,
@@ -43,6 +44,24 @@ export async function saveCheckinProof(input: SaveCheckinProofInput) {
     reportAppError({ route: 'save_checkin_proof', error, payload: { challenge_id: input.challengeId } });
     throw error instanceof Error ? error : new Error(getErrorMessage(error));
   }
+}
+
+/** Uploads a slot's files without saving, so several slots can upload together before the saves. */
+export async function preuploadCheckinProof(input: SaveCheckinProofInput): Promise<SaveCheckinProofInput> {
+  return preuploadCheckinProofWithClient(
+    supabase as never,
+    input,
+    async (upload) =>
+      uploadChallengeProof({
+        uri: upload.uri,
+        userId: upload.userId,
+        challengeId: upload.challengeId,
+        proofType: upload.proofType as import('@/lib/types').ProofType,
+        mimeType: upload.mimeType,
+        blob: upload.blob,
+      }),
+    challengeProofUrl,
+  );
 }
 
 export async function submitLocationProof(input: {
