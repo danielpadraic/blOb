@@ -1450,7 +1450,6 @@ export function useFeed(challengeId?: string | null) {
     enabled: !home,
     staleTime: 30_000,
     retry: 1,
-    placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     refetchInterval: false,
