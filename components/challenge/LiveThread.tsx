@@ -42,9 +42,9 @@ import {
   type LiveDayBreakChallenge,
 } from '@/lib/liveDayBreak';
 import {
+  attachLiveQuoteParents,
   buildLiveThreadRows,
   findLiveHighlightIndex,
-  findLiveParent,
   liveChatText,
   liveRowKey,
   isLiveCheckinPost,
@@ -191,6 +191,14 @@ export function LiveThread({
   onReact,
 }: LiveThreadProps) {
   const keyboardHeight = useKeyboardHeight();
+  // The host passes a fresh onReact every render. Reading it through a ref keeps renderItem stable,
+  // so a reaction patch re-renders the rows that changed, not every row.
+  const onReactRef = useRef(onReact);
+  onReactRef.current = onReact;
+  const stableOnReact = useCallback<LiveThreadProps['onReact']>(
+    (post, type, commentId) => onReactRef.current(post, type, commentId),
+    [],
+  );
   const keyboardOpen = liveComposerKeyboardOpen(keyboardHeight);
   useEffect(() => {
     const liveKeys = Boolean(focused && keyboardOpen);
@@ -248,7 +256,7 @@ export function LiveThread({
         viewerId: currentUserId,
         viewer: viewerProfile.data,
       });
-      const built = buildLiveThreadRows(dedupeLivePostsByCheckinId(seeded));
+      const built = attachLiveQuoteParents(buildLiveThreadRows(dedupeLivePostsByCheckinId(seeded)), posts);
       const withDays = stableDayBreak ? insertLiveDayBreaks(built, stableDayBreak) : built;
       const rows = reuseLiveThreadRows(prevRowsRef.current, withDays);
       prevRowsRef.current = rows;
@@ -265,7 +273,7 @@ export function LiveThread({
       });
       return { rows: EMPTY_LIVE_ROWS, error: message };
     }
-  }, [currentUserId, sourcePosts, stableDayBreak, viewerProfile.data]);
+  }, [currentUserId, posts, sourcePosts, stableDayBreak, viewerProfile.data]);
   const rows = thread.rows;
   const buildError = thread.error;
 
@@ -1009,7 +1017,7 @@ export function LiveThread({
                 avatarUrl: parentAuthor.avatarUrl,
               }}
               reactions={item.comment.deleted_at ? [] : item.comment.reactions}
-              onReact={(type) => onReact(item.parent, type, item.comment.id)}
+              onReact={(type) => stableOnReact(item.parent, type, item.comment.id)}
               onOpenWho={(type) =>
                 openWho(item.parent.id, type, item.comment.id, item.comment.reactions)
               }
@@ -1031,7 +1039,7 @@ export function LiveThread({
         );
       }
 
-      const parent = findLiveParent(posts, item.post.parent_id);
+      const parent = item.quoteParent ?? null;
       const parentAuthor = parent ? resolveLiveAuthor(parent) : null;
       const postAuthor = resolveLiveAuthor(item.post);
       const quote =
@@ -1060,7 +1068,7 @@ export function LiveThread({
               )
             }
             onPickerClose={closePicker}
-            onReact={(type) => onReact(item.post, type)}
+            onReact={(type) => stableOnReact(item.post, type)}
             onOpenWho={(type) => openWho(item.post.id, type, null, item.post.reactions)}
             onEdit={
               currentUserId && postAuthor.authorId === currentUserId
@@ -1095,7 +1103,7 @@ export function LiveThread({
         </LiveRowBoundary>
       );
     },
-    [canCompose, closePicker, currentUserId, highlightCommentId, highlightFlash, highlightPostId, onReact, onRowError, openRowPicker, openWho, picker?.rowId, posts, social, startEdit, startReply],
+    [canCompose, closePicker, currentUserId, highlightCommentId, highlightFlash, highlightPostId, stableOnReact, onRowError, openRowPicker, openWho, picker?.rowId, social, startEdit, startReply],
   );
 
   const renderQuietEmpty = useCallback(

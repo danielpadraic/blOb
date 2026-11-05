@@ -514,7 +514,14 @@ export function applyLiveReactionAction(
 }
 
 export type LiveThreadRow =
-  | { id: string; createdAt: string; kind: 'post'; post: PostWithMeta }
+  | {
+      id: string;
+      createdAt: string;
+      kind: 'post';
+      post: PostWithMeta;
+      /** The post this one replies to, resolved when rows are built so a row never reads the whole list. */
+      quoteParent?: PostWithMeta | null;
+    }
   | {
       id: string;
       createdAt: string;
@@ -592,6 +599,25 @@ export function buildLiveThreadRows(posts: PostWithMeta[]): LiveThreadRow[] {
   });
 }
 
+/**
+ * Resolve each reply's parent once, up front. A row that carries its own parent only changes when
+ * that parent changes, so a reaction on one post no longer re-renders every row to look it up.
+ */
+export function attachLiveQuoteParents(rows: LiveThreadRow[], posts: PostWithMeta[]): LiveThreadRow[] {
+  const byId = new Map<string, PostWithMeta>();
+  for (const post of posts) {
+    if (post?.id) {
+      byId.set(post.id, post);
+    }
+  }
+  return rows.map((row) => {
+    if (row.kind !== 'post' || !row.post.parent_id) {
+      return row;
+    }
+    return { ...row, quoteParent: byId.get(row.post.parent_id) ?? null };
+  });
+}
+
 /** Keep the same row object when the source post/comment did not change. */
 export function reuseLiveThreadRows(prev: LiveThreadRow[], next: LiveThreadRow[]): LiveThreadRow[] {
   if (prev.length === 0) {
@@ -612,7 +638,12 @@ export function reuseLiveThreadRows(prev: LiveThreadRow[], next: LiveThreadRow[]
       unchanged = false;
       return row;
     }
-    if (row.kind === 'post' && old.kind === 'post' && old.post === row.post) {
+    if (
+      row.kind === 'post' &&
+      old.kind === 'post' &&
+      old.post === row.post &&
+      (old.quoteParent ?? null) === (row.quoteParent ?? null)
+    ) {
       return old;
     }
     if (row.kind === 'comment' && old.kind === 'comment' && old.comment === row.comment && old.parent === row.parent) {

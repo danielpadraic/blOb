@@ -4,6 +4,8 @@ import {
   applyLiveBackGesture,
   applyLiveReaction,
   applyLiveReactionAction,
+  attachLiveQuoteParents,
+  reuseLiveThreadRows,
   buildLiveThreadRows,
   findLiveHighlightIndex,
   formatLiveClock,
@@ -635,5 +637,39 @@ describe('liveEmptyBody', () => {
         viewerOut: false,
       }),
     ).toBe(lines.watchingLine);
+  });
+});
+
+describe('live quote parents', () => {
+  const base = { author_id: 'a', created_at: '2026-09-05T10:00:00Z', content: 'hi', media_urls: [] };
+  const parent = { ...base, id: 'p1' } as never;
+  const reply = { ...base, id: 'p2', parent_id: 'p1', created_at: '2026-09-05T10:05:00Z' } as never;
+  const other = { ...base, id: 'p3', created_at: '2026-09-05T10:10:00Z' } as never;
+
+  it('hands a reply its parent and leaves other rows alone', () => {
+    const posts = [parent, reply, other];
+    const rows = attachLiveQuoteParents(buildLiveThreadRows(posts), posts);
+    const replyRow = rows.find((row) => row.id === 'p2');
+    expect(replyRow?.kind === 'post' && replyRow.quoteParent).toBe(parent);
+    const otherRow = rows.find((row) => row.id === 'p3');
+    expect(otherRow?.kind === 'post' && otherRow.quoteParent).toBeUndefined();
+  });
+
+  it('keeps row identity when an unrelated post changes', () => {
+    const first = attachLiveQuoteParents(buildLiveThreadRows([parent, reply, other]), [parent, reply, other]);
+    const reacted = { ...other, reactions: [{ id: 'r' }] } as never;
+    const nextPosts = [parent, reply, reacted];
+    const next = reuseLiveThreadRows(first, attachLiveQuoteParents(buildLiveThreadRows(nextPosts), nextPosts));
+    expect(next.find((row) => row.id === 'p1')).toBe(first.find((row) => row.id === 'p1'));
+    expect(next.find((row) => row.id === 'p2')).toBe(first.find((row) => row.id === 'p2'));
+    expect(next.find((row) => row.id === 'p3')).not.toBe(first.find((row) => row.id === 'p3'));
+  });
+
+  it('refreshes a reply row when its parent changes', () => {
+    const first = attachLiveQuoteParents(buildLiveThreadRows([parent, reply]), [parent, reply]);
+    const edited = { ...(parent as object), content: 'edited' } as never;
+    const nextPosts = [edited, reply];
+    const next = reuseLiveThreadRows(first, attachLiveQuoteParents(buildLiveThreadRows(nextPosts), nextPosts));
+    expect(next.find((row) => row.id === 'p2')).not.toBe(first.find((row) => row.id === 'p2'));
   });
 });
