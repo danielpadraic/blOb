@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import {
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  TextInput,
+  View,
+} from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,7 +22,6 @@ import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { useKeyboardHeight } from '@/components/ui/KeyboardFormShell';
 import { useAuth } from '@/hooks/useAuth';
-import { useMyCircles } from '@/hooks/useCircles';
 import type { LoggableChallenge } from '@/hooks/useLoggableChallenge';
 import { hideOfficialCoinSibling } from '@/lib/officialCoin';
 import {
@@ -36,6 +43,7 @@ import {
   liftShareNameMatches,
 } from '@/lib/liftShareInset';
 import { asIdSet } from '@/lib/ids';
+import { holdTabBarHidden } from '@/lib/liveComposerKeyboard';
 import { searchPeople } from '@/lib/social';
 import { THEME } from '@/lib/theme';
 
@@ -61,7 +69,7 @@ export type LiftShareChoice = {
   caption: string;
   /** The challenge to attach to, or null for a Home-only card. */
   challengeId: string | null;
-  /** The Circle room to post in. Never set alongside a challenge. */
+  /** Always null. Circles are not a Lift share destination. */
   circleId: string | null;
   home: boolean;
   audience: PostAudience;
@@ -112,12 +120,9 @@ export function LiftShareSheet({
   const insets = useSafeAreaInsets();
   const friends = useFriends(user?.id);
   const blockedPeers = useBlockedPeerIds();
-  const myCircles = useMyCircles();
-  const circles = myCircles.data ?? [];
   const [destination, setDestination] = useState<LiftShareDestination | null>(null);
   const [caption, setCaption] = useState('');
   const [challengeId, setChallengeId] = useState<string | null>(null);
-  const [circleId, setCircleId] = useState<string | null>(null);
   const [recipientIds, setRecipientIds] = useState<string[]>([]);
   const [recipientQuery, setRecipientQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
@@ -141,6 +146,14 @@ export function LiftShareSheet({
     }
   }, [locked]);
 
+  // The sheet covers the whole window, so the pill tab bar must not sit under or beside it.
+  useEffect(() => {
+    if (!visible) {
+      return undefined;
+    }
+    return holdTabBarHidden();
+  }, [visible]);
+
   // Reopening the sheet on a second share starts at the destination list again.
   useEffect(() => {
     if (!visible) {
@@ -150,7 +163,6 @@ export function LiftShareSheet({
       setSearchFocused(false);
       setPickedProfiles({});
       setChallengeId(null);
-      setCircleId(null);
     }
   }, [visible]);
 
@@ -200,7 +212,7 @@ export function LiftShareSheet({
     destination === 'message'
       ? recipientIds.length > 0
       : destination === 'live'
-        ? Boolean(challengeId || circleId)
+        ? Boolean(challengeId)
         : destination === 'home';
 
   const primaryLabel = busy
@@ -210,9 +222,7 @@ export function LiftShareSheet({
         ? `Send to ${recipientIds.length} people`
         : 'Send'
       : destination === 'live'
-        ? circleId
-          ? 'Post to Circle'
-          : 'Add to challenge'
+        ? 'Add to challenge'
         : 'Share to Home';
 
   function togglePerson(person: SharePerson) {
@@ -232,7 +242,7 @@ export function LiftShareSheet({
       destination,
       caption: caption.trim(),
       challengeId: destination === 'live' ? challengeId : null,
-      circleId: destination === 'live' ? circleId : null,
+      circleId: null,
       home,
       audience: destination === 'message' ? 'specific' : DEFAULT_POST_AUDIENCE,
       recipientIds: destination === 'message' ? recipientIds : [],
@@ -265,12 +275,13 @@ export function LiftShareSheet({
       dim={false}
       fill
       zIndex={140}>
-      <View
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{
           flex: 1,
           height: '100%',
           backgroundColor: THEME.surface,
-          // Web: sit on visualViewport. iOS Screen already pads. Android resizes the window.
+          // Web: sit on visualViewport. iOS pads through the avoiding view. Android resizes the window.
           marginBottom: Platform.OS === 'web' ? keyboardHeight : 0,
         }}>
         <View
@@ -485,7 +496,7 @@ export function LiftShareSheet({
                 />
                 <DestinationRow
                   glyph={GLYPH.people}
-                  label="Home"
+                  label="Home Feed"
                   detail="One card on your feed"
                   onPress={() => setDestination('home')}
                 />
@@ -493,15 +504,11 @@ export function LiftShareSheet({
                   glyph={GLYPH.swords}
                   label="Live"
                   detail={
-                    challenges.length && circles.length
-                      ? 'A challenge you are in, or one of your Circles'
-                      : circles.length
-                        ? 'Post it in one of your Circles'
-                        : challenges.length
-                          ? 'Goes on your check-in for this period'
-                          : 'No challenges or Circles to add it to'
+                    challenges.length
+                      ? 'Goes on your check-in for this period'
+                      : 'No active challenge to add it to'
                   }
-                  disabled={!challenges.length && !circles.length}
+                  disabled={!challenges.length}
                   onPress={() => setDestination('live')}
                 />
               </View>
@@ -519,9 +526,6 @@ export function LiftShareSheet({
               </View>
             ) : (
               <>
-                {/* A challenge and a Circle are both "somewhere my people are", so they share one
-                    screen. They are mutually exclusive because a post row can only carry one of the
-                    two ids. */}
                 {destination === 'live' ? (
                   <>
                     {challenges.length ? (
@@ -538,7 +542,6 @@ export function LiftShareSheet({
                               detail={challenge.statusLine ?? challenge.taskLabel ?? undefined}
                               selected={challengeId === challenge.id}
                               onPress={() => {
-                                setCircleId(null);
                                 setChallengeId((current) =>
                                   current === challenge.id ? null : challenge.id,
                                 );
@@ -549,40 +552,13 @@ export function LiftShareSheet({
                       </>
                     ) : null}
 
-                    {circles.length ? (
-                      <>
-                        <SectionLabel text="CIRCLES" />
-                        <AppText style={{ fontSize: 12, color: THEME.textMuted, marginBottom: 8 }}>
-                          Posts in the Circle&rsquo;s room.
-                        </AppText>
-                        <View style={{ gap: 8 }}>
-                          {circles.map((circle) => (
-                            <PickRow
-                              key={circle.id}
-                              label={circle.name}
-                              detail={
-                                circle.member_count
-                                  ? `${circle.member_count} ${circle.member_count === 1 ? 'member' : 'members'}`
-                                  : undefined
-                              }
-                              selected={circleId === circle.id}
-                              onPress={() => {
-                                setChallengeId(null);
-                                setCircleId((current) => (current === circle.id ? null : circle.id));
-                              }}
-                            />
-                          ))}
-                        </View>
-                      </>
-                    ) : null}
-
-                    {!challenges.length && !circles.length ? (
+                    {!challenges.length ? (
                       <AppText style={{ marginTop: 16, fontSize: 14, color: THEME.textMuted }}>
-                        Join a challenge or a Circle and they will show up here.
+                        Join an active challenge and it will show up here.
                       </AppText>
                     ) : null}
 
-                    {destination === 'live' && (challengeId || circleId) && !locked ? (
+                    {destination === 'live' && challengeId && !locked ? (
                       <Pressable
                         accessibilityRole="switch"
                         accessibilityLabel="Also show on Home"
@@ -675,7 +651,7 @@ export function LiftShareSheet({
             <AppText style={{ fontSize: 13, fontWeight: '600', color: THEME.danger }}>{error}</AppText>
           </View>
         ) : null}
-      </View>
+      </KeyboardAvoidingView>
     </ChromeOverlay>
   );
 }

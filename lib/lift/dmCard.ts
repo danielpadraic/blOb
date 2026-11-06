@@ -80,5 +80,8 @@ export async function sendLiftCardToThreads(input: {
       console.warn('Could not send the lift in a DM', error);
     }
   }
+  if (sent === 0) {
+    throw new Error('Could not send that lift. Check your connection and try again.');
+  }
   return sent;
 }

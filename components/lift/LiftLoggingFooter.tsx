@@ -167,7 +167,6 @@ export function LiftDraftFooter({
         <LiftFooterBtn
           title="Complete"
           variant="save"
-          dimmed={!canComplete}
           loading={completing}
           accessibilityLabel={!canComplete && leftoverLine ? leftoverLine : 'Complete'}
           onPress={canComplete ? onComplete : (onLeftover ?? onComplete)}

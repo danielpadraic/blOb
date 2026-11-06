@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  holdTabBarHidden,
   isLiveComposerKeyboardOpen,
   setLiveComposerKeyboardOpen,
   subscribeLiveComposerKeyboard,
@@ -16,5 +17,17 @@ describe('liveComposerKeyboard', () => {
     setLiveComposerKeyboardOpen(false);
     stop();
     expect(seen).toEqual([true, false]);
+  });
+
+  it('keeps the bar hidden while any hold is open, even with the keys down', () => {
+    setLiveComposerKeyboardOpen(false);
+    const releaseA = holdTabBarHidden();
+    const releaseB = holdTabBarHidden();
+    expect(isLiveComposerKeyboardOpen()).toBe(true);
+    releaseA();
+    releaseA();
+    expect(isLiveComposerKeyboardOpen()).toBe(true);
+    releaseB();
+    expect(isLiveComposerKeyboardOpen()).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildLiftDmBody, parseLiftDmBody } from '@/lib/lift/dmCard';
+import { buildLiftDmBody, parseLiftDmBody, sendLiftCardToThreads } from '@/lib/lift/dmCard';
 import type { LiftSessionDraft } from '@/lib/lift/types';
 
 const draft = {
@@ -24,5 +24,40 @@ describe('lift DM card', () => {
     expect(parsed?.sessionId).toBe(draft.id);
     expect(parsed?.caption).toBe('Heavy');
     expect(parsed?.snapshot.sessionId).toBe(draft.id);
+  });
+
+  it('writes one card into the thread, with title and no Home post', async () => {
+    const sent: Array<{ conversation_id: string; body: string }> = [];
+    const count = await sendLiftCardToThreads({
+      draft,
+      authorId: 'dan',
+      caption: '',
+      recipientIds: ['amy'],
+      startChat: async () => ({ id: 'thread-1' }),
+      startGroup: async () => ({ id: 'group-1' }),
+      send: async (message) => {
+        sent.push(message);
+      },
+    });
+    expect(count).toBe(1);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.conversation_id).toBe('thread-1');
+    expect(sent[0]?.body).toContain('Legs · Sep 30');
+    expect(parseLiftDmBody(sent[0]?.body)?.snapshot.title).toBe('Legs · Sep 30');
+  });
+
+  it('says so when nothing was delivered', async () => {
+    await expect(
+      sendLiftCardToThreads({
+        draft,
+        authorId: 'dan',
+        recipientIds: ['amy'],
+        startChat: async () => {
+          throw new Error('offline');
+        },
+        startGroup: async () => ({ id: 'g' }),
+        send: async () => undefined,
+      }),
+    ).rejects.toThrow(/Could not send/);
   });
 });
