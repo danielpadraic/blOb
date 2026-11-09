@@ -444,7 +444,14 @@ export function PostMediaCarousel({
       return;
     }
     markUserPaused();
-    lightbox?.openLightbox(lightboxItems, itemIndex, lightboxOrigin);
+    // The reader may swipe inside the lightbox. Closing it puts the inline grid on that same photo.
+    lightbox?.openLightbox(lightboxItems, itemIndex, lightboxOrigin, {
+      onClose: (lastIndex) => {
+        if (lastIndex !== indexRef.current) {
+          settleAt(lastIndex, false, false);
+        }
+      },
+    });
   }
 
   const slides = urls.filter((url) => Boolean(String(url ?? '').trim()));

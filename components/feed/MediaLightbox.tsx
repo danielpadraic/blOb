@@ -82,8 +82,18 @@ type LightboxState = {
   origin: LightboxOrigin | null;
 };
 
+export type LightboxOpenOptions = {
+  /** Called with the photo the reader was on when the lightbox closed, so the inline grid can follow. */
+  onClose?: (index: number) => void;
+};
+
 type MediaLightboxValue = {
-  openLightbox: (items: LightboxItem[], index?: number, origin?: LightboxOrigin | null) => void;
+  openLightbox: (
+    items: LightboxItem[],
+    index?: number,
+    origin?: LightboxOrigin | null,
+    opts?: LightboxOpenOptions,
+  ) => void;
   closeLightbox: (opts?: { restore?: boolean }) => void;
   open: boolean;
 };
@@ -124,6 +134,8 @@ export function MediaLightboxHost({ children }: { children: ReactNode }) {
   const params = useGlobalSearchParams<{ tab?: string }>();
   const tabParam = Array.isArray(params.tab) ? params.tab[0] : params.tab;
   const originRef = useRef<LightboxOrigin | null>(null);
+  const lastPageRef = useRef(0);
+  const onClosedRef = useRef<((index: number) => void) | null>(null);
   const pathRef = useRef(pathname);
   const tabRef = useRef(tabParam);
   pathRef.current = pathname;
@@ -131,8 +143,11 @@ export function MediaLightboxHost({ children }: { children: ReactNode }) {
 
   const closeLightbox = useCallback((opts?: { restore?: boolean }) => {
     const origin = originRef.current;
+    const onClosed = onClosedRef.current;
+    onClosedRef.current = null;
     setState(null);
     originRef.current = null;
+    onClosed?.(lastPageRef.current);
     if (opts?.restore === false) {
       return;
     }
@@ -149,13 +164,20 @@ export function MediaLightboxHost({ children }: { children: ReactNode }) {
     }
     pushChallengeHref(router, href, 'lightbox-close', origin?.challengeId ?? '', pathRef.current);
   }, [router]);
-  const openLightbox = useCallback((items: LightboxItem[], index = 0, origin?: LightboxOrigin | null) => {
+  const openLightbox = useCallback((
+    items: LightboxItem[],
+    index = 0,
+    origin?: LightboxOrigin | null,
+    opts?: LightboxOpenOptions,
+  ) => {
     const next = lightboxItems(items);
     if (next.length === 0) {
       return;
     }
     const start = Math.min(Math.max(index, 0), next.length - 1);
     originRef.current = origin ?? null;
+    lastPageRef.current = start;
+    onClosedRef.current = opts?.onClose ?? null;
     setState({ items: next, index: start, origin: origin ?? null });
   }, []);
 
@@ -177,7 +199,13 @@ export function MediaLightboxHost({ children }: { children: ReactNode }) {
     <MediaLightboxContext.Provider value={value}>
       <View style={{ flex: 1 }}>
         {children}
-        <MediaLightboxOverlay state={state} onClose={closeLightbox} />
+        <MediaLightboxOverlay
+          state={state}
+          onClose={closeLightbox}
+          onPage={(next) => {
+            lastPageRef.current = next;
+          }}
+        />
       </View>
     </MediaLightboxContext.Provider>
   );
@@ -186,9 +214,11 @@ export function MediaLightboxHost({ children }: { children: ReactNode }) {
 function MediaLightboxOverlay({
   state,
   onClose,
+  onPage,
 }: {
   state: LightboxState | null;
   onClose: () => void;
+  onPage?: (page: number) => void;
 }) {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -204,6 +234,14 @@ function MediaLightboxOverlay({
   const pageHeight = Math.max(height, 1);
   const open = Boolean(state);
   pageRef.current = page;
+
+  useEffect(() => {
+    if (open) {
+      onPage?.(page);
+    }
+    // onPage is a fresh closure each render and only writes a ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, page]);
 
   useEffect(() => {
     if (!state) {
