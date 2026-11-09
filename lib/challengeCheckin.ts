@@ -64,7 +64,7 @@ export function isCheckinPrimary(phase: CheckinPhase): boolean {
   return phase === 'none' || phase === 'in_progress' || phase === 'ready';
 }
 
-/** Overview / Board footer. Chips stay Begin / Continue / Submit. */
-export function stickyCheckinFooterTitle(locked: boolean): string {
-  return locked ? 'Checked in' : 'Check in';
+/** Overview / Board footer. Same word before and after; a checkmark marks the done state. */
+export function stickyCheckinFooterTitle(_locked: boolean): string {
+  return 'Check in';
 }

@@ -1325,7 +1325,7 @@ export default function ChallengeDetailScreen() {
       ? JOIN_CTA_HEIGHT + 12
       : showStickyCta
         ? JOIN_CTA_HEIGHT +
-          (!checkinLocked && watch.visible ? 44 : 12) +
+          (!checkinLocked && watch.visible ? 44 : checkinLocked && periodGate ? 36 : 12) +
           (!checkinLocked && periodDueClock ? 40 : 0)
         : 0;
 
@@ -2154,7 +2154,7 @@ export default function ChallengeDetailScreen() {
               <View className="gap-1.5">
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={copy('checkin.checkedIn')}
+                  accessibilityLabel={`${logTitle}, done`}
                   onPress={() => setPageTab('feed')}
                   style={{
                     height: JOIN_CTA_HEIGHT,
@@ -2168,7 +2168,7 @@ export default function ChallengeDetailScreen() {
                   }}>
                   <Glyph name={GLYPH.check} color={THEME.accentForeground} size={18} />
                   <AppText className="text-[16px] font-semibold" style={{ color: THEME.accentForeground }}>
-                    {copy('checkin.checkedIn')}
+                    {logTitle}
                   </AppText>
                 </Pressable>
                 {periodGate ? (
@@ -2258,9 +2258,6 @@ export default function ChallengeDetailScreen() {
 
 function RuleLine({ text }: { text: string }) {
   return (
-    <View className="flex-row gap-2">
-      <AppText style={{ color: THEME.accent }}>●</AppText>
-      <AppText className="flex-1 leading-6 text-ink">{text}</AppText>
-    </View>
+    <AppText className="leading-6 text-ink">{text}</AppText>
   );
 }

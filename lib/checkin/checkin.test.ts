@@ -50,7 +50,7 @@ describe('check-in stages', () => {
     expect(checkinStageLabel('none')).toBe('Begin');
     expect(checkinStageLabel('ready')).toBe('Submit');
     expect(stickyCheckinFooterTitle(false)).toBe('Check in');
-    expect(stickyCheckinFooterTitle(true)).toBe('Checked in');
+    expect(stickyCheckinFooterTitle(true)).toBe('Check in');
   });
 });
 

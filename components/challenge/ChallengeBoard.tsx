@@ -281,7 +281,8 @@ export function ChallengeBoard({
   const hasLaneScoreboard = scoringLanes.length >= 1;
   const headerFormat = quantityBoard ? 'quantity' : pointsBoard ? 'points' : 'consistency';
   const leadingScore = racing.reduce((max, row) => Math.max(max, Number(row.points) || 0), 0);
-  const headerLine = hasLaneScoreboard
+  // Remaining / Caught Up / Dropped counts live on the full Board only, never on the Overview teaser.
+  const headerLine = hasLaneScoreboard || (compact && headerFormat === 'consistency' && !officialCoin)
     ? ''
     : officialCoin
     ? officialCoinBoardHeaderLine(challenge)
