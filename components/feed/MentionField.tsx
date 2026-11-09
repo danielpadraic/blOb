@@ -305,10 +305,13 @@ function MentionFieldInner(
     setHeight((current) => (current === next ? current : next));
   }
 
+  const flowSeat = pickerPlacement === 'flow';
+  // In flow the list is part of the composer: it opens between the field and the tool row, so it can
+  // never sit over camera / gallery / GIF / audience and never clips against a header or list.
   const dropdown = open ? (
     <View
       style={{
-        position: pickerPlacement === 'flow' ? 'relative' : 'absolute',
+        position: flowSeat ? 'relative' : 'absolute',
         left: 0,
         right: 0,
         bottom: pickerPlacement === 'above' ? '100%' : undefined,
@@ -317,9 +320,10 @@ function MentionFieldInner(
         marginBottom: pickerPlacement === 'above' ? 4 : 0,
         marginTop: pickerPlacement === 'above' ? 0 : 4,
         backgroundColor: frost ? 'rgba(16,19,18,0.94)' : THEME.surface,
-        borderWidth: 1,
+        borderWidth: flowSeat ? 0 : 1,
+        borderTopWidth: 1,
         borderColor: frost ? 'rgba(255,255,255,0.12)' : THEME.border,
-        borderRadius: 14,
+        borderRadius: flowSeat ? 0 : 14,
         maxHeight: 180,
         overflow: 'hidden',
       }}>
@@ -473,6 +477,11 @@ function MentionFieldInner(
         }}
         onBlur={() => {
           form?.setFieldFocused?.(false);
+          if (flowSeat) {
+            // No backdrop to tap in flow, so leaving the field closes the list. A row press lands
+            // first: web keeps focus on mouse-down and native does not blur on a row tap.
+            setTimeout(() => setSuppressed(true), 150);
+          }
           onBlur?.();
         }}
         onContentSizeChange={(event) => {

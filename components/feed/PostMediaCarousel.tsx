@@ -142,7 +142,7 @@ const WEB_FEED_TOUCH =
 /** Multi-still strip: allow sideways paging without handing swipe-right to the browser. */
 const WEB_PAGER_TOUCH =
   Platform.OS === 'web'
-    ? ({ touchAction: 'pan-x' } as object)
+    ? ({ touchAction: 'pan-y' } as object)
     : undefined;
 
 function useReduceMotion() {

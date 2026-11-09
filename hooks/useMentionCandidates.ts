@@ -37,6 +37,8 @@ export function useMentionCandidates(input: {
   const following = useFollowing(user?.id, { enabled: pickerOpen });
   const audience = asPostAudience(input.audience);
   const rawQuery = input.query.trim().replace(/^@/, '').toLowerCase();
+  // `query` is the settled text and drives every network search. `rawQuery` filters what is
+  // already on the device, so the list narrows on the first keystroke instead of after the debounce.
   const [query, setQuery] = useState(rawQuery);
   useEffect(() => {
     if (!rawQuery) {
@@ -146,7 +148,7 @@ export function useMentionCandidates(input: {
       if (audience === 'specific' && rank !== 'audience' && !input.audienceUserIds.includes(profile.id)) {
         return;
       }
-      if (query && !mentionSearchMatches(profile, query)) {
+      if (rawQuery && !mentionSearchMatches(profile, rawQuery)) {
         return;
       }
       seen.add(profile.id);
@@ -180,7 +182,7 @@ export function useMentionCandidates(input: {
     for (const profile of searched.data ?? []) {
       take(profile, 'search');
     }
-    if (query.length >= 2) {
+    if (query.length >= 2 && rawQuery.length >= 2) {
       for (const row of challenges.data ?? []) {
         const title = String(row.title ?? '').trim() || 'Challenge';
         if (seen.has(row.id)) {
@@ -223,6 +225,7 @@ export function useMentionCandidates(input: {
     input.excludeIds,
     members.data,
     query,
+    rawQuery,
     scoped.data,
     searched.data,
     user?.id,

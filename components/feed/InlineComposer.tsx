@@ -214,12 +214,19 @@ export function InlineComposer({
     persistDraft(docRef.current, attachments);
   }, [attachments, persistDraft]);
 
-  function onDocChange(doc: MentionDoc) {
-    docRef.current = doc;
-    const next = doc.text.trim().length > 0;
-    setHasText((current) => (current === next ? current : next));
-    persistDraft(doc, attachments);
-  }
+  // One identity for the life of the composer. Attachments are read through a ref so a new photo
+  // never hands the field a new onChange.
+  const attachmentsRef = useRef(attachments);
+  attachmentsRef.current = attachments;
+  const onDocChange = useCallback(
+    (doc: MentionDoc) => {
+      docRef.current = doc;
+      const next = doc.text.trim().length > 0;
+      setHasText((current) => (current === next ? current : next));
+      persistDraft(doc, attachmentsRef.current);
+    },
+    [persistDraft],
+  );
 
   function addAttachment(attachment: Omit<Attachment, 'id'>) {
     setAttachments((current) => {
@@ -385,7 +392,7 @@ export function InlineComposer({
       ref={fieldRef}
       compact
       collapsed={fieldCollapsed}
-      pickerPlacement="above"
+      pickerPlacement="flow"
       autoFocus={autoFocus}
       placeholder={placeholder}
       initialText={stored?.doc.text || initialText}

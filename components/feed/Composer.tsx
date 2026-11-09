@@ -511,7 +511,7 @@ export function Composer({
               initialText={docRef.current.text}
               compact
               collapsed={!expanded && !hasText}
-              pickerPlacement="above"
+              pickerPlacement="flow"
               audience={audience}
               audienceUserIds={audienceUserIds}
               onChange={onDocChange}
