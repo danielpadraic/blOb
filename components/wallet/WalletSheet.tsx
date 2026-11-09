@@ -179,6 +179,7 @@ export function WalletSheet() {
                   })();
                 }}
               />
+              <AppText className="text-[13px] leading-5 text-muted">{copy('wallet.cashOutTerms')}</AppText>
               {!hasPayoutAddress(profile) ? (
                 <AppText className="text-[13px] leading-5 text-muted">
                   {copy('wallet.addAddressToCashOut')}

@@ -381,6 +381,10 @@ export function notificationHrefFromPushData(data: {
   if (routed) {
     return routed;
   }
+  const paidChallengeId = data.challenge_id || data.challengeId;
+  if (data.type === 'payout_received' && paidChallengeId) {
+    return challengeDetailHref(paidChallengeId, 'lobby', null, { tab: 'overview', receipt: true });
+  }
   const href = data.href || data.url;
   if (href && /\/challenges\/[^/]+\/submit(?:\?|$)/.test(href) && data.challenge_id) {
     return challengeDetailHref(data.challenge_id, 'lobby', null, { tab: 'overview' });
@@ -490,7 +494,7 @@ export function notificationHref(item: AppNotification): Href | null {
   if (item.type === 'payout_received') {
     const payoutChallengeId = notificationChallengeId(data);
     if (payoutChallengeId) {
-      return challengeDetailHref(payoutChallengeId, 'lobby', null, { tab: 'overview' });
+      return challengeDetailHref(payoutChallengeId, 'lobby', null, { tab: 'overview', receipt: true });
     }
     return '/profile';
   }

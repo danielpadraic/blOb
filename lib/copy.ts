@@ -152,6 +152,8 @@ const STRINGS = {
   'account.addressSaved': 'Address saved.',
   'account.addressStateInvalid': 'Pick a US state.',
   'wallet.addAddressToCashOut': 'Add an address to cash out',
+  'wallet.cashOutTerms':
+    'Cash prizes land in this wallet. Cash out is separate: a fee and an ID check apply, and it starts at $25. Promo and Credit stay in the app.',
   'error.passwordWeak': 'Needs a lowercase, uppercase, number, and symbol.',
   'error.passwordSame': 'Pick a different password.',
   'error.passwordSession': 'Sign out and sign in again, then change your password.',

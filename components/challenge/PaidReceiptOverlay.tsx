@@ -8,15 +8,15 @@ import { Button } from '@/components/ui/Button';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { AppText } from '@/components/ui/AppText';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
-import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { THEME, themeShadow } from '@/lib/theme';
+import { settledReceiptTitle } from '@/lib/walletReceipt';
 import type { Challenge, ChallengeSettlementView } from '@/lib/types';
 
 type PaidReceiptOverlayProps = {
   visible: boolean;
   challenge: Pick<
     Challenge,
-    'id' | 'title' | 'task' | 'currency' | 'is_official' | 'buy_in_amount' | 'creator_contribution' | 'prize_pool'
+    'id' | 'title' | 'task' | 'status' | 'currency' | 'is_official' | 'buy_in_amount' | 'creator_contribution' | 'prize_pool'
   >;
   settlement: ChallengeSettlementView;
   userId?: string;
@@ -33,7 +33,7 @@ export function PaidReceiptOverlay({
   onClose,
 }: PaidReceiptOverlayProps) {
   const insets = useSafeAreaInsets();
-  const name = challengeDisplayTitle(challenge) || 'Challenge prize';
+  const receiptTitle = settledReceiptTitle(challenge);
   const mine = settlement.payouts.find((row) => row.user_id === userId);
   const paid = joined && Number(mine?.amount) > 0;
   const cash = String(challenge.currency ?? '') === 'bucks';
@@ -82,12 +82,12 @@ export function PaidReceiptOverlay({
               You got paid.
             </AppText>
             <AppText className="mt-1 text-[15px] leading-6" style={{ color: THEME.textMuted }}>
-              {name} · Prize
+              {receiptTitle}
             </AppText>
           </View>
         ) : (
           <AppText className="text-[17px] font-semibold leading-6" style={{ color: THEME.textPrimary }}>
-            {name} · Prize
+            {receiptTitle}
           </AppText>
         )}
         <View className="mt-3">

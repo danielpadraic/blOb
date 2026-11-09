@@ -94,8 +94,11 @@ export function walletReceiptName(input: {
   if (persisted) {
     return challengeDisplayTitle({ title: persisted }) || persisted;
   }
-  const joined = challengeDisplayTitle({ title: input.title, task: input.task });
-  if (joined) {
+  const joined = challengeDisplayTitle({
+    title: usableName(input.title),
+    task: usableName(input.task),
+  });
+  if (usableName(joined)) {
     return joined;
   }
   return 'Challenge prize';
@@ -141,6 +144,21 @@ export function walletReceiptHeadline(input: {
     return name;
   }
   return `${name} · Prize`;
+}
+
+/** Settled screen kind: a cancelled room returns buy-ins (Refund); every other settle is a Prize. */
+export function settledReceiptKind(status?: string | null): 'Refund' | 'Prize' {
+  const value = String(status ?? '');
+  return value === 'cancelled' || value === 'cancelled_underfilled' ? 'Refund' : 'Prize';
+}
+
+/** Real challenge title plus the kind. Never "this challenge". */
+export function settledReceiptTitle(
+  challenge: { title?: string | null; task?: string | null; status?: string | null },
+  kind?: WalletReceiptKind,
+): string {
+  const name = walletReceiptName({ title: challenge.title, task: challenge.task });
+  return `${name} · ${kind ?? settledReceiptKind(challenge.status)}`;
 }
 
 export function walletReceiptHref(challengeId: string | null | undefined, origin?: string | null) {
