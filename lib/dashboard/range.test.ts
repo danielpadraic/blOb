@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { rangeDayKeys } from '@/lib/dashboard/range';
+import { rangeDayKeys, rangeWindowLabel } from '@/lib/dashboard/range';
 
 describe('dashboard week', () => {
   it('is Sunday through Saturday in the phone zone, not the last 7 days', () => {
@@ -46,5 +46,17 @@ describe('dashboard week', () => {
   it('does not count the day in UTC', () => {
     const keys = rangeDayKeys('today', new Date('2026-10-01T03:00:00.000Z'), 'UTC');
     expect(keys).not.toEqual(['2026-10-01']);
+  });
+});
+
+describe('rangeWindowLabel', () => {
+  it('names the exact Sunday through Saturday window', () => {
+    const keys = rangeDayKeys('week', new Date('2026-10-01T18:00:00.000Z'), 'America/Chicago');
+    expect(rangeWindowLabel(keys)).toBe('Sun Sep 27 – Sat Oct 3');
+  });
+
+  it('names a single day and ignores an empty window', () => {
+    expect(rangeWindowLabel(['2026-10-01'])).toBe('Thu Oct 1');
+    expect(rangeWindowLabel([])).toBe('');
   });
 });

@@ -97,3 +97,22 @@ export function monthKeys(today: string): string[] {
 export function dayInRange(day: string, keys: readonly string[]): boolean {
   return Boolean(day) && keys.includes(day);
 }
+
+const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function dayLabel(ymd: string): string {
+  const [year, month, day] = ymd.split('-').map(Number);
+  const dow = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  return `${WEEKDAY_SHORT[dow]} ${MONTH_SHORT[month - 1]} ${day}`;
+}
+
+/** The exact days a ring or bar covers, for the tap readout. "Sun Oct 4 – Sat Oct 10". */
+export function rangeWindowLabel(keys: readonly string[]): string {
+  const first = keys[0];
+  const last = keys[keys.length - 1];
+  if (!first || !last || !YMD.test(first) || !YMD.test(last)) {
+    return '';
+  }
+  return first === last ? dayLabel(first) : `${dayLabel(first)} – ${dayLabel(last)}`;
+}

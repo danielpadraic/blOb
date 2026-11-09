@@ -39,17 +39,22 @@ function cleanGoal(value: unknown, fallback: RingGoal): RingGoal {
 
 export type StoredRingGoals = {
   goals: RingGoals;
-  /** True after she taps Save on this dashboard. Interests must not replace Exercise after that. */
+  /** True after she saves a goal on this dashboard. Move and Stand keep her numbers from then on. */
   saved: boolean;
+  /**
+   * True only after she changed Exercise itself. Until then Interests session goals keep
+   * filling Exercise, even when she edited Move or Stand.
+   */
+  exerciseEdited: boolean;
 };
 
 export async function readRingGoals(): Promise<StoredRingGoals> {
   try {
     const raw = await authStorage.getItem(KEY);
     if (!raw) {
-      return { goals: DEFAULT_RING_GOALS, saved: false };
+      return { goals: DEFAULT_RING_GOALS, saved: false, exerciseEdited: false };
     }
-    const parsed = JSON.parse(raw) as Partial<RingGoals> & { saved?: boolean };
+    const parsed = JSON.parse(raw) as Partial<RingGoals> & { saved?: boolean; exerciseEdited?: boolean };
     return {
       goals: {
         move: cleanGoal(parsed.move, DEFAULT_RING_GOALS.move),
@@ -57,15 +62,27 @@ export async function readRingGoals(): Promise<StoredRingGoals> {
         stand: cleanGoal(parsed.stand, DEFAULT_RING_GOALS.stand),
       },
       saved: parsed.saved !== false,
+      // A goal saved before this flag existed was a deliberate dashboard edit.
+      exerciseEdited: parsed.exerciseEdited === undefined ? parsed.saved !== false : parsed.exerciseEdited === true,
     };
   } catch {
-    return { goals: DEFAULT_RING_GOALS, saved: false };
+    return { goals: DEFAULT_RING_GOALS, saved: false, exerciseEdited: false };
   }
 }
 
-export function writeRingGoals(goals: RingGoals): void {
+/** Exercise counts as edited once the saved goal differs from the one on screen. The edit sticks. */
+export function exerciseGoalEdited(shown: RingGoals, next: RingGoals, alreadyEdited: boolean): boolean {
+  if (alreadyEdited) {
+    return true;
+  }
+  return shown.exercise.amount !== next.exercise.amount || shown.exercise.cadence !== next.exercise.cadence;
+}
+
+export function writeRingGoals(goals: RingGoals, exerciseEdited: boolean): void {
   try {
-    void Promise.resolve(authStorage.setItem(KEY, JSON.stringify({ ...goals, saved: true }))).catch(() => undefined);
+    void Promise.resolve(
+      authStorage.setItem(KEY, JSON.stringify({ ...goals, saved: true, exerciseEdited })),
+    ).catch(() => undefined);
   } catch {
     // The fields on screen still apply this visit.
   }
@@ -221,8 +238,20 @@ export function exerciseDayMinutes(raw: unknown): number {
   return Math.min(24 * 60, minutes);
 }
 
-/** Active calories, exercise minutes, and stand hours inside the selected days only. */
-export function ringTotals(days: readonly BodyDay[], keys: readonly string[]): {
+function trainedDayMinutes(trained: Readonly<Record<string, number>> | null | undefined, day: string): number {
+  return Math.min(24 * 60, positiveNumber(trained?.[day]) ?? 0);
+}
+
+/**
+ * Active calories, exercise minutes, and stand hours inside the selected days only.
+ * `trainedMinutes` is blOb Lift and cardio time by day. A Lift session is often the same workout
+ * the watch already counted, so a day takes the larger number and never the sum.
+ */
+export function ringTotals(
+  days: readonly BodyDay[],
+  keys: readonly string[],
+  trainedMinutes?: Readonly<Record<string, number>> | null,
+): {
   move: number;
   exercise: number;
   stand: number;
@@ -231,11 +260,19 @@ export function ringTotals(days: readonly BodyDay[], keys: readonly string[]): {
   let move = 0;
   let exercise = 0;
   let stand = 0;
+  const seen = new Set<string>();
   for (const day of inRange) {
+    seen.add(day.day);
     const active = positiveNumber(day.moveKcal) ?? positiveNumber(day.calories) ?? 0;
     move += active;
-    exercise += exerciseDayMinutes(day.exerciseMin);
+    const health = exerciseDayMinutes(day.exerciseMin);
+    exercise += Math.max(health, trainedDayMinutes(trainedMinutes, day.day));
     stand += Math.min(24, positiveNumber(day.standHours) ?? 0);
+  }
+  for (const key of keys) {
+    if (!seen.has(key)) {
+      exercise += trainedDayMinutes(trainedMinutes, key);
+    }
   }
   return { move, exercise, stand };
 }

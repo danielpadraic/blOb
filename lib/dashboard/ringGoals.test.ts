@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { exerciseSeedFromInterests, ringProgress, ringTotals, scaledRingGoal } from '@/lib/dashboard/ringGoals';
+import {
+  DEFAULT_RING_GOALS,
+  exerciseGoalEdited,
+  exerciseSeedFromInterests,
+  ringProgress,
+  ringTotals,
+  scaledRingGoal,
+} from '@/lib/dashboard/ringGoals';
 import { bucketBodyPoints } from '@/lib/health/bodyDays';
 
 describe('ring goals', () => {
@@ -144,5 +151,69 @@ describe('ring quantities', () => {
     expect(totals.stand).toBe(24);
     expect(totals.exercise).toBe(273);
     expect(totals.move).toBe(186);
+  });
+});
+
+describe('exercise ring minutes', () => {
+  const week = ['2026-10-04', '2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10'];
+
+  it('turns a week of HealthKit seconds into minutes against a 210 min goal', () => {
+    const days = week.map((day) => ({ day, exerciseMin: 874 }));
+    const totals = ringTotals(days, week);
+    expect(totals.exercise).toBeLessThan(110);
+    const goal = scaledRingGoal({
+      amount: 30,
+      cadence: 'daily',
+      range: 'week',
+      customDays: 7,
+      monthDays: 31,
+      yearDays: 365,
+    });
+    expect(goal).toBe(210);
+    expect(ringProgress(totals.exercise, goal)).toBeLessThan(1);
+  });
+
+  it('never adds Lift on top of the same workout', () => {
+    const totals = ringTotals([{ day: '2026-10-05', exerciseMin: 45 }], ['2026-10-05'], { '2026-10-05': 40 });
+    expect(totals.exercise).toBe(45);
+  });
+
+  it('uses Lift and cardio minutes when Health has nothing for that day', () => {
+    const totals = ringTotals([{ day: '2026-10-05', exerciseMin: 20 }], ['2026-10-05', '2026-10-06'], {
+      '2026-10-05': 10,
+      '2026-10-06': 35,
+    });
+    expect(totals.exercise).toBe(55);
+  });
+
+  it('ignores Lift minutes outside the window', () => {
+    expect(ringTotals([], ['2026-10-05'], { '2026-10-12': 60 }).exercise).toBe(0);
+  });
+});
+
+describe('exercise goal edit flag', () => {
+  it('stays unedited when only Move changes', () => {
+    const next = { ...DEFAULT_RING_GOALS, move: { amount: 700, cadence: 'daily' as const } };
+    expect(exerciseGoalEdited(DEFAULT_RING_GOALS, next, false)).toBe(false);
+  });
+
+  it('marks Exercise edited when its amount or cadence changes, and keeps it', () => {
+    const amount = { ...DEFAULT_RING_GOALS, exercise: { amount: 45, cadence: 'daily' as const } };
+    const cadence = { ...DEFAULT_RING_GOALS, exercise: { amount: 30, cadence: 'weekly' as const } };
+    expect(exerciseGoalEdited(DEFAULT_RING_GOALS, amount, false)).toBe(true);
+    expect(exerciseGoalEdited(DEFAULT_RING_GOALS, cadence, false)).toBe(true);
+    expect(exerciseGoalEdited(DEFAULT_RING_GOALS, DEFAULT_RING_GOALS, true)).toBe(true);
+  });
+
+  it('converts a monthly goal from a weekly goal at 52/12', () => {
+    const month = scaledRingGoal({
+      amount: 150,
+      cadence: 'weekly',
+      range: 'month',
+      customDays: 31,
+      monthDays: 31,
+      yearDays: 365,
+    });
+    expect(month).toBeCloseTo((150 * 52) / 12);
   });
 });

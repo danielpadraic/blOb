@@ -53,7 +53,7 @@ import type { PostAudience } from '@/lib/postAudience';
 import { mergeSelfProfilePatch } from '@/lib/completeProfileRow';
 import { AUTH_LOGIN_PATH } from '@/lib/authRedirect';
 import { pendingInviteResumeHref } from '@/lib/challengeInvites';
-import { TABS_HREF } from '@/lib/routes';
+import { POST_LOGIN_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import type { WeightUnit } from '@/lib/types';
 import {
@@ -389,7 +389,7 @@ export function ProfileSetupWizard() {
           mergeSelfProfilePatch(current ?? profile, user.id, patch),
         );
       }
-      router.replace((await pendingInviteResumeHref()) ?? TABS_HREF);
+      router.replace((await pendingInviteResumeHref()) ?? POST_LOGIN_HREF);
     } catch (error) {
       const message = getProfileSetupSaveMessage(error);
       if (isUsernameTakenError(error)) {

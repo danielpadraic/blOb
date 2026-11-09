@@ -100,6 +100,8 @@ export type FitnessDashboardModel = {
   stepLabel: string | null;
   bodyCards: BodyCard[];
   bodyDays: BodyDay[];
+  /** blOb Lift and cardio minutes by day, for the Exercise ring. */
+  trainedMinutes: Record<string, number>;
   syncedLabel: string | null;
   challenges: DashboardChallengeBar[];
   activities: DashboardActivity[];
@@ -129,6 +131,7 @@ const EMPTY: FitnessDashboardModel = {
   stepLabel: null,
   bodyCards: [],
   bodyDays: [],
+  trainedMinutes: {},
   syncedLabel: null,
   challenges: [],
   activities: [],
@@ -394,6 +397,12 @@ function buildModel(input: {
   }
   const showCalendar = input.duties.length > 0 || checkinDone > 0;
   const cards = bodyCards(input.bodyDays, keys, label);
+  const trainedMinutes: Record<string, number> = {};
+  for (const source of [liftTime, cardio]) {
+    for (const [day, seconds] of source) {
+      trainedMinutes[day] = (trainedMinutes[day] ?? 0) + seconds / 60;
+    }
+  }
 
   return {
     liftBars: dayBars(keys, poundsByDay(liftPounds), label),
@@ -416,6 +425,7 @@ function buildModel(input: {
     stepLabel: stepTotal > 0 ? Math.round(stepTotal).toLocaleString('en-US') : null,
     bodyCards: cards,
     bodyDays: input.bodyDays,
+    trainedMinutes,
     syncedLabel: input.showSyncLabel ? syncDayLabel(input.syncedAt, zone) : null,
     challenges: input.challenges,
     activities: activities.slice(0, 24),

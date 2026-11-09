@@ -1,4 +1,5 @@
 import { setPendingAuthEmail } from '@/lib/authFormMemory';
+import { POST_LOGIN_HREF } from '@/lib/routes';
 import { apexBlobOrigin } from '@/lib/webHost';
 
 export const AUTH_CALLBACK_PATH = '/auth/callback';
@@ -12,7 +13,7 @@ export function postAuthLandingHref(path: 'boot' | 'auth' | 'setup' | 'app'): st
     return AUTH_LOGIN_PATH;
   }
   if (path === 'app') {
-    return '/feed';
+    return POST_LOGIN_HREF;
   }
   return ONBOARDING_HREF;
 }

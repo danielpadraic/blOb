@@ -14,7 +14,7 @@ import { useMyProfile } from '@/hooks/useProfile';
 import { LEGAL_PRIVACY_VERSION, LEGAL_TOS_VERSION } from '@/copy/legalDocs';
 import { pendingInviteResumeHref } from '@/lib/challengeInvites';
 import { acceptLegal } from '@/lib/legal';
-import { TABS_HREF } from '@/lib/routes';
+import { POST_LOGIN_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import { getErrorMessage } from '@/utils/errors';
 import { isProfileNamed } from '@/utils/validators';
@@ -70,7 +70,7 @@ export default function LegalAcceptScreen() {
       queryClient.setQueryData(['profile', user.id, 'self'], merged);
       router.replace(
         isProfileNamed(merged)
-          ? ((await pendingInviteResumeHref()) ?? TABS_HREF)
+          ? ((await pendingInviteResumeHref()) ?? POST_LOGIN_HREF)
           : ('/onboarding/profile-setup' as Href),
       );
       void refetch().then((result) => {

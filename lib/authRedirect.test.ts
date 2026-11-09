@@ -173,10 +173,10 @@ describe('emailAuthRedirectTo', () => {
 });
 
 describe('postAuthLandingHref', () => {
-  it('sends unnamed or booting sessions to onboarding, not Home', () => {
+  it('sends unnamed or booting sessions to onboarding and a ready session to the dashboard', () => {
     expect(postAuthLandingHref('setup')).toBe(ONBOARDING_HREF);
     expect(postAuthLandingHref('boot')).toBe(ONBOARDING_HREF);
-    expect(postAuthLandingHref('app')).toBe('/feed');
+    expect(postAuthLandingHref('app')).toBe('/profile');
     expect(postAuthLandingHref('auth')).toBe('/(auth)/login');
   });
 });

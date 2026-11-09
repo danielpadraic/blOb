@@ -4,6 +4,8 @@ import { THEME } from '@/lib/theme';
 
 /** Tab navigator home. `/` is `app/index.tsx` and must not redirect to itself. */
 export const TABS_HREF = '/feed';
+/** Where a signed-in session lands: You / Fitness dashboard. Home stays one tap away. */
+export const POST_LOGIN_HREF = '/profile';
 export const LOBBY_HREF = '/challenges';
 
 const CLIP_ROUTE_ID_RE =

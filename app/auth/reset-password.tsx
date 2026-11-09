@@ -14,7 +14,7 @@ import { Screen } from '@/components/ui/Screen';
 import { useAuth } from '@/hooks/useAuth';
 import { reportAppError } from '@/lib/appErrors';
 import { copy } from '@/lib/copy';
-import { TABS_HREF } from '@/lib/routes';
+import { POST_LOGIN_HREF } from '@/lib/routes';
 import { THEME } from '@/lib/theme';
 import { getPasswordUpdateMessage } from '@/utils/errors';
 import { setPasswordSchema, type SetPasswordValues } from '@/utils/validators';
@@ -76,7 +76,7 @@ export default function ResetPasswordScreen() {
   }
 
   if (!isPasswordRecovery && !notice) {
-    return <Redirect href={TABS_HREF} />;
+    return <Redirect href={POST_LOGIN_HREF} />;
   }
 
   const onSubmit = handleSubmit(async (values) => {
@@ -86,7 +86,7 @@ export default function ResetPasswordScreen() {
       setNotice(copy('account.passwordUpdated'));
       finishPasswordRecovery();
       Alert.alert(copy('account.passwordUpdated'));
-      router.replace(TABS_HREF);
+      router.replace(POST_LOGIN_HREF);
     } catch (error) {
       reportAppError({ route: 'auth/reset-password', error });
       setFormError(getPasswordUpdateMessage(error));

@@ -18,16 +18,18 @@ import {
   hydrateHomePrompt,
   markHomeVisited,
 } from '@/lib/dashboard/homePrompt';
+import { HOME_QUERY_TYPE_OR } from '@/lib/homeFeed';
 import { readDashboardRange, writeDashboardRange } from '@/lib/dashboard/rangeChoice';
 import type { DayMark } from '@/lib/dashboard/calendar';
 import { cardioLines, exerciseChipNames, muscleChipKeys, muscleLabel, poundChart, poundEmptyCopy } from '@/lib/dashboard/effort';
 import { isMuscleKey } from '@/lib/lift/muscles';
 import { weekdayLetter } from '@/lib/dashboard/calendar';
-import { dashboardZone, type DashboardRange } from '@/lib/dashboard/range';
+import { dashboardZone, rangeWindowLabel, type DashboardRange } from '@/lib/dashboard/range';
 import {
   daysInMonth,
   daysInYear,
   DEFAULT_RING_GOALS,
+  exerciseGoalEdited,
   exerciseSeedFromInterests,
   readRingGoals,
   ringProgress,
@@ -103,6 +105,8 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
         .from('posts')
         .select('id, created_at, author_id')
         .is('deleted_at', null)
+        .or(HOME_QUERY_TYPE_OR)
+        .or('hidden_from_home.is.null,hidden_from_home.eq.false')
         .order('created_at', { ascending: false })
         .limit(12);
       const rows = (posts.data ?? []) as Array<{ id: string; created_at: string; author_id: string }>;
@@ -133,7 +137,7 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
     setGoalsReady(false);
     void readRingGoals().then((stored) => {
       setGoals(stored.goals);
-      setExerciseLocked(stored.saved);
+      setExerciseLocked(stored.exerciseEdited);
       setGoalsReady(true);
     });
   }, [profile.id]);
@@ -203,7 +207,8 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
     }));
   }, [exerciseLocked, exerciseSeed, goalsReady, interests.mine.isLoading]);
   const ringZone = dashboardZone(null);
-  const ringValues = ringTotals(model.bodyDays, model.dayKeys);
+  const ringValues = ringTotals(model.bodyDays, model.dayKeys, model.trainedMinutes);
+  const windowText = rangeWindowLabel(model.dayKeys);
   const goalScale = {
     customDays: model.dayKeys.length,
     monthDays: ringZone ? daysInMonth(new Date(), ringZone) : model.dayKeys.length || 30,
@@ -221,7 +226,7 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
     const shown = key === 'stand' ? Math.round(value * 10) / 10 : Math.round(value);
     const goalShown = key === 'stand' ? Math.round(goal * 10) / 10 : Math.round(goal);
     const withUnit = `${shown} ${unit}`;
-    const windowName = RANGE_LABEL[range];
+    const windowName = windowText ? `${RANGE_LABEL[range]} · ${windowText}` : RANGE_LABEL[range];
     return {
       key,
       value,
@@ -229,7 +234,7 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
       inside: withUnit.length <= 6 ? withUnit : String(shown),
       name: key === 'move' ? 'MOVE' : key === 'exercise' ? 'EXERCISE' : 'STAND',
       compare: `${shown} / ${goalShown} ${unit}`,
-      tap: `${key === 'move' ? 'Move' : key === 'exercise' ? 'Exercise' : 'Stand'} · ${windowName} · ${shown} ${unit}`,
+      tap: `${key === 'move' ? 'Move' : key === 'exercise' ? 'Exercise' : 'Stand'} · ${shown} ${unit} of ${goalShown} ${unit} · ${windowName}`,
       color: key === 'stand' ? THEME.gold : key === 'exercise' ? THEME.circle : THEME.accent,
     };
   });
@@ -362,20 +367,41 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
       </View>
 
       {prompt.data ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 36 }}>
-          <AppText style={{ flex: 1, fontWeight: '700', color: THEME.textPrimary }} numberOfLines={1}>
-            {prompt.data.name}
-          </AppText>
-          <Pressable accessibilityRole="button" onPress={openHome}>
-            <AppText style={{ fontWeight: '700', color: THEME.accent }}>Open Home</AppText>
+        <View
+          accessibilityRole="alert"
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+            minHeight: 52,
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+            borderRadius: 20,
+            borderWidth: 1,
+            borderColor: THEME.border,
+            backgroundColor: THEME.surface,
+            ...themeShadow('card'),
+          }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <AppText style={{ fontWeight: '800', color: THEME.textPrimary }} numberOfLines={1}>
+              New on Home
+            </AppText>
+            <AppText style={{ color: THEME.textMuted, fontSize: 13 }} numberOfLines={1}>
+              {prompt.data.name} posted
+            </AppText>
+          </View>
+          <Pressable accessibilityRole="button" accessibilityLabel="Open Home" onPress={openHome} style={{ minHeight: 44, justifyContent: 'center' }}>
+            <AppText style={{ fontWeight: '800', color: THEME.accent }}>Open Home</AppText>
           </Pressable>
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="Dismiss"
             onPress={() => {
               dismissHomePrompt(profile.id, prompt.data?.createdAt ?? '');
               setPromptTick((n) => n + 1);
-            }}>
-            <AppText style={{ color: THEME.textMuted }}>Dismiss</AppText>
+            }}
+            style={{ minHeight: 44, justifyContent: 'center' }}>
+            <AppText style={{ color: THEME.textMuted, fontWeight: '700' }}>Dismiss</AppText>
           </Pressable>
         </View>
       ) : null}
@@ -633,9 +659,10 @@ export function FitnessDashboard({ profile }: { profile: Profile }) {
         exerciseHint={exerciseLocked ? null : exerciseSeed?.line}
         onCancel={() => setGoalsOpen(false)}
         onSave={(next) => {
+          const edited = exerciseGoalEdited(goals, next, exerciseLocked);
           setGoals(next);
-          writeRingGoals(next);
-          setExerciseLocked(true);
+          writeRingGoals(next, edited);
+          setExerciseLocked(edited);
           setGoalsOpen(false);
         }}
       />
