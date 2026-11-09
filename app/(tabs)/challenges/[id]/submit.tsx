@@ -213,6 +213,7 @@ import {
   mergeOfficialPairParts,
   mirrorOfficialCoinPeriod,
   officialPairLiveFailure,
+  officialPairPending,
   officialPairSiblingRoom,
   orderedCheckinSlides,
   qualifyingSlotUrl,
@@ -523,6 +524,13 @@ function SubmitWorkoutInner() {
         periodKeys: siblingPeriodKeys,
       }),
   });
+  const pairPending = officialPairPending({
+    officialCoin,
+    roomsLoading: coinRooms.isLoading,
+    siblingChallengeId,
+    siblingEnabled: Boolean(officialCoin && siblingChallengeId && subjectId && !isProxy),
+    siblingFetched: siblingCheckin.isFetched,
+  });
   const submitCheckin = useSubmitCheckin(id, isProxy ? proxyForId : undefined, { officialCoin });
   const queryClient = useQueryClient();
   const wavePublishedRef = useRef(false);
@@ -730,7 +738,7 @@ function SubmitWorkoutInner() {
     if (!id || !challenge || !checkinQuery.isFetched || isProxy) {
       return;
     }
-    if (officialCoin && siblingChallengeId && !siblingCheckin.isFetched) {
+    if (pairPending) {
       return;
     }
     const localRow = checkinQuery.data;
@@ -921,7 +929,7 @@ function SubmitWorkoutInner() {
     if (!checkinQuery.isFetched) {
       return;
     }
-    if (officialCoin && siblingChallengeId && !siblingCheckin.isFetched) {
+    if (pairPending) {
       return;
     }
     const storedCheckin = checkinQuery.data?.id ? checkinQuery.data : null;
@@ -1096,6 +1104,7 @@ function SubmitWorkoutInner() {
     checkinQuery.data?.updated_at,
     checkinQuery.isFetched,
     officialCoin,
+    pairPending,
     siblingChallengeId,
     siblingCheckin.data,
     siblingCheckin.isFetched,
@@ -3030,7 +3039,6 @@ function SubmitWorkoutInner() {
   unfilledRef.current = blockingProofs.filter((proof) => !slotFilled(proof)).map((proof) => proof.id);
   const nextPhoto = nextEmpty && isGuidedCameraProof(nextEmpty) ? nextEmpty : null;
   const firstHealth = nextPhoto && proofPrefersHealthAttach(nextPhoto, challenge) ? nextPhoto : null;
-  const pairPending = Boolean(officialCoin && siblingChallengeId && !siblingCheckin.isFetched);
   const checkinReady = checkinQuery.isFetched && !checkinQuery.isLoading && !pairPending;
   const shouldAutoHealth =
     checkinReady &&

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { ChallengeProof } from '@/lib/challengeProofs';
 import {
   mergeOfficialPairParts,
+  officialPairPending,
   ocrCheckinStats,
   orderedCheckinSlides,
   qualifyingSlotUrl,
@@ -120,5 +121,33 @@ describe('collapseDualStampHomePosts', () => {
     expect(rows.map((row) => row.id)).toEqual(['older', 'other']);
     expect(rows[0]?.media_urls).toEqual(['https://cdn.example/pre.jpg', 'https://cdn.example/post.jpg']);
     expect(rows[0]?.checkin_stats?.paired_challenge_ids).toEqual(['week', 'month']);
+  });
+});
+
+describe('officialPairPending', () => {
+  const base = {
+    officialCoin: true,
+    roomsLoading: false,
+    siblingChallengeId: 'monthly',
+    siblingEnabled: true,
+    siblingFetched: true,
+  };
+
+  it('does not gate non-Official check-ins', () => {
+    expect(officialPairPending({ ...base, officialCoin: false, roomsLoading: true })).toBe(false);
+  });
+
+  it('waits for the Official rooms before the camera can ask for a pre selfie', () => {
+    expect(officialPairPending({ ...base, roomsLoading: true, siblingChallengeId: null })).toBe(true);
+  });
+
+  it('waits for the sibling check-in, then releases', () => {
+    expect(officialPairPending({ ...base, siblingFetched: false })).toBe(true);
+    expect(officialPairPending(base)).toBe(false);
+  });
+
+  it('never blocks when the sibling query is off', () => {
+    expect(officialPairPending({ ...base, siblingEnabled: false, siblingFetched: false })).toBe(false);
+    expect(officialPairPending({ ...base, siblingChallengeId: null, siblingFetched: false })).toBe(false);
   });
 });

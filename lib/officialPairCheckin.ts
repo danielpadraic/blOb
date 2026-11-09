@@ -224,6 +224,26 @@ export function ocrCheckinStats(health?: CheckinHealthProof | null): CheckinProo
   return stats;
 }
 
+/**
+ * True until the sibling Official room and its check-in are known. Camera, hydrate and finish wait
+ * on this so a stored pre-workout selfie from the other room is never asked for again.
+ */
+export function officialPairPending(input: {
+  officialCoin: boolean;
+  roomsLoading: boolean;
+  siblingChallengeId: string | null;
+  siblingEnabled: boolean;
+  siblingFetched: boolean;
+}): boolean {
+  if (!input.officialCoin) {
+    return false;
+  }
+  if (input.roomsLoading) {
+    return true;
+  }
+  return Boolean(input.siblingChallengeId && input.siblingEnabled && !input.siblingFetched);
+}
+
 export function siblingOfficialChallengeId(
   currentId: string | null | undefined,
   rooms?: { weeklyId?: string | null; monthlyId?: string | null } | null,
