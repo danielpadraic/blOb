@@ -250,11 +250,25 @@ export function InAppCamera({
     const blockPinch = (event: Event) => {
       event.preventDefault();
     };
+    const blockMultiTouch = (event: TouchEvent) => {
+      if (event.touches.length > 1) {
+        event.preventDefault();
+      }
+    };
+    const blockCtrlWheel = (event: WheelEvent) => {
+      if (event.ctrlKey) {
+        event.preventDefault();
+      }
+    };
     document.addEventListener('gesturestart', blockPinch, { passive: false });
     document.addEventListener('gesturechange', blockPinch, { passive: false });
+    document.addEventListener('touchmove', blockMultiTouch, { passive: false });
+    document.addEventListener('wheel', blockCtrlWheel, { passive: false });
     return () => {
       document.removeEventListener('gesturestart', blockPinch);
       document.removeEventListener('gesturechange', blockPinch);
+      document.removeEventListener('touchmove', blockMultiTouch);
+      document.removeEventListener('wheel', blockCtrlWheel);
     };
   }, [checkin, web]);
 
@@ -1388,6 +1402,7 @@ export function InAppCamera({
           zoom={previewFovZoom}
           rotateDeg={previewRotateDeg}
           box={previewBox}
+          lockTouch={!checkin}
         />
       ) : showFrame && (ask === 'ready' || ask === 'starting') ? (
         <NativeCameraPreview
@@ -1792,13 +1807,16 @@ const WebCameraPreview = memo(function WebCameraPreview({
   zoom,
   rotateDeg = 0,
   box,
+  lockTouch = false,
 }: {
   attach: (node: HTMLVideoElement | null) => void;
   facing: CameraFovFacing;
   zoom: number;
   rotateDeg?: number;
   box?: { width: number; height: number };
+  lockTouch?: boolean;
 }) {
+  const touchAction = lockTouch ? 'none' : 'manipulation';
   const attachRef = useRef(attach);
   attachRef.current = attach;
   const setVideoNode = useCallback((node: HTMLVideoElement | null) => {
@@ -1808,7 +1826,7 @@ const WebCameraPreview = memo(function WebCameraPreview({
   const rotate = rotateDeg !== 0 && !!box?.width && !!box?.height;
   const transform = webPreviewCssTransform({ facing, zoom, rotateDeg: rotate ? rotateDeg : 0 });
   return (
-    <View style={{ flex: 1, overflow: 'hidden', ...(Platform.OS === 'web' ? { touchAction: 'manipulation' } : null) }}>
+    <View style={{ flex: 1, overflow: 'hidden', ...(Platform.OS === 'web' ? { touchAction } : null) }}>
       {createElement('video', {
         ref: setVideoNode,
         autoPlay: true,
@@ -1827,7 +1845,7 @@ const WebCameraPreview = memo(function WebCameraPreview({
           backgroundColor: '#101312',
           transformOrigin: 'center center',
           transform,
-          touchAction: 'manipulation',
+          touchAction,
         },
       })}
     </View>
@@ -1836,6 +1854,7 @@ const WebCameraPreview = memo(function WebCameraPreview({
   prev.facing === next.facing &&
   prev.zoom === next.zoom &&
   prev.rotateDeg === next.rotateDeg &&
+  prev.lockTouch === next.lockTouch &&
   (next.rotateDeg === 0 ||
     (prev.box?.width === next.box?.width && prev.box?.height === next.box?.height)),
 );

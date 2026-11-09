@@ -160,12 +160,12 @@ export function webWavePreviewTouchStyle(checkin: boolean): object | undefined {
   if (Platform.OS !== 'web' || checkin) {
     return undefined;
   }
-  return { touchAction: 'manipulation', WebkitUserSelect: 'none', userSelect: 'none' };
+  return { touchAction: 'none', WebkitUserSelect: 'none', userSelect: 'none' };
 }
 
-/** Pinch / visualViewport resize must not reopen getUserMedia while a Wave is rolling. */
+/** Pinch / visualViewport resize never re-measures or reopens the Wave / Round camera. */
 export function shouldIgnoreViewportResize(input: { recording: boolean; checkin: boolean }): boolean {
-  return Boolean(input.recording && !input.checkin);
+  return !input.checkin;
 }
 
 export function webCameraStreamAlive(stream?: { getTracks: () => Array<{ readyState?: string; kind?: string }> } | null): boolean {

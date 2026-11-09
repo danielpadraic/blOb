@@ -59,9 +59,9 @@ describe('stopMedia', () => {
 });
 
 describe('shouldIgnoreViewportResize', () => {
-  it('ignores pinch resize only while a Wave is recording', () => {
+  it('ignores pinch resize on the Wave / Round camera, recording or not', () => {
     expect(shouldIgnoreViewportResize({ recording: true, checkin: false })).toBe(true);
-    expect(shouldIgnoreViewportResize({ recording: false, checkin: false })).toBe(false);
+    expect(shouldIgnoreViewportResize({ recording: false, checkin: false })).toBe(true);
     expect(shouldIgnoreViewportResize({ recording: true, checkin: true })).toBe(false);
   });
 });

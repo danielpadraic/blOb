@@ -6,6 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useRouter } from 'expo-router';
 
+import { CameraSafeBoundary } from '@/components/capture/CameraSafeBoundary';
 import { InAppCamera } from '@/components/capture/InAppCamera';
 import { SaveCaptureHint } from '@/components/capture/SaveCaptureHint';
 import { takeClipAttach } from '@/lib/clipAttach';
@@ -623,6 +624,7 @@ export function CaptureStudio({
     const libraryDenied = denied?.kind === 'library';
     return (
       <View className="flex-1">
+        <CameraSafeBoundary onClose={close}>
         <InAppCamera
           capture={captureKind}
           facingKind={mode === 'post' ? 'proof' : 'social'}
@@ -662,6 +664,7 @@ export function CaptureStudio({
           onCancel={close}
           onUnavailable={mode === 'story' ? undefined : () => setWebFallback(true)}
         />
+        </CameraSafeBoundary>
         {libraryDenied ? (
           <View
             className="absolute bottom-24 left-4 right-4 flex-row items-center justify-between rounded-2xl px-3 py-2"

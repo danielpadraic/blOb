@@ -59,7 +59,7 @@ import { isOfficialCoinChallenge, OFFICIAL_COIN_ALREADY_TODAY } from '@/lib/offi
 import { isLiftTimerPath, isLiveCameraPath, stopAllLiveMedia, stopMediaUnlessCameraPath } from '@/lib/cameraSession';
 import { startFreshRoundCapture, startFreshWaveCapture } from '@/lib/waveCapture';
 import { shouldResetToHomeOnLaunch } from '@/lib/appResume';
-import { THEME } from '@/lib/theme';
+import { FEED_COLUMN_MAX, THEME } from '@/lib/theme';
 import * as Linking from 'expo-linking';
 
 export { AppErrorBoundary as ErrorBoundary };
@@ -465,6 +465,8 @@ function TabLayoutInner() {
   const wide = isWideDashboardWindow(width, Platform.OS);
   const friendsTabRoot = pathname === '/friends';
   const watchOpen = isWatchSurfacePath(pathname);
+  // Wave and Round stay a phone column on a wide monitor. No dashboard rail, no full-width camera.
+  const phoneShell = wide && (watchOpen || pathname.includes('/capture'));
   const tourLogoMenu = Boolean(tour?.active && tour.logoMenu);
   const tourPlus = tour?.active ? tour.plusSheet : null;
   const headerMenuOpen = tourLogoMenu || logoMenuOpen;
@@ -476,9 +478,26 @@ function TabLayoutInner() {
     {/* Outside the header and the tab bar on purpose: the Lift Play timer has to cover both, and
         the tab navigator below clips anything absolutely positioned inside a screen. */}
     <LiftPlayHost>
-    <View className="flex-1" style={{ flexDirection: wide ? 'row' : 'column', backgroundColor: THEME.background }}>
-      {wide ? <DashboardRail /> : null}
-      <View className="flex-1" style={{ minWidth: 0 }}>
+    <View
+      className="flex-1"
+      style={{
+        flexDirection: wide && !phoneShell ? 'row' : 'column',
+        backgroundColor: phoneShell ? THEME.primary : THEME.background,
+      }}>
+      {wide && !phoneShell ? <DashboardRail /> : null}
+      <View
+        className="flex-1"
+        style={
+          phoneShell
+            ? {
+                minWidth: 0,
+                width: '100%',
+                maxWidth: FEED_COLUMN_MAX,
+                alignSelf: 'center',
+                backgroundColor: THEME.background,
+              }
+            : { minWidth: 0 }
+        }>
       {watchOpen || isChallengeIdRoute(segments as string[]) || isCircleIdRoute(segments as string[]) || pathname.includes('/capture') ? null : (
         <TabChromeHeader
           alertsOpen={alertsOpen}
