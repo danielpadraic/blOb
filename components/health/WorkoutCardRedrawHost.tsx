@@ -11,7 +11,7 @@ import { parseChallengeProofs, type ChallengeProof } from '@/lib/challengeProofs
 import { challengeClockTz } from '@/lib/checkinPeriod';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { copy } from '@/lib/copy';
-import { postSendNotice } from '@/lib/checkin/sendNotice';
+import { postSendNoticeToLive } from '@/lib/checkin/officialNoticeRoom';
 import { patchFeedPostFields } from '@/lib/liveFeedPatch';
 import { type CardRepair } from '@/lib/health/cardRedraw';
 import { takeCardHandoff } from '@/lib/health/cardInflight';
@@ -102,7 +102,7 @@ export function WorkoutCardRedrawHost() {
   const skipHead = useCallback(() => {
     const failed = activeRef.current?.item;
     if (failed && takeCardHandoff(failed.challengeId)) {
-      postSendNotice(failed.challengeId, copy('checkin.workoutCardFailed'));
+      void postSendNoticeToLive(failed.challengeId, copy('checkin.workoutCardFailed'));
     }
     activeRef.current = null;
     setRequest(null);
@@ -192,7 +192,7 @@ export function WorkoutCardRedrawHost() {
         } catch {
           // Unstamped, so the next open tries again. Chips and selfies stay.
           if (takeCardHandoff(item.challengeId)) {
-            postSendNotice(item.challengeId, copy('checkin.workoutCardFailed'));
+            void postSendNoticeToLive(item.challengeId, copy('checkin.workoutCardFailed'));
           }
           activeRef.current = null;
           setQueue((current) => {

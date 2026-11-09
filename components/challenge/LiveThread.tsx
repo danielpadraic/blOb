@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   AppState,
+  Dimensions,
   FlatList,
   Keyboard,
   Platform,
@@ -25,8 +26,8 @@ import { LiftPickerSheet } from '@/components/lift/LiftPickerSheet';
 import type { LiftSessionSummary } from '@/lib/lift/types';
 import { MascotState } from '@/components/mascot/MascotState';
 import { useSocialSheetsOptional } from '@/components/social/SocialSheets';
-import { useKeyboardHeight } from '@/components/ui/KeyboardFormShell';
-import { liveComposerInset, liveComposerKeyboardOpen } from '@/lib/liveComposerInset';
+import { useKeyboardHeight, useKeyboardOverlap } from '@/components/ui/KeyboardFormShell';
+import { liveComposerInset, liveComposerKeyboardOpen, liveKeyboardOverlap } from '@/lib/liveComposerInset';
 import { setLiveComposerKeyboardOpen } from '@/lib/liveComposerKeyboard';
 import { AppText } from '@/components/ui/AppText';
 import { Avatar } from '@/components/ui/Avatar';
@@ -198,6 +199,8 @@ export function LiveThread({
   onReact,
 }: LiveThreadProps) {
   const keyboardHeight = useKeyboardHeight();
+  const keyboardFromBottom = useKeyboardOverlap();
+  const [hostBottom, setHostBottom] = useState<number | null>(null);
   // The host passes a fresh onReact every render. Reading it through a ref keeps renderItem stable,
   // so a reaction patch re-renders the rows that changed, not every row.
   const onReactRef = useRef(onReact);
@@ -1150,10 +1153,27 @@ export function LiveThread({
     [collapseComposer, emptyBody, emptyTitle],
   );
 
+  const measureHost = useCallback(() => {
+    hostRef.current?.measureInWindow((_x, y, _w, h) => {
+      if (Number.isFinite(y) && Number.isFinite(h)) {
+        setHostBottom(Math.round(y + h));
+      }
+    });
+  }, []);
+  useEffect(() => {
+    if (keyboardOpen) {
+      measureHost();
+    }
+  }, [keyboardOpen, measureHost]);
   const composerPad = liveComposerInset({
     keyboardHeight,
     closedPad: Math.max(footerReserve, 0),
     layoutAlreadyAvoidsKeyboard: Platform.OS === 'android',
+    measuredOverlap: liveKeyboardOverlap({
+      hostBottom,
+      windowHeight: Dimensions.get('window').height,
+      keyboardFromBottom: keyboardFromBottom || keyboardHeight,
+    }),
   });
   const composerHRef = useRef(0);
 
@@ -1161,6 +1181,7 @@ export function LiveThread({
     <View
       ref={hostRef}
       collapsable={false}
+      onLayout={measureHost}
       style={{
         flex: 1,
         minHeight: 0,

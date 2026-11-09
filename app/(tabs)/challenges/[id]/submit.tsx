@@ -78,7 +78,7 @@ import {
   type SaveCheckinProofInput,
 } from '@/lib/challenges/stagedCheckin';
 import { ProofUploadError, runProofUploads } from '@/lib/checkin/parallelUpload';
-import { postSendNotice } from '@/lib/checkin/sendNotice';
+import { postSendNoticeToLive } from '@/lib/checkin/officialNoticeRoom';
 import { beginCardInflight, endCardInflight, watchCardHandoff } from '@/lib/health/cardInflight';
 import { readLocationFix, locationPermissionGrantedThisSession } from '@/lib/locationDevice';
 import { parseLocationPlace } from '@/lib/locationProof';
@@ -1549,7 +1549,7 @@ function SubmitWorkoutInner() {
       .then((miss) => {
         if (miss) {
           if (roomId) {
-            postSendNotice(roomId, miss);
+            void postSendNoticeToLive(roomId, miss);
           }
           requestWorkoutCardRedraw();
         }
@@ -2417,7 +2417,7 @@ function SubmitWorkoutInner() {
               }
             } catch (mentionError) {
               console.error('[blob:mentions]', mentionError);
-              postSendNotice(noticeId, 'Checked in. Couldn’t tag everyone you mentioned.');
+              void postSendNoticeToLive(noticeId, 'Checked in. Couldn’t tag everyone you mentioned.');
             }
           }
         }
