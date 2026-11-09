@@ -1566,7 +1566,7 @@ function SubmitWorkoutInner() {
     leavingCameraRef.current = true;
     stopAllLiveMedia();
     setCameraPaused(true);
-    void settleCardAfterLeave(checkinIdRef.current, [id]);
+    void settleCardAfterLeave(checkinIdRef.current, [id, siblingChallengeId]);
     setReview(null);
     setSnapPreview(null);
     setCaptureId(null);

@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/ui/AppText';
+import { useKeyboardHeight } from '@/components/ui/KeyboardFormShell';
 import { chipRowBottom } from '@/lib/checkin/cameraChrome';
 import { THEME } from '@/lib/theme';
 
@@ -60,6 +61,8 @@ export function CheckinCameraChrome({
   const insets = useSafeAreaInsets();
   const reviewing = reviewOpen;
   const [captionHeight, setCaptionHeight] = useState(44);
+  // With the keys up the caption row sits on them. The home-indicator pad is for the closed state.
+  const keysUp = useKeyboardHeight() > 100;
   const chips = (
     <ScrollView
       horizontal
@@ -144,7 +147,13 @@ export function CheckinCameraChrome({
           </View>
         ) : null}
         {reviewing ? (
-          <View style={{ marginTop: 'auto', paddingHorizontal: 16, paddingBottom: Math.max(insets.bottom, 16), gap: 12 }}>
+          <View
+            style={{
+              marginTop: 'auto',
+              paddingHorizontal: 16,
+              paddingBottom: keysUp ? 8 : Math.max(insets.bottom, 16),
+              gap: 12,
+            }}>
             {chips}
             <TextInput
               value={caption}

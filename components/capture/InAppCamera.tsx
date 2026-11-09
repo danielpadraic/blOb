@@ -1646,7 +1646,24 @@ export function InAppCamera({
             </Pressable>
           </View>
         ) : null}
-        {switchToast ? (
+        {switchToast && checkin ? (
+          // Check-in chips sit just above the shutter row. A line in flow would push the shutter up
+          // under them, so this one floats at the top instead.
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: '100%',
+              marginBottom: 12 + 72 + 16,
+              alignItems: 'center',
+            }}>
+            <AppText className="text-center text-[13px] font-semibold" style={{ color: '#fff' }}>
+              {switchToast}
+            </AppText>
+          </View>
+        ) : switchToast ? (
           <AppText className="mb-2 text-center text-[13px] font-semibold" style={{ color: '#fff' }}>
             {switchToast}
           </AppText>
@@ -1734,7 +1751,16 @@ export function InAppCamera({
             </AppText>
           </Pressable>
         </View>
-        {stillStatus ? (
+        {stillStatus && checkin ? (
+          // Under the shutter, in the safe-area pad, so it never moves the shutter into the chips.
+          <View
+            pointerEvents="none"
+            style={{ position: 'absolute', left: 0, right: 0, top: '100%', marginTop: 4, alignItems: 'center' }}>
+            <AppText className="text-center text-[12px] font-semibold" style={{ color: '#fff' }}>
+              {stillStatus}
+            </AppText>
+          </View>
+        ) : stillStatus ? (
           <AppText className="mt-2 text-center text-[13px] font-semibold" style={{ color: '#fff' }}>
             {stillStatus}
           </AppText>
