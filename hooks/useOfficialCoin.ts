@@ -22,7 +22,7 @@ export const OFFICIAL_COIN_KEY = 'official-coin';
 export const OFFICIAL_COIN_DAYS_KEY = 'official-coin-days';
 
 const ROOM_SELECT =
-  'id, title, task, description, rules, status, starts_at, ends_at, days_required, official_kind, score_mode, window_reset, prize_guarantee_coins, is_official, created_by, sponsor_name, currency, timezone';
+  'id, title, task, description, rules, status, starts_at, ends_at, days_required, official_kind, score_mode, window_reset, prize_guarantee_coins, is_official, created_by, sponsor_name, currency, timezone, proofs, proof_type, proof_requirements';
 
 export type OfficialCoinRoom = {
   kind: OfficialCoinKind;
@@ -116,7 +116,9 @@ export function useOfficialCoinStatus() {
           .in('challenge_id', ids),
         supabase
           .from('challenge_checkins')
-          .select('challenge_id, period_key, status, submitted_at')
+          .select(
+            'id, user_id, challenge_id, period_key, status, submitted_at, proof_parts, pre_selfie_url, post_selfie_url, hr_monitor_url, health_workout_id',
+          )
           .eq('user_id', user!.id)
           .in('challenge_id', ids),
         supabase
@@ -146,28 +148,45 @@ export function useOfficialCoinStatus() {
         membership.set(id, row);
       }
 
-      const loggedDays = new Map<string, Set<string>>();
-      let checkedInToday = false;
-      for (const row of (checkins.data ?? []) as {
+      type CheckinRow = {
+        id?: string | null;
+        user_id?: string | null;
         challenge_id?: string | null;
         period_key?: string | null;
         status?: string | null;
         submitted_at?: string | null;
-      }[]) {
+        proof_parts?: unknown;
+        pre_selfie_url?: string | null;
+        post_selfie_url?: string | null;
+        hr_monitor_url?: string | null;
+        health_workout_id?: string | null;
+      };
+      const checkinRows = (checkins.data ?? []) as CheckinRow[];
+      const roomById = new Map(challenges.map((row) => [String(row.id), row]));
+      let checkedInToday = false;
+      for (const row of checkinRows) {
         if (row.status !== 'submitted' || !row.submitted_at) {
           continue;
         }
-        const id = String(row.challenge_id ?? '');
-        const key = normalizePeriodKey(row.period_key);
-        if (!id || !key) {
-          continue;
-        }
-        const set = loggedDays.get(id) ?? new Set<string>();
-        set.add(key);
-        loggedDays.set(id, set);
-        if (key === todayKey) {
+        if (normalizePeriodKey(row.period_key) === todayKey) {
           checkedInToday = true;
         }
+      }
+      // A day counts only when this room's required slots are all present. Recounted from
+      // challenge_checkins every read, so a selfie with Workout still open is not a day.
+      const loggedDays = new Map<string, Set<string>>();
+      const byRoom = new Map<string, CheckinRow[]>();
+      for (const row of checkinRows) {
+        if (!['submitted', 'ready', 'in_progress'].includes(String(row.status ?? ''))) {
+          continue;
+        }
+        const id = String(row.challenge_id ?? '');
+        byRoom.set(id, [...(byRoom.get(id) ?? []), row]);
+      }
+      for (const [id, rows] of byRoom) {
+        const room = roomById.get(id);
+        const counted = officialBoardDaysByUser(room as never, rows as never);
+        loggedDays.set(id, new Set((counted.get(user!.id) ?? []).map((day) => day.periodKey)));
       }
 
       const now = new Date();
