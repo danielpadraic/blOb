@@ -218,6 +218,7 @@ import { useStableChallengeRouteId, scrollNodeTo } from '@/lib/challengeRoute';
 import { copy } from '@/lib/copy';
 import { isViewerOutOfPrize } from '@/lib/lobbyChallenge';
 import {
+  isOfficialCoinBoardGhost,
   isOfficialCoinChallenge,
   isOfficialCoinMonthly,
   isOfficialCoinWeekly,
@@ -385,6 +386,20 @@ export default function ChallengeDetailScreen() {
       profile: map.get(row.user_id) ?? row.profile,
     }));
   }, [boardProfiles.data, roster.data]);
+  // Official Coin rosters never list QA accounts. Pinnacle TEST and every other room keep theirs.
+  const memberRoster = useMemo(
+    () =>
+      isOfficialCoinChallenge(challengeQuery.data)
+        ? boardRoster.filter(
+            (row) =>
+              !isOfficialCoinBoardGhost({
+                displayName: row.profile?.display_name,
+                username: row.profile?.username,
+              }),
+          )
+        : boardRoster,
+    [boardRoster, challengeQuery.data],
+  );
   const periodCheckin = usePeriodCheckin(id, challengeQuery.data);
   const coinRooms = useOfficialCoinStatus();
   // One Official Fitness room: the monthly id opens the weekly host with the same shell.
@@ -1950,7 +1965,7 @@ export default function ChallengeDetailScreen() {
         {wasCancelled ? null : (
           <ChallengeMembersCard
             challenge={challenge}
-            roster={boardRoster}
+            roster={memberRoster}
             moderatorIds={modsQuery.data}
           />
         )}
