@@ -361,7 +361,7 @@ describe('the prompt heading', () => {
       now: NOW,
     });
     expect(targets.map((row) => row.title)).toEqual([
-      'Weekly Fitness Challenge',
+      'Official Fitness Challenge',
       'Run 128 Miles by January 1',
     ]);
   });
@@ -390,6 +390,6 @@ describe('the prompt heading', () => {
       ],
       now: NOW,
     });
-    expect(targets.map((row) => row.title)).toEqual(['Weekly Fitness Challenge']);
+    expect(targets.map((row) => row.title)).toEqual(['Official Fitness Challenge']);
   });
 });

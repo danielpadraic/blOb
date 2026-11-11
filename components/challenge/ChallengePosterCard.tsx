@@ -1,3 +1,4 @@
+import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
@@ -98,7 +99,7 @@ export function ChallengePosterCard({
         numberOfLines={2}
         adjustsFontSizeToFit
         minimumFontScale={0.85}>
-        {challenge.title}
+        {challengeDisplayTitle(challenge) || challenge.title}
       </AppText>
     </View>
   );
@@ -122,7 +123,7 @@ export function ChallengePosterCard({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={challenge.title}
+      accessibilityLabel={challengeDisplayTitle(challenge) || challenge.title}
       style={cardStyle}>
       {header}
           <View className="flex-row items-center justify-between gap-2">

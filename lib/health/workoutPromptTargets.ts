@@ -8,6 +8,7 @@
  * ask.
  */
 
+import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { isCorporateChallenge } from '@/lib/challengeExperience';
 import { officialCoinKind } from '@/lib/officialCoin';
 import { usesPeriodCheckinGate } from '@/lib/loggable';
@@ -241,7 +242,7 @@ export function workoutPromptTargets(input: {
     }
     targets.push({
       challengeId: challenge.id,
-      title: String(challenge.title ?? '').trim() || 'this challenge',
+      title: challengeDisplayTitle(challenge as never) || String(challenge.title ?? '').trim() || 'this challenge',
       countedIds: result.countedIds,
       countedSec: result.countedSec,
       nudge: result.nudge,

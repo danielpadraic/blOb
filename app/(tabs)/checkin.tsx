@@ -20,9 +20,10 @@ import {
   type OfficialRoomSlots,
 } from '@/lib/multiCheckin';
 import { pushCheckinPickerRow } from '@/lib/challengeNav';
+import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { useOfficialCoinStatus } from '@/hooks/useOfficialCoin';
 import {
-  isOfficialCoinChallenge,
+  looksLikeOfficialCoinRoom,
   OFFICIAL_COIN_ALREADY_TODAY,
   OFFICIAL_COIN_CHECKIN_LABEL,
   OFFICIAL_COIN_SPONSOR_LINE,
@@ -62,7 +63,7 @@ export default function MultiCheckinScreen() {
   for (const item of loggable.data ?? []) {
     rememberMultiCheckinSnapshot({
       id: item.id,
-      title: item.title,
+      title: challengeDisplayTitle(item) || item.title,
       task: String(item.taskLabel ?? item.task ?? '').trim(),
       remainingProofLabels: item.remainingProofLabels ?? [],
     });
@@ -73,7 +74,7 @@ export default function MultiCheckinScreen() {
   const coinWeeklyId = coinStatus.weekly?.challenge.id ?? '';
   const coinMonthlyId = coinStatus.monthly?.challenge.id ?? '';
   const otherLoggable = useMemo(
-    () => (loggable.data ?? []).filter((row) => !isOfficialCoinChallenge(row)),
+    () => (loggable.data ?? []).filter((row) => !looksLikeOfficialCoinRoom(row)),
     [loggable.data],
   );
   const coinWeeklyRow = useMemo(

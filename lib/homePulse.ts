@@ -17,7 +17,7 @@ import { liveCheckinLabel } from '@/lib/liveThread';
 import { formatRelative } from '@/utils/format';
 import { isEndedLobbyStatus } from '@/lib/lobbyChallenge';
 import {
-  hideOfficialCoinSibling,
+  withoutOfficialCoinMonthly,
   isOfficialCoinBoardGhost,
   isOfficialCoinChallenge,
   officialCoinKind,
@@ -374,7 +374,7 @@ export function buildPulsePills(input: {
   relative?: (at: string) => string;
   now?: number;
 }): PulsePill[] {
-  const challenges = hideOfficialCoinSibling(selectPulseChallenges(input.challenges, input.viewerId));
+  const challenges = withoutOfficialCoinMonthly(selectPulseChallenges(input.challenges, input.viewerId));
   const newestFirst = [...input.posts]
     .filter((post) => Boolean(post?.challenge_id) && !post.deleted_at)
     .sort((a, b) => {
@@ -500,7 +500,7 @@ export async function fetchHomePulsePills(userId?: string): Promise<PulsePill[]>
       fetchCompetingChallenges(userId),
       fetchHostingChallenges(userId),
     ]);
-    challenges = hideOfficialCoinSibling(selectPulseChallenges(
+    challenges = withoutOfficialCoinMonthly(selectPulseChallenges(
       [
         ...joined.map((row) => ({ ...row, joined: true, hosting: String(row.created_by ?? '') === userId })),
         ...hosted.map((row) => ({ ...row, hosting: true, joined: false })),

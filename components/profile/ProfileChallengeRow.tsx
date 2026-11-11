@@ -1,3 +1,4 @@
+import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { usePathname, useRouter } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
@@ -138,7 +139,7 @@ export function ProfileChallengeRow({
         ) : null}
       </View>
       <AppText className="mt-1 text-[14px] font-bold text-charcoal" numberOfLines={1}>
-        {item.challenge.title}
+        {challengeDisplayTitle(item.challenge) || item.challenge.title}
       </AppText>
       <AppText className="mt-0.5 text-[11px] text-muted">
         {[role || null, place, dates].filter(Boolean).join(' · ')}

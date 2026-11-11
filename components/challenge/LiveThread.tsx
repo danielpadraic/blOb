@@ -66,8 +66,12 @@ import {
 } from '@/lib/liveThread';
 import {
   LIVE_VIEWPORT_READY_MIN,
+  LIVE_LAND_QUIET_MS,
   beginLiveVisit,
+  canRepinWhileLanding,
   hasLiveInitialScroll,
+  isUserScrollGesture,
+  isUserTakeover,
   liveLandingFocus,
   logLiveAutoScroll,
   markLiveInitialScroll,
@@ -302,6 +306,8 @@ export function LiveThread({
   const atEndRef = useRef(false);
   const userLeftEndRef = useRef(false);
   const draggingRef = useRef(false);
+  const momentumRef = useRef(false);
+  const lastInputAtRef = useRef(0);
   const firstPaintPendingRef = useRef(false);
   const viewportHRef = useRef(0);
   /** Last reported offset, used to tell a user's upward scroll from our own downward pin. */
@@ -523,6 +529,69 @@ export function LiveThread({
   const visitTokenRef = useRef(0);
   const settleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wentBackgroundRef = useRef(false);
+  const landWatchRef = useRef<{ token: number; startedAt: number } | null>(null);
+  const armLandSettleRef = useRef<() => void>(() => undefined);
+
+  const userGestureActive = useCallback(
+    () =>
+      isUserScrollGesture({
+        dragging: draggingRef.current,
+        momentum: momentumRef.current,
+        lastInputAt: lastInputAtRef.current,
+        now: Date.now(),
+      }),
+    [],
+  );
+  const noteUserInput = useCallback(() => {
+    lastInputAtRef.current = Date.now();
+  }, []);
+
+  const landStillOurs = useCallback(() => {
+    const watch = landWatchRef.current;
+    return (
+      watch != null &&
+      canRepinWhileLanding({
+        watching: true,
+        tokenMatches: watch.token === visitTokenRef.current,
+        userLeftEnd: userLeftEndRef.current,
+        gesture: userGestureActive(),
+        elapsedMs: Date.now() - watch.startedAt,
+      })
+    );
+  }, [userGestureActive]);
+
+  const armLandSettle = useCallback(() => {
+    if (settleTimerRef.current) {
+      clearTimeout(settleTimerRef.current);
+    }
+    settleTimerRef.current = setTimeout(() => {
+      settleTimerRef.current = null;
+      const ours = landStillOurs();
+      landWatchRef.current = null;
+      if (ours) {
+        listRef.current?.scrollToEnd({ animated: false });
+      }
+    }, LIVE_LAND_QUIET_MS);
+  }, [landStillOurs]);
+  armLandSettleRef.current = armLandSettle;
+
+  /** Content height changed while the opening land is open: pin again and wait for quiet. */
+  const repinWhileLanding = useCallback((): boolean => {
+    if (!landWatchRef.current) {
+      return false;
+    }
+    if (!landStillOurs()) {
+      landWatchRef.current = null;
+      if (settleTimerRef.current) {
+        clearTimeout(settleTimerRef.current);
+        settleTimerRef.current = null;
+      }
+      return false;
+    }
+    listRef.current?.scrollToEnd({ animated: false });
+    armLandSettle();
+    return true;
+  }, [armLandSettle, landStillOurs]);
 
   useEffect(
     () => () => {
@@ -538,6 +607,7 @@ export function LiveThread({
       return;
     }
     firstPaintPendingRef.current = false;
+    landWatchRef.current = null;
     if (settleTimerRef.current) {
       clearTimeout(settleTimerRef.current);
       settleTimerRef.current = null;
@@ -667,18 +737,10 @@ export function LiveThread({
     markLiveInitialScroll(landingChallengeId);
     notifyFirstPaint();
     // Rows below the fold are measured after the first scrollToEnd, so the offset it used was an
-    // estimate. One settle pass right after the land; a finger, wheel, or newer visit cancels it.
-    const token = visitTokenRef.current;
-    if (settleTimerRef.current) {
-      clearTimeout(settleTimerRef.current);
-    }
-    settleTimerRef.current = setTimeout(() => {
-      settleTimerRef.current = null;
-      if (visitTokenRef.current !== token || draggingRef.current || userLeftEndRef.current) {
-        return;
-      }
-      listRef.current?.scrollToEnd({ animated: false });
-    }, 250);
+    // estimate. Keep landing on the newest until the content height stops changing; only a real
+    // finger, wheel, or newer visit hands the thread back to the reader.
+    landWatchRef.current = { token: visitTokenRef.current, startedAt: Date.now() };
+    armLandSettleRef.current();
   }, [emptyList, focused, landingChallengeId, notifyFirstPaint, pinToLiveEdge]);
   finishFirstPaintPinRef.current = finishFirstPaintPin;
 
@@ -837,9 +899,15 @@ export function LiveThread({
         contentHeight: contentSize.height,
         viewportHeight: layoutMeasurement.height,
       });
-      // Our own pins only ever move down, so an upward move is the user taking over. That ends the
-      // opening pin even on web, where a wheel or trackpad never fires a drag event.
-      if (contentOffset.y < lastOffsetRef.current - 4) {
+      // Our own pins only move down, but rows measured after a pin can lower the offset too. Only a
+      // real touch, wheel, or drag counts as the reader taking over; reflow never does.
+      if (
+        isUserTakeover({
+          delta: contentOffset.y - lastOffsetRef.current,
+          gesture: userGestureActive(),
+        })
+      ) {
+        landWatchRef.current = null;
         firstPaintPendingRef.current = false;
         markLiveInitialScroll(landingChallengeId);
         notifyFirstPaint();
@@ -870,8 +938,33 @@ export function LiveThread({
         }
       }
     },
-    [landingChallengeId, newBelow, notifyFirstPaint, reads, rows],
+    [landingChallengeId, newBelow, notifyFirstPaint, reads, rows, userGestureActive],
   );
+
+  // Web never fires a drag event for a wheel, trackpad, scrollbar, or key. Listen on the scroll node so
+  // those count as the reader; nothing else (reflow, our own pins) does.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || showBootSpinner) {
+      return;
+    }
+    const node = (
+      listRef.current as unknown as { getScrollableNode?: () => unknown } | null
+    )?.getScrollableNode?.() as
+      | {
+          addEventListener?: (type: string, fn: () => void, options?: unknown) => void;
+          removeEventListener?: (type: string, fn: () => void) => void;
+        }
+      | undefined;
+    if (!node?.addEventListener || !node.removeEventListener) {
+      return;
+    }
+    const types = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
+    const onInput = () => noteUserInput();
+    types.forEach((type) => node.addEventListener?.(type, onInput, { passive: true }));
+    return () => {
+      types.forEach((type) => node.removeEventListener?.(type, onInput));
+    };
+  }, [noteUserInput, showBootSpinner]);
 
   // New rows arriving while the reader is scrolled up become a count on the jump control, never a
   // scroll. Their viewport does not move.
@@ -1214,16 +1307,26 @@ export function LiveThread({
           showsVerticalScrollIndicator={false}
           onScroll={onScroll}
           scrollEventThrottle={16}
+          onTouchStart={noteUserInput}
           onScrollBeginDrag={() => {
             draggingRef.current = true;
+            momentumRef.current = false;
+            noteUserInput();
+            landWatchRef.current = null;
             firstPaintPendingRef.current = false;
             collapseComposer();
           }}
           onScrollEndDrag={() => {
             draggingRef.current = false;
+            noteUserInput();
           }}
           onMomentumScrollBegin={() => {
+            momentumRef.current = true;
             firstPaintPendingRef.current = false;
+          }}
+          onMomentumScrollEnd={() => {
+            momentumRef.current = false;
+            noteUserInput();
           }}
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
@@ -1244,6 +1347,9 @@ export function LiveThread({
                   animated: false,
                 });
               }
+              return;
+            }
+            if (repinWhileLanding()) {
               return;
             }
             if (userLeftEndRef.current) {

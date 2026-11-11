@@ -1,3 +1,4 @@
+import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
@@ -74,7 +75,7 @@ export default function OfficialToolsScreen() {
         Official tools
       </AppText>
       <AppText className="mt-1 text-[22px] font-bold leading-7 text-charcoal">
-        {challenge?.title ?? 'Challenge'}
+        {(challenge ? challengeDisplayTitle(challenge) : '') || 'Challenge'}
       </AppText>
 
       {toast ? (

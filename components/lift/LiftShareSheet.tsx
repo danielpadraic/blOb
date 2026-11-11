@@ -1,3 +1,4 @@
+import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
@@ -23,7 +24,7 @@ import { Glyph, GLYPH } from '@/components/ui/Glyph';
 import { useKeyboardHeight } from '@/components/ui/KeyboardFormShell';
 import { useAuth } from '@/hooks/useAuth';
 import type { LoggableChallenge } from '@/hooks/useLoggableChallenge';
-import { hideOfficialCoinSibling } from '@/lib/officialCoin';
+import { withoutOfficialCoinMonthly } from '@/lib/officialCoin';
 import {
   useBlockedPeerIds,
   useFriends,
@@ -115,7 +116,7 @@ export function LiftShareSheet({
   onComposeHome,
   onSkip,
 }: LiftShareSheetProps) {
-  const challenges = useMemo(() => hideOfficialCoinSibling(allChallenges), [allChallenges]);
+  const challenges = useMemo(() => withoutOfficialCoinMonthly(allChallenges), [allChallenges]);
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const friends = useFriends(user?.id);
@@ -538,7 +539,7 @@ export function LiftShareSheet({
                           {challenges.map((challenge) => (
                             <PickRow
                               key={challenge.id}
-                              label={challenge.title ?? 'Challenge'}
+                              label={challengeDisplayTitle(challenge) || 'Challenge'}
                               detail={challenge.statusLine ?? challenge.taskLabel ?? undefined}
                               selected={challengeId === challenge.id}
                               onPress={() => {

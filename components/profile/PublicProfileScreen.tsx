@@ -1,3 +1,4 @@
+import { isOfficialCoinMonthly } from '@/lib/officialCoin';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Image, Pressable, View } from 'react-native';
@@ -252,6 +253,9 @@ function PublicProfileBody() {
     const seeFn = viewerCanSeeShowcase;
     publicChallenges = [...hosted, ...participating].filter((item, index, list) => {
       if (list.findIndex((row) => row.challenge.id === item.challenge.id) !== index) {
+        return false;
+      }
+      if (isOfficialCoinMonthly(item.challenge)) {
         return false;
       }
       if (isSelf) {

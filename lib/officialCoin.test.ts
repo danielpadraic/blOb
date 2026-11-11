@@ -641,3 +641,35 @@ describe('officialHostIdFor', () => {
     expect(officialHostIdFor('month', undefined, { monthlyId: 'month' })).toBeNull();
   });
 });
+
+describe('title-aware monthly sibling filter', () => {
+  const host = { id: 'w', title: 'Weekly Fitness Challenge', official_kind: 'coin_weekly' };
+  const legacy = (title: string) => ({ id: `m-${title}`, title, official_kind: null });
+
+  it('drops a monthly row with no official_kind by its stored title', () => {
+    for (const title of ['Monthly Fitness Challenge', 'Official Monthly Coin', 'monthly fitness challenge ']) {
+      expect(withoutOfficialCoinMonthly([host, legacy(title)]).map((row) => row.id)).toEqual(['w']);
+      expect(hideOfficialCoinSibling([host, legacy(title)]).map((row) => row.id)).toEqual(['w']);
+    }
+  });
+
+  it('discovery filter drops it even when no weekly host is in the list', () => {
+    expect(withoutOfficialCoinMonthly([legacy('Monthly Fitness Challenge')])).toEqual([]);
+  });
+
+  it('keeps a user-made room that is explicitly not official', () => {
+    const mine = { id: 'u', title: 'Monthly Fitness Challenge', official_kind: null, is_official: false };
+    expect(withoutOfficialCoinMonthly([host, mine]).map((row) => row.id)).toEqual(['w', 'u']);
+  });
+
+  it('routes a legacy-titled monthly row to the weekly host', () => {
+    expect(
+      officialHostIdFor('m1', { id: 'm1', title: 'Monthly Fitness Challenge', official_kind: null }, { weeklyId: 'w' }),
+    ).toBe('w');
+  });
+
+  it('prints one public title for both rooms', () => {
+    expect(officialCoinDisplayTitle(host)).toBe('Official Fitness Challenge');
+    expect(officialCoinDisplayTitle(legacy('Monthly Fitness Challenge'))).toBe('Official Fitness Challenge');
+  });
+});

@@ -1,3 +1,4 @@
+import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,7 +12,7 @@ import { KeyboardField, useKeyboardHeight } from '@/components/ui/KeyboardFormSh
 import { useAuth } from '@/hooks/useAuth';
 import { useMyCircles } from '@/hooks/useCircles';
 import type { LoggableChallenge } from '@/hooks/useLoggableChallenge';
-import { hideOfficialCoinSibling } from '@/lib/officialCoin';
+import { withoutOfficialCoinMonthly } from '@/lib/officialCoin';
 import { useFriends } from '@/hooks/useSocial';
 import { checkinHidesHomeShare } from '@/lib/checkinShare';
 import { buildCounterCard } from '@/lib/counter/card';
@@ -51,7 +52,7 @@ const DESTINATIONS: { id: CounterShareDestination; label: string; glyph: (typeof
 ];
 
 export function CounterShareSheet({ visible, draft, challenges: allChallenges, busy, error, onClose, onShare }: Props) {
-  const challenges = useMemo(() => hideOfficialCoinSibling(allChallenges), [allChallenges]);
+  const challenges = useMemo(() => withoutOfficialCoinMonthly(allChallenges), [allChallenges]);
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const circles = useMyCircles().data ?? [];
@@ -179,7 +180,7 @@ export function CounterShareSheet({ visible, draft, challenges: allChallenges, b
                     paddingHorizontal: 12,
                     justifyContent: 'center',
                   }}>
-                  <AppText style={{ fontWeight: '700', color: THEME.textPrimary }}>{row.title}</AppText>
+                  <AppText style={{ fontWeight: '700', color: THEME.textPrimary }}>{challengeDisplayTitle(row) || row.title}</AppText>
                 </Pressable>
               ))
             ) : (

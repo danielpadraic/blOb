@@ -18,6 +18,7 @@ import {
 } from '@/lib/checkinPeriod';
 import { allowsMultiCheckin, usesPeriodCheckinGate } from '@/lib/loggable';
 import { dateStampInZone } from '@/lib/officialDays';
+import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { isOfficialCoinChallenge } from '@/lib/officialCoin';
 import { isClipSharePost } from '@/lib/roundShare';
 
@@ -397,7 +398,7 @@ export function mergeMultiCheckinRows(
       item.remainingProofLabels ?? remainingProofLabelsOf(item, item.proofParts, item.checkinPhase);
     return {
       id: item.id,
-      title: item.title,
+      title: challengeDisplayTitle(item) || item.title,
       task: String(item.taskLabel ?? item.task ?? '').trim(),
       remainingProofLabels: remaining,
       state: hubRowState(

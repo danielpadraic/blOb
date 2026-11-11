@@ -6,7 +6,7 @@ import { useFollowing, useFriends } from '@/hooks/useSocial';
 import { searchMentionCircles } from '@/lib/circles';
 import { isCreatorAccount } from '@/lib/creator';
 import { asIdSet } from '@/lib/ids';
-import { withoutOfficialCoinMonthly } from '@/lib/officialCoin';
+import { officialCoinDisplayTitle, withoutOfficialCoinMonthly } from '@/lib/officialCoin';
 import { mentionSearchMatches, type MentionKind } from '@/lib/mentions';
 import { asPostAudience, type PostAudience } from '@/lib/postAudience';
 import { fetchPublicProfilesByIds, searchPeople } from '@/lib/social';
@@ -88,7 +88,7 @@ export function useMentionCandidates(input: {
       }
       const { data, error } = await supabase
         .from('challenges')
-        .select('id, title, task, official_kind')
+        .select('id, title, task, is_official, official_kind')
         .or(`title.ilike.%${safe}%,task.ilike.%${safe}%`)
         .limit(12);
       if (error) {
@@ -185,7 +185,7 @@ export function useMentionCandidates(input: {
     }
     if (query.length >= 2 && rawQuery.length >= 2) {
       for (const row of challenges.data ?? []) {
-        const title = String(row.title ?? '').trim() || 'Challenge';
+        const title = officialCoinDisplayTitle(row) || String(row.title ?? '').trim() || 'Challenge';
         if (seen.has(row.id)) {
           continue;
         }

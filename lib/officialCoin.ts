@@ -49,6 +49,10 @@ const LEGACY_OFFICIAL_COIN_TITLES: Record<string, OfficialCoinKind> = {
   'official monthly coin': 'coin_monthly',
   'weekly fitness challenge': 'coin_weekly',
   'monthly fitness challenge': 'coin_monthly',
+  'official weekly fitness challenge': 'coin_weekly',
+  'official monthly fitness challenge': 'coin_monthly',
+  'weekly coin': 'coin_weekly',
+  'monthly coin': 'coin_monthly',
 };
 
 /**
@@ -59,12 +63,8 @@ const LEGACY_OFFICIAL_COIN_TITLES: Record<string, OfficialCoinKind> = {
 export function officialCoinDisplayTitle(
   row?: (OfficialCoinChallenge & { title?: string | null }) | null,
 ): string {
-  const kind = officialCoinKind(row);
-  if (kind) {
-    return OFFICIAL_COIN_TITLE[kind];
-  }
-  const legacy = LEGACY_OFFICIAL_COIN_TITLES[String(row?.title ?? '').trim().toLowerCase()];
-  return legacy ? OFFICIAL_COIN_TITLE[legacy] : '';
+  const kind = resolvedOfficialCoinKind(row);
+  return kind ? OFFICIAL_COIN_TITLE[kind] : '';
 }
 
 /** House chrome on the Check In picker. Different from private / user challenges. */
@@ -75,6 +75,7 @@ export const OFFICIAL_COIN_ALREADY_TODAY = 'You’re in for today.';
 export type OfficialCoinChallenge = {
   id?: string | null;
   title?: string | null;
+  is_official?: boolean | null;
   official_kind?: string | null;
   window_reset?: string | null;
   score_mode?: string | null;
@@ -128,6 +129,31 @@ export function officialCoinKind(
 
 export function isOfficialCoinChallenge(challenge?: OfficialCoinChallenge | null): boolean {
   return officialCoinKind(challenge) != null;
+}
+
+/**
+ * The room's kind from `official_kind`, or, when a partial row never selected that column, from
+ * its stored legacy title. A row marked `is_official: false` is somebody's own challenge and is
+ * never read as a house room, whatever it is called.
+ */
+export function resolvedOfficialCoinKind(
+  row?: (OfficialCoinChallenge & { title?: string | null }) | null,
+): OfficialCoinKind | null {
+  const kind = officialCoinKind(row);
+  if (kind) {
+    return kind;
+  }
+  if (!row || row.is_official === false) {
+    return null;
+  }
+  return LEGACY_OFFICIAL_COIN_TITLES[String(row.title ?? '').trim().toLowerCase()] ?? null;
+}
+
+/** True for a house room by kind or by legacy title. Use for discovery and display, not for gating money. */
+export function looksLikeOfficialCoinRoom(
+  row?: (OfficialCoinChallenge & { title?: string | null }) | null,
+): boolean {
+  return resolvedOfficialCoinKind(row) != null;
 }
 
 /** Official Coin boards only. Pinnacle TEST stays on its own board. */
@@ -184,12 +210,12 @@ export function officialCoinRoomSize(
 
 /** The scoring-only room. Hidden from Home, Search, and the Check In picker. */
 export function isOfficialCoinMonthly(challenge?: OfficialCoinChallenge | null): boolean {
-  return officialCoinKind(challenge) === 'coin_monthly';
+  return resolvedOfficialCoinKind(challenge) === 'coin_monthly';
 }
 
 /** Drop the monthly sibling when the weekly host is present in the same list. */
 export function hideOfficialCoinSibling<T extends OfficialCoinChallenge>(rows: readonly T[]): T[] {
-  const hasHost = rows.some((row) => officialCoinKind(row) === 'coin_weekly');
+  const hasHost = rows.some((row) => resolvedOfficialCoinKind(row) === 'coin_weekly');
   return rows.filter((row) => !(hasHost && isOfficialCoinMonthly(row)));
 }
 

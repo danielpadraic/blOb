@@ -1,7 +1,12 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 
 import {
+  LIVE_USER_INPUT_GRACE_MS,
+  LIVE_LAND_WATCH_MAX_MS,
   beginLiveVisit,
+  canRepinWhileLanding,
+  isUserScrollGesture,
+  isUserTakeover,
   clearLiveInitialScroll,
   hasLiveInitialScroll,
   liveLandingFocus,
@@ -92,5 +97,33 @@ describe('live landing', () => {
       itemCount: 12,
     });
     spy.mockRestore();
+  });
+});
+
+describe('live landing gestures', () => {
+  const idle = { dragging: false, momentum: false, lastInputAt: 0, now: 100_000 };
+  it('treats reflow with no input as not the reader', () => {
+    expect(isUserScrollGesture(idle)).toBe(false);
+    expect(isUserTakeover({ delta: -300, gesture: isUserScrollGesture(idle) })).toBe(false);
+  });
+  it('counts a drag, momentum, or recent wheel as the reader', () => {
+    expect(isUserScrollGesture({ ...idle, dragging: true })).toBe(true);
+    expect(isUserScrollGesture({ ...idle, momentum: true })).toBe(true);
+    expect(isUserScrollGesture({ ...idle, lastInputAt: idle.now - 100 })).toBe(true);
+    expect(isUserScrollGesture({ ...idle, lastInputAt: idle.now - LIVE_USER_INPUT_GRACE_MS - 1 })).toBe(false);
+  });
+  it('only a gesture-backed upward move is a takeover', () => {
+    expect(isUserTakeover({ delta: -40, gesture: true })).toBe(true);
+    expect(isUserTakeover({ delta: -2, gesture: true })).toBe(false);
+    expect(isUserTakeover({ delta: 40, gesture: true })).toBe(false);
+  });
+  it('re-pins during the opening land until the reader acts or time runs out', () => {
+    const base = { watching: true, tokenMatches: true, userLeftEnd: false, gesture: false, elapsedMs: 100 };
+    expect(canRepinWhileLanding(base)).toBe(true);
+    expect(canRepinWhileLanding({ ...base, watching: false })).toBe(false);
+    expect(canRepinWhileLanding({ ...base, tokenMatches: false })).toBe(false);
+    expect(canRepinWhileLanding({ ...base, userLeftEnd: true })).toBe(false);
+    expect(canRepinWhileLanding({ ...base, gesture: true })).toBe(false);
+    expect(canRepinWhileLanding({ ...base, elapsedMs: LIVE_LAND_WATCH_MAX_MS + 1 })).toBe(false);
   });
 });

@@ -1,3 +1,4 @@
+import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import {
   keepPreviousData,
   useInfiniteQuery,
@@ -556,7 +557,7 @@ async function withMentions(posts: PostWithMeta[], viewerId?: string): Promise<P
       });
     } else if (row.challenge_id) {
       const challenge = challengeById.get(row.challenge_id);
-      const title = String(challenge?.title ?? '').trim() || 'this challenge';
+      const title = (challenge ? challengeDisplayTitle(challenge as never) : '') || String(challenge?.title ?? '').trim() || 'this challenge';
       list.push({
         userId: row.challenge_id,
         username: title,

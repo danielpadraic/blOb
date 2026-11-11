@@ -141,3 +141,49 @@ export function liveLandingFocus(input: LiveLandingTarget): {
   }
   return { commentId: null, postId: null, latest: true };
 }
+
+/** A wheel, touch, drag, or key counts as the reader for this long after the last input. */
+export const LIVE_USER_INPUT_GRACE_MS = 900;
+/** The opening land re-pins until the content height has been quiet this long. */
+export const LIVE_LAND_QUIET_MS = 350;
+/** Hard stop so a feed that keeps growing can never hold the opening land forever. */
+export const LIVE_LAND_WATCH_MAX_MS = 4000;
+
+/**
+ * True only for a real person scrolling: finger down, momentum after a flick, or a wheel / touch /
+ * key input a moment ago. Reflow from rows measured after the first scrollToEnd lowers the offset
+ * too, but none of these are true then.
+ */
+export function isUserScrollGesture(input: {
+  dragging: boolean;
+  momentum: boolean;
+  lastInputAt: number;
+  now: number;
+}): boolean {
+  if (input.dragging || input.momentum) {
+    return true;
+  }
+  return input.now - input.lastInputAt < LIVE_USER_INPUT_GRACE_MS;
+}
+
+/** An upward move only means "the reader left the newest" when a real gesture caused it. */
+export function isUserTakeover(input: { delta: number; gesture: boolean }): boolean {
+  return input.delta < -4 && input.gesture;
+}
+
+/** Whether the opening land may keep re-pinning after a content-size change. */
+export function canRepinWhileLanding(input: {
+  watching: boolean;
+  tokenMatches: boolean;
+  userLeftEnd: boolean;
+  gesture: boolean;
+  elapsedMs: number;
+}): boolean {
+  return (
+    input.watching &&
+    input.tokenMatches &&
+    !input.userLeftEnd &&
+    !input.gesture &&
+    input.elapsedMs <= LIVE_LAND_WATCH_MAX_MS
+  );
+}

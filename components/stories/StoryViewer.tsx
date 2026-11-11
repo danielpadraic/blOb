@@ -1,3 +1,4 @@
+import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { Image } from 'expo-image';
@@ -443,9 +444,9 @@ function ChallengeChip({
       className="mx-4 mt-3 self-start rounded-full px-3 py-2"
       style={{ backgroundColor: THEME.accentSoft }}
       accessibilityRole="button"
-      accessibilityLabel={`Open challenge ${challenge.title}`}>
+      accessibilityLabel={`Open challenge ${challengeDisplayTitle(challenge) || challenge.title}`}>
       <AppText className="text-[12px] font-bold" style={{ color: THEME.accent }}>
-        {challenge.title}
+        {challengeDisplayTitle(challenge) || challenge.title}
       </AppText>
     </Pressable>
   );
