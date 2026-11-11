@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/utils/upload', () => ({
+  uploadChallengeProof: vi.fn(),
+}));
 
 import type { ChallengeProof } from '@/lib/challengeProofs';
 import {

@@ -40,8 +40,8 @@ describe('completed lift pounds', () => {
     const chart = poundChart(sessions, ['2026-09-30', '2026-10-01'], { muscle: 'chest', exercise: null }, () => 'W');
     expect(chart.totalLabel).toBe('4,800 lb');
     expect(chart.bars.map((bar) => bar.value)).toEqual([0, 4800]);
-    expect(chart.bars[1]?.hint).toBe('Thu · 4,800 lb');
-    expect(chart.bars[0]?.hint).toBe('Wed · 0 lb');
+    expect(chart.bars[1]?.hint).toBe('Pounds · Thu · 4,800 lb');
+    expect(chart.bars[0]?.hint).toBe('Pounds · Wed · 0 lb');
     expect(muscleChipKeys(sessions)).toEqual(['chest', 'back']);
     expect(exerciseChipNames(sessions, 'chest')).toEqual(['Bench Press', 'Fly']);
   });

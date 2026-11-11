@@ -114,16 +114,22 @@ describe('challenge load helpers', () => {
       prefetchQuery: vi.fn(),
     };
     const push = vi.fn();
-    expect(
-      openChallengeLobby(
-        { push },
-        {
-          id: 'bbb',
-          snapshot: { id: 'aaa', title: 'Workout Group #2', prize_pool: 20 },
-        },
-        client as never,
-      ),
-    ).toBe(true);
+    vi.useFakeTimers();
+    try {
+      expect(
+        openChallengeLobby(
+          { push },
+          {
+            id: 'bbb',
+            snapshot: { id: 'aaa', title: 'Workout Group #2', prize_pool: 20 },
+          },
+          client as never,
+        ),
+      ).toBe(true);
+      vi.advanceTimersByTime(200);
+    } finally {
+      vi.useRealTimers();
+    }
     expect(push).toHaveBeenCalledWith('/challenges/bbb');
     expect(client.getQueryData(['challenge', 'bbb'])).toBeUndefined();
     expect(client.getQueryData(['challenge', 'aaa'])).toBeUndefined();
@@ -139,7 +145,13 @@ describe('challenge load helpers', () => {
       prefetchQuery: vi.fn(),
     };
     const push = vi.fn();
-    expect(openChallengeLobby({ push }, { id: 'abc' }, client as never)).toBe(true);
+    vi.useFakeTimers();
+    try {
+      expect(openChallengeLobby({ push }, { id: 'abc' }, client as never)).toBe(true);
+      vi.advanceTimersByTime(200);
+    } finally {
+      vi.useRealTimers();
+    }
     expect(push).toHaveBeenCalledWith('/challenges/abc');
     expect(client.getQueryData(['challenge', 'abc'])).toBeUndefined();
     expect(seedChallengeDetailQuery({ id: 'abc' }, client)).toBe('abc');
