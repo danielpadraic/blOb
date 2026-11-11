@@ -177,7 +177,7 @@ export function useOfficialCoinStatus() {
       const loggedDays = new Map<string, Set<string>>();
       const byRoom = new Map<string, CheckinRow[]>();
       for (const row of checkinRows) {
-        if (!['submitted', 'ready', 'in_progress'].includes(String(row.status ?? ''))) {
+        if (row.status !== 'submitted' || !row.submitted_at) {
           continue;
         }
         const id = String(row.challenge_id ?? '');
@@ -311,7 +311,7 @@ export function useOfficialCoinDays(
           'id, user_id, period_key, status, submitted_at, proof_parts, pre_selfie_url, post_selfie_url, hr_monitor_url, health_workout_id',
         )
         .eq('challenge_id', challengeId)
-        .in('status', ['submitted', 'ready', 'in_progress'])
+        .eq('status', 'submitted')
         .gte('period_key', startKey)
         .lt('period_key', endKey)
         .order('period_key', { ascending: true });
@@ -323,6 +323,7 @@ export function useOfficialCoinDays(
         id: string;
         user_id: string;
         period_key: string;
+        status?: string | null;
         submitted_at?: string | null;
         proof_parts?: unknown;
         pre_selfie_url?: string | null;

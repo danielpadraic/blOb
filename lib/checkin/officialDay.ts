@@ -82,6 +82,8 @@ export type OfficialBoardCheckin = {
   id?: string | null;
   user_id?: string | null;
   period_key?: string | null;
+  status?: string | null;
+  submitted_at?: string | null;
   proof_parts?: unknown;
   pre_selfie_url?: string | null;
   post_selfie_url?: string | null;
@@ -142,7 +144,11 @@ export type OfficialBoardDayHit = {
   checkinId: string;
 };
 
-/** One Chicago day per person. Later duplicate rows for the same day are ignored. */
+/**
+ * One Chicago day per person. Later duplicate rows for the same day are ignored.
+ * Only a Submitted row counts, the same rule settlement uses. A Ready row with every slot
+ * filled keeps its Submit button but is not a Board day yet.
+ */
 export function officialBoardDaysByUser(
   challenge: OfficialProofChallenge | null | undefined,
   rows: readonly OfficialBoardCheckin[],
@@ -150,6 +156,9 @@ export function officialBoardDaysByUser(
   const seen = new Set<string>();
   const byUser = new Map<string, OfficialBoardDayHit[]>();
   for (const row of rows) {
+    if (row.status !== 'submitted' || !String(row.submitted_at ?? '').trim()) {
+      continue;
+    }
     if (!officialBoardDayComplete(challenge, row)) {
       continue;
     }
