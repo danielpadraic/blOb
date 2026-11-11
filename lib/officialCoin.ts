@@ -148,6 +148,40 @@ export function isOfficialCoinBoardGhost(input: {
   return name.startsWith('test rookie') || name.startsWith('test veteran');
 }
 
+type GhostCandidate = {
+  profile?: { display_name?: string | null; username?: string | null } | null;
+  display_name?: string | null;
+  username?: string | null;
+};
+
+/** QA accounts among a roster or profile list. Only Official Coin rooms hide them. */
+export function countOfficialCoinGhosts(rows: readonly GhostCandidate[] | null | undefined): number {
+  let ghosts = 0;
+  for (const row of rows ?? []) {
+    if (
+      isOfficialCoinBoardGhost({
+        displayName: row.profile?.display_name ?? row.display_name,
+        username: row.profile?.username ?? row.username,
+      })
+    ) {
+      ghosts += 1;
+    }
+  }
+  return ghosts;
+}
+
+/** Room size for display. participant_count counts QA accounts, so Official Coin rooms subtract them. */
+export function officialCoinRoomSize(
+  challenge: (OfficialCoinChallenge & { participant_count?: number | null }) | null | undefined,
+  ghostCount: number,
+): number {
+  const total = Math.max(Math.floor(Number(challenge?.participant_count) || 0), 0);
+  if (!isOfficialCoinChallenge(challenge)) {
+    return total;
+  }
+  return Math.max(total - Math.max(Math.floor(Number(ghostCount) || 0), 0), 0);
+}
+
 /** The scoring-only room. Hidden from Home, Search, and the Check In picker. */
 export function isOfficialCoinMonthly(challenge?: OfficialCoinChallenge | null): boolean {
   return officialCoinKind(challenge) === 'coin_monthly';

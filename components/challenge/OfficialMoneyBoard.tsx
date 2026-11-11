@@ -9,6 +9,7 @@ import { entryFieldNote, prizeFieldNote, type FieldNoteKey } from '@/lib/challen
 import { cashPrizeLabel } from '@/lib/currency';
 import { AppText } from '@/components/ui/AppText';
 import { copy } from '@/lib/copy';
+import { officialCoinRoomSize } from '@/lib/officialCoin';
 import {
   armingCountdownLabel,
   isOfficialJoinable,
@@ -30,11 +31,14 @@ export function OfficialMoneyBoard({
   challenge,
   finished = 0,
   standing = null,
+  ghostCount = 0,
   onInvite,
 }: {
   challenge: ChallengeWithStats;
   finished?: number;
   standing?: string | null;
+  /** QA accounts on the roster. participant_count includes them; Official Coin rooms subtract them. */
+  ghostCount?: number;
   onInvite?: () => void;
 }) {
   const filling = isOfficialJoinable(challenge);
@@ -51,8 +55,8 @@ export function OfficialMoneyBoard({
   const showGuarantee = showsGuaranteedPrize(challenge);
   const pot = Math.max(Number(challenge.prize_pool) || 0, 0);
   const buyIn = Math.max(Number(challenge.buy_in_amount) || 0, 0);
-  const joined = Math.max(Number(challenge.participant_count) || 0, 0);
-  const remaining = officialRemainingToStart(challenge);
+  const joined = officialCoinRoomSize(challenge, ghostCount);
+  const remaining = officialRemainingToStart({ ...challenge, participant_count: joined });
   const startLine =
     challenge.status === 'arming'
       ? armingCountdownLabel(challenge.armed_at, new Date(nowMs))

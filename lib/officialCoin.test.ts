@@ -4,11 +4,13 @@ import { normalizeChallenge } from '@/lib/challenges';
 import { displayChallengePot } from '@/lib/challengePot';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import {
+  countOfficialCoinGhosts,
   hideOfficialCoinSibling,
   isOfficialCoinMonthly,
   normalizeOfficialPairTitle,
   OFFICIAL_BOARD_TABS,
   OFFICIAL_FITNESS_TITLE,
+  officialCoinRoomSize,
   officialHostRedirectHref,
   withoutOfficialCoinMonthly,
   canRejoinOfficialCoin,
@@ -570,5 +572,30 @@ describe('one Official Fitness room', () => {
     expect(officialHostRedirectHref('host', { id: 'month', from: '/feed', notice: 'Hi there' })).toBe(
       '/challenges/host?from=%2Ffeed&notice=Hi+there',
     );
+  });
+});
+
+describe('Official Coin room size ignores QA accounts', () => {
+  const ghosts = [
+    { profile: { username: 'blobtest_ann', display_name: 'Ann' } },
+    { profile: { username: 'rookie1', display_name: 'Test Rookie 3' } },
+    { profile: { username: 'vet1', display_name: 'Test Veteran' } },
+  ];
+  const people = [
+    { profile: { username: 'maya', display_name: 'Maya' } },
+    { profile: null },
+  ];
+
+  it('counts blobtest_*, Test Rookie, and Test Veteran only', () => {
+    expect(countOfficialCoinGhosts([...ghosts, ...people])).toBe(3);
+    expect(countOfficialCoinGhosts(null)).toBe(0);
+    expect(countOfficialCoinGhosts([{ username: '@BlobTest_x' }])).toBe(1);
+  });
+
+  it('subtracts ghosts on Official Coin rooms and leaves other rooms alone', () => {
+    expect(officialCoinRoomSize({ official_kind: 'coin_weekly', participant_count: 12 }, 3)).toBe(9);
+    expect(officialCoinRoomSize({ official_kind: 'coin_weekly', participant_count: 2 }, 5)).toBe(0);
+    expect(officialCoinRoomSize({ official_kind: null, participant_count: 12 }, 3)).toBe(12);
+    expect(officialCoinRoomSize({ official_kind: 'coin_weekly' }, 0)).toBe(0);
   });
 });

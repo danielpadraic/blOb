@@ -16,7 +16,13 @@ import { peekLiveLastRead } from '@/lib/liveLastRead';
 import { liveCheckinLabel } from '@/lib/liveThread';
 import { formatRelative } from '@/utils/format';
 import { isEndedLobbyStatus } from '@/lib/lobbyChallenge';
-import { hideOfficialCoinSibling, officialCoinKind, type OfficialCoinKind } from '@/lib/officialCoin';
+import {
+  hideOfficialCoinSibling,
+  isOfficialCoinBoardGhost,
+  isOfficialCoinChallenge,
+  officialCoinKind,
+  type OfficialCoinKind,
+} from '@/lib/officialCoin';
 import { challengeProgressLine } from '@/lib/challengeProgress';
 import { namedChallengeHref } from '@/lib/routes';
 import { fetchPublicProfilesByIds, personDisplayName } from '@/lib/social';
@@ -571,7 +577,7 @@ export async function fetchHomePulsePills(userId?: string): Promise<PulsePill[]>
   }
   const ids = challenges.map((row) => String(row.id ?? '').trim()).filter(Boolean);
   const [memberCounts, progress] = await Promise.all([
-    fetchPulseMemberCounts(ids),
+    fetchPulseMemberCounts(ids, challenges),
     fetchPulseProgress(userId, ids, challenges),
   ]);
   const lastReadAt: Record<string, string | null> = {};
@@ -591,32 +597,85 @@ export async function fetchHomePulsePills(userId?: string): Promise<PulsePill[]>
   });
 }
 
-/** Room size for the +N beside the face pile. A miss just hides the chip. */
-async function fetchPulseMemberCounts(ids: string[]): Promise<Record<string, number>> {
+type PulseParticipantRow = { challenge_id?: string | null; user_id?: string | null; status?: string | null };
+
+/**
+ * Pure tally for the +N. Official Coin rooms skip QA accounts (blobtest_*, Test Rookie, Test Veteran).
+ * A participant with no profile in the map still counts, so a profile miss never shrinks a room.
+ */
+export function tallyPulseMemberCounts(
+  rows: readonly PulseParticipantRow[],
+  coinRoomIds: ReadonlySet<string>,
+  profiles: ReadonlyMap<string, { display_name?: string | null; username?: string | null }>,
+): Record<string, number> {
   const counts: Record<string, number> = {};
+  for (const row of rows) {
+    const id = String(row.challenge_id ?? '');
+    const status = String(row.status ?? 'joined');
+    if (!id || status === 'refunded_pre_start' || status === 'withdrawn') {
+      continue;
+    }
+    if (coinRoomIds.has(id)) {
+      const profile = profiles.get(String(row.user_id ?? ''));
+      if (
+        profile &&
+        isOfficialCoinBoardGhost({ displayName: profile.display_name, username: profile.username })
+      ) {
+        continue;
+      }
+    }
+    counts[id] = (counts[id] ?? 0) + 1;
+  }
+  return counts;
+}
+
+/** Room size for the +N beside the face pile. A miss just hides the chip. */
+async function fetchPulseMemberCounts(
+  ids: string[],
+  challenges: PulseChallengeLike[] = [],
+): Promise<Record<string, number>> {
   if (ids.length === 0) {
-    return counts;
+    return {};
   }
   try {
     const { data, error } = await supabase
       .from('challenge_participants')
-      .select('challenge_id, status')
+      .select('challenge_id, user_id, status')
       .in('challenge_id', ids);
     if (error) {
-      return counts;
+      return {};
     }
-    for (const row of (data ?? []) as { challenge_id?: string | null; status?: string | null }[]) {
-      const id = String(row.challenge_id ?? '');
-      const status = String(row.status ?? 'joined');
-      if (!id || status === 'refunded_pre_start' || status === 'withdrawn') {
-        continue;
+    const rows = (data ?? []) as PulseParticipantRow[];
+    const coinRoomIds = new Set(
+      challenges
+        .filter((row) => isOfficialCoinChallenge(row))
+        .map((row) => String(row.id ?? '').trim())
+        .filter(Boolean),
+    );
+    const profiles = new Map<string, PublicProfile>();
+    if (coinRoomIds.size > 0) {
+      const userIds = [
+        ...new Set(
+          rows
+            .filter((row) => coinRoomIds.has(String(row.challenge_id ?? '')))
+            .map((row) => String(row.user_id ?? ''))
+            .filter(Boolean),
+        ),
+      ];
+      try {
+        for (let i = 0; i < userIds.length; i += 200) {
+          for (const profile of await fetchPublicProfilesByIds(userIds.slice(i, i + 200))) {
+            profiles.set(profile.id, profile);
+          }
+        }
+      } catch {
+        profiles.clear();
       }
-      counts[id] = (counts[id] ?? 0) + 1;
     }
+    return tallyPulseMemberCounts(rows, coinRoomIds, profiles);
   } catch {
-    return counts;
+    return {};
   }
-  return counts;
 }
 
 /** The viewer's logged days, miles, and points. A missing row still prints 0 on the card. */

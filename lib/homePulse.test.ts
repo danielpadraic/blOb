@@ -13,6 +13,7 @@ import {
   pulseSnippet,
   selectPulseChallenges,
   sortPulsePills,
+  tallyPulseMemberCounts,
 } from '@/lib/homePulse';
 
 describe('selectPulseChallenges', () => {
@@ -492,5 +493,37 @@ describe('Official Fitness is one pill', () => {
     });
     expect(pills.map((pill) => pill.id)).toEqual(['weekly']);
     expect(pills[0].title).toBe('Official Fitness Challenge');
+  });
+});
+
+describe('tallyPulseMemberCounts', () => {
+  const rows = [
+    { challenge_id: 'coin', user_id: 'u1', status: 'joined' },
+    { challenge_id: 'coin', user_id: 'u2', status: 'joined' },
+    { challenge_id: 'coin', user_id: 'g1', status: 'joined' },
+    { challenge_id: 'coin', user_id: 'g2', status: 'joined' },
+    { challenge_id: 'coin', user_id: 'g3', status: 'joined' },
+    { challenge_id: 'coin', user_id: 'u3', status: 'withdrawn' },
+    { challenge_id: 'coin', user_id: 'nop', status: 'joined' },
+    { challenge_id: 'peer', user_id: 'g1', status: 'joined' },
+    { challenge_id: 'peer', user_id: 'u1', status: 'refunded_pre_start' },
+  ];
+  const profiles = new Map([
+    ['u1', { username: 'maya', display_name: 'Maya' }],
+    ['u2', { username: 'jo', display_name: 'Jo' }],
+    ['g1', { username: 'blobtest_a', display_name: 'A' }],
+    ['g2', { username: 'rk', display_name: 'Test Rookie 2' }],
+    ['g3', { username: 'vt', display_name: 'Test Veteran' }],
+  ]);
+
+  it('skips QA accounts on Official Coin rooms only', () => {
+    const counts = tallyPulseMemberCounts(rows, new Set(['coin']), profiles);
+    expect(counts.coin).toBe(3);
+    expect(counts.peer).toBe(1);
+  });
+
+  it('counts everyone when the profiles are missing', () => {
+    const counts = tallyPulseMemberCounts(rows, new Set(['coin']), new Map());
+    expect(counts.coin).toBe(6);
   });
 });

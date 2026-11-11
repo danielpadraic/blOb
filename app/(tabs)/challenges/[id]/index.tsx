@@ -218,6 +218,7 @@ import { useStableChallengeRouteId, scrollNodeTo } from '@/lib/challengeRoute';
 import { copy } from '@/lib/copy';
 import { isViewerOutOfPrize } from '@/lib/lobbyChallenge';
 import {
+  countOfficialCoinGhosts,
   isOfficialCoinBoardGhost,
   isOfficialCoinChallenge,
   isOfficialCoinMonthly,
@@ -398,6 +399,10 @@ export default function ChallengeDetailScreen() {
               }),
           )
         : boardRoster,
+    [boardRoster, challengeQuery.data],
+  );
+  const ghostCount = useMemo(
+    () => (isOfficialCoinChallenge(challengeQuery.data) ? countOfficialCoinGhosts(boardRoster) : 0),
     [boardRoster, challengeQuery.data],
   );
   const periodCheckin = usePeriodCheckin(id, challengeQuery.data);
@@ -1648,6 +1653,7 @@ export default function ChallengeDetailScreen() {
                   challenge={challenge}
                   finished={finishers}
                   standing={challenge.status === 'live' ? standingLine : null}
+                  ghostCount={ghostCount}
                   onInvite={openInvite}
                 />
               </View>
