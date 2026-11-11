@@ -37,6 +37,11 @@ import {
   officialCoinRoomIds,
   officialCoinScoreLabel,
   officialCoinToFinishLabel,
+  officialCoinToFinishLines,
+  officialCoinNearestEndClock,
+  officialCoinPrizeLine,
+  officialCoinMidWindowLines,
+  OFFICIAL_COIN_ONE_LIVE_LINE,
   OFFICIAL_COIN_ABOUT,
   OFFICIAL_COIN_HERO_LINE,
   OFFICIAL_COIN_MECHANICS,
@@ -671,5 +676,51 @@ describe('title-aware monthly sibling filter', () => {
   it('prints one public title for both rooms', () => {
     expect(officialCoinDisplayTitle(host)).toBe('Official Fitness Challenge');
     expect(officialCoinDisplayTitle(legacy('Monthly Fitness Challenge'))).toBe('Official Fitness Challenge');
+  });
+});
+
+describe('one Details page for both windows', () => {
+  it('corner shows the nearer open window end, and a countdown inside its last day', () => {
+    expect(officialCoinNearestEndClock([WEEKLY, MONTHLY], FRIDAY)?.line).toBe('Ends Sep. 27, 2026');
+    const monthEndsFirst = { ...MONTHLY, ends_at: '2026-09-27T05:00:00.000Z' };
+    expect(officialCoinNearestEndClock([WEEKLY, monthEndsFirst], FRIDAY)?.line).toBe('Ends Sep. 26, 2026');
+    const closeAt = new Date(WEEKLY.ends_at).getTime();
+    const clock = officialCoinNearestEndClock([WEEKLY, MONTHLY], new Date(closeAt - (2 * 3600 + 30 * 60 + 15) * 1000));
+    expect(clock).toEqual({ line: 'Ends in 02:30:15', urgent: true });
+  });
+
+  it('skips a closed window and works with the weekly host alone', () => {
+    const closed = { ...WEEKLY, ends_at: '2026-09-20T05:00:00.000Z' };
+    expect(officialCoinNearestEndClock([closed, MONTHLY], FRIDAY)?.line).toBe('Ends Sep. 30, 2026');
+    expect(officialCoinNearestEndClock([WEEKLY, null], FRIDAY)?.line).toBe('Ends Sep. 27, 2026');
+    expect(officialCoinNearestEndClock([null, undefined], FRIDAY)).toBeNull();
+  });
+
+  it('prints both prizes from the stored guarantee fields only', () => {
+    expect(officialCoinPrizeLine(WEEKLY, MONTHLY)).toBe('Weekly prize 100 coins · Monthly prize 1,000 coins.');
+    expect(officialCoinPrizeLine({ ...WEEKLY, prize_guarantee_coins: 250 }, MONTHLY)).toBe(
+      'Weekly prize 250 coins · Monthly prize 1,000 coins.',
+    );
+    expect(officialCoinPrizeLine(WEEKLY, null)).toBe('Weekly prize 100 coins.');
+    expect(officialCoinPrizeLine({ ...WEEKLY, prize_guarantee_coins: null }, null)).toBe('');
+    expect(officialCoinPrizeLine(WEEKLY, MONTHLY)).not.toContain('settlement');
+  });
+
+  it('prints the mid-week and mid-month lines for each open window', () => {
+    const weekly = { challenge: { ...WEEKLY, starts_at: '2026-09-20T05:00:00.000Z' }, membership: { window_starts_at: '2026-09-23T05:00:00.000Z' } };
+    const monthly = { challenge: MONTHLY, membership: { window_starts_at: '2026-09-10T05:00:00.000Z' } };
+    const lines = officialCoinMidWindowLines(weekly, monthly, FRIDAY);
+    expect(lines.length).toBe(2);
+    expect(lines[0]).toContain('mid-week');
+    expect(lines[1]).toContain('mid-month');
+    expect(officialCoinMidWindowLines({ challenge: WEEKLY, membership: null }, null, FRIDAY)).toEqual([]);
+  });
+
+  it('lists To finish per window and keeps the one-Live sentence', () => {
+    expect(officialCoinToFinishLines(WEEKLY, MONTHLY, FRIDAY)).toEqual([
+      'Weekly 7-Day Consistency',
+      'Monthly 30-Day Consistency',
+    ]);
+    expect(OFFICIAL_COIN_ONE_LIVE_LINE).toBe('One Live. Your check-in lands here once.');
   });
 });

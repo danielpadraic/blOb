@@ -224,6 +224,7 @@ import {
   officialHostIdFor,
   isOfficialCoinWeekly,
   officialCoinToFinishLabel,
+  officialCoinToFinishLines,
   officialHostRedirectHref,
   OFFICIAL_COIN_MECHANICS,
 } from '@/lib/officialCoin';
@@ -1493,6 +1494,7 @@ export default function ChallengeDetailScreen() {
             daysCompleted={daysCompleted}
             progressRatio={progressRatio}
             nowMs={nowMs}
+            coinSibling={coinRooms.data?.monthly?.challenge ?? null}
             showProgressRing={showDayRing}
             cancelled={wasCancelled}
             onInvite={openInvite}>
@@ -1645,6 +1647,9 @@ export default function ChallengeDetailScreen() {
               challenge={challenge}
               missesUsed={periodMisses.data ?? 0}
               membership={participation}
+              coinWeekly={coinRooms.data?.weekly ?? null}
+              coinMonthly={coinRooms.data?.monthly ?? null}
+              nowMs={nowMs}
             />
             {/* The cash ladder money board (contestants needed, 1.5x) has no place in a coin room. */}
             {officialCoinRoom || Boolean(receipt) || moneyPhase === 'ended' ? null : (
@@ -1751,7 +1756,11 @@ export default function ChallengeDetailScreen() {
                 : isPoints
                   ? `${totalTaskPoints(tasks)} pts`
                   : officialCoinRoom
-                    ? officialCoinToFinishLabel(challenge, new Date(nowMs))
+                    ? officialCoinToFinishLines(
+                        coinRooms.data?.weekly?.challenge ?? challenge,
+                        coinRooms.data?.monthly?.challenge,
+                        new Date(nowMs),
+                      ).join('\n') || officialCoinToFinishLabel(challenge, new Date(nowMs))
                     : challenge.is_official
                       ? challengeGoalLabel(challenge)
                       : ruleCopy.toFinish || challenge.task?.trim() || ruleCopy.cadenceLong}
@@ -1780,28 +1789,16 @@ export default function ChallengeDetailScreen() {
             )}
           </View>
           {officialCoinRoom ? (
-            /* One locked proof list, same words on both rooms. */
-            <View>
+            /* One locked proof list, same words on both windows. Plain rules text, no status bullets. */
+            <View className="gap-2">
               <AppText className="text-[11px] font-semibold uppercase tracking-widest text-muted">
                 {proofHeadline}
               </AppText>
-              <View className="mt-2 gap-2.5">
-                {OFFICIAL_COIN_MECHANICS.proofs.map((proof, index) => (
-                  <View key={proof.id} className="flex-row gap-3">
-                    <View
-                      className="h-6 w-6 items-center justify-center rounded-full"
-                      style={{ backgroundColor: THEME.accentSoft }}>
-                      <AppText className="text-[12px] font-bold" style={{ color: THEME.accent }}>
-                        {index + 1}
-                      </AppText>
-                    </View>
-                    <View className="flex-1">
-                      <AppText className="font-semibold text-charcoal">{proof.label}</AppText>
-                      <AppText className="text-[13px] leading-5 text-muted">{proof.method}</AppText>
-                    </View>
-                  </View>
-                ))}
-              </View>
+              {OFFICIAL_COIN_MECHANICS.proofs.map((proof) => (
+                <AppText key={proof.id} className="text-[14px] leading-6" style={{ color: THEME.textPrimary }}>
+                  {proof.label}
+                </AppText>
+              ))}
             </View>
           ) : isPoints || usesPointsBoard(challenge) || proofSteps.length === 0 ? null : (
             <View>

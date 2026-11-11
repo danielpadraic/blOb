@@ -618,6 +618,103 @@ export function officialCoinEndClock(
   };
 }
 
+type OfficialCoinWindowRoom = {
+  challenge: OfficialCoinChallenge;
+  membership?: OfficialCoinMembership | null;
+} | null | undefined;
+
+/**
+ * Corner of the Overview hero: the nearer open window's clock. Weekly usually closes first, but the
+ * last week of a month can run past the month's end, so both are compared. Falls back to whichever
+ * room has a date when neither is open.
+ */
+export function officialCoinNearestEndClock(
+  rooms: readonly (OfficialCoinChallenge | null | undefined)[],
+  now: Date | number = new Date(),
+): OfficialCoinClock | null {
+  const nowMs = now instanceof Date ? now.getTime() : Number(now);
+  const dated = rooms.filter(
+    (room): room is OfficialCoinChallenge =>
+      isOfficialCoinChallenge(room) && Number.isFinite(new Date(String(room?.ends_at)).getTime()),
+  );
+  if (dated.length === 0) {
+    return null;
+  }
+  const open = dated
+    .filter((room) => new Date(String(room.ends_at)).getTime() > nowMs)
+    .sort((a, b) => new Date(String(a.ends_at)).getTime() - new Date(String(b.ends_at)).getTime());
+  return officialCoinEndClock(open[0] ?? dated[0], nowMs);
+}
+
+function storedGuarantee(challenge?: OfficialCoinChallenge | null): number {
+  const stored = Number(challenge?.prize_guarantee_coins);
+  return Number.isFinite(stored) && stored > 0 ? Math.trunc(stored) : 0;
+}
+
+/**
+ * `Weekly prize 100 coins · Monthly prize 1,000 coins.` Only amounts stored on the room rows are
+ * printed; a room with no stored guarantee is left out rather than guessed.
+ */
+export function officialCoinPrizeLine(
+  weekly?: OfficialCoinChallenge | null,
+  monthly?: OfficialCoinChallenge | null,
+): string {
+  const parts: string[] = [];
+  const week = storedGuarantee(weekly);
+  const month = storedGuarantee(monthly);
+  if (week > 0) {
+    parts.push(`Weekly prize ${formatOfficialCoinAmount(week)} coins`);
+  }
+  if (month > 0) {
+    parts.push(`Monthly prize ${formatOfficialCoinAmount(month)} coins`);
+  }
+  return parts.length > 0 ? `${parts.join(' · ')}.` : '';
+}
+
+/** The existing mid-week / mid-month lines for each window that is still open. */
+export function officialCoinMidWindowLines(
+  weekly: OfficialCoinWindowRoom,
+  monthly: OfficialCoinWindowRoom,
+  now: Date = new Date(),
+): string[] {
+  const lines: string[] = [];
+  for (const room of [weekly, monthly]) {
+    if (!room) {
+      continue;
+    }
+    const endsAt = new Date(String(room.challenge.ends_at)).getTime();
+    if (Number.isFinite(endsAt) && endsAt <= now.getTime()) {
+      continue;
+    }
+    const line = officialCoinMidWindowLine(room.challenge, room.membership, now);
+    if (line) {
+      lines.push(line);
+    }
+  }
+  return lines;
+}
+
+/** TO FINISH for both windows: `Weekly 7-Day Consistency`, `Monthly 30-Day Consistency`. */
+export function officialCoinToFinishLines(
+  weekly?: OfficialCoinChallenge | null,
+  monthly?: OfficialCoinChallenge | null,
+  now: Date = new Date(),
+): string[] {
+  const lines: string[] = [];
+  const week = officialCoinToFinishLabel(weekly, now);
+  const month = officialCoinToFinishLabel(monthly, now);
+  if (week) {
+    lines.push(`Weekly ${week}`);
+  }
+  if (month) {
+    lines.push(`Monthly ${month}`);
+  }
+  return lines;
+}
+
+/** One sentence under the two window paragraphs. */
+export const OFFICIAL_COIN_ONE_LIVE_LINE = 'One Live. Your check-in lands here once.';
+
 /** Leave Official drops both rooms. Warn first. */
 export const OFFICIAL_COIN_LEAVE_CONFIRM = {
   title: 'Leave Official Fitness?',

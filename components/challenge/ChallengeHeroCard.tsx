@@ -24,8 +24,9 @@ import { isOfficialJoinable } from '@/lib/officialSeries';
 import { challengeDisplayTitle } from '@/lib/challengeTitle';
 import {
   isOfficialCoinChallenge,
-  officialCoinEndClock,
+  officialCoinNearestEndClock,
   OFFICIAL_COIN_HERO_LINE,
+  type OfficialCoinChallenge,
 } from '@/lib/officialCoin';
 import {
   calloutCardChrome,
@@ -57,6 +58,8 @@ type ChallengeHeroCardProps = {
   daysCompleted?: number;
   progressRatio?: number;
   nowMs: number;
+  /** Official Coin only: the monthly room, so the corner can show the nearer window end. */
+  coinSibling?: OfficialCoinChallenge | null;
   showProgressRing?: boolean;
   cancelled?: boolean;
   onOpen?: () => void;
@@ -85,6 +88,7 @@ export function ChallengeHeroCard({
   daysCompleted = 0,
   progressRatio = 0,
   nowMs,
+  coinSibling = null,
   showProgressRing = false,
   cancelled = false,
   onOpen,
@@ -99,13 +103,18 @@ export function ChallengeHeroCard({
   const vsLine = calloutPartySubtitle(calloutParty, viewerId);
   const watchingLine = calloutWatchingCountLabel(calloutParty?.watchingCount ?? watchingCount);
   const filling = official && isOfficialJoinable(challenge);
-  const tags = challengeCardTags({
+  const coinRoomForTags = isOfficialCoinChallenge(challenge);
+  const allTags = challengeCardTags({
     challenge,
     hosting: Boolean(hosting && viewerId && viewerId === challenge.created_by),
     joined,
     invited,
     showNotJoined: showNotJoined && !joined,
   });
+  // A standing house room is always open. No Live / Not started status chip on it.
+  const tags = coinRoomForTags
+    ? allTags.filter((tag) => tag.kind !== 'live' && tag.kind !== 'notStarted')
+    : allTags;
   const subtitle = challengeGoalSubtitle(challenge);
   const titleColor = official ? '#FFFFFF' : THEME.textPrimary;
   const muted = official ? 'rgba(255,255,255,0.78)' : THEME.textMuted;
@@ -116,7 +125,7 @@ export function ChallengeHeroCard({
   const hostName = host?.display_name?.trim() || host?.username || '';
   const coinRoom = isOfficialCoinChallenge(challenge);
   // Chicago calendar end date, then a live countdown inside the last day.
-  const coinClock = coinRoom ? officialCoinEndClock(challenge, nowMs) : null;
+  const coinClock = coinRoom ? officialCoinNearestEndClock([challenge, coinSibling], nowMs) : null;
 
   const summary = (
     <View className="gap-3">
@@ -153,12 +162,14 @@ export function ChallengeHeroCard({
           <ChallengeHeroOverflowButton light={official} />
         </View>
       </View>
-      <ChallengeScheduleMeta
-        challenge={challenge}
-        nowMs={nowMs}
-        tone={official ? 'dark' : 'light'}
-        hideClock
-      />
+      {coinRoomForTags ? null : (
+        <ChallengeScheduleMeta
+          challenge={challenge}
+          nowMs={nowMs}
+          tone={official ? 'dark' : 'light'}
+          hideClock
+        />
+      )}
       {sponsorName ? (
         <OfficialSponsorLine
           challenge={challenge}
@@ -246,12 +257,14 @@ export function ChallengeHeroCard({
               ) : null}
             </View>
           )}
-          <OfficialFillingStats
-            challenge={challenge}
-            nowMs={nowMs}
-            showStartLine={false}
-            tone="hero"
-          />
+          {coinRoomForTags ? null : (
+            <OfficialFillingStats
+              challenge={challenge}
+              nowMs={nowMs}
+              showStartLine={false}
+              tone="hero"
+            />
+          )}
         </View>
       ) : (
         <View className="flex-row items-start justify-between gap-3">

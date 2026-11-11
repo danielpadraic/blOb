@@ -7,9 +7,12 @@ import { officialDetailsParagraphs } from '@/copy/officialBob';
 import { challengeShowsMissBudget } from '@/lib/missDuty';
 import {
   isOfficialCoinChallenge,
-  officialCoinMidWindowLine,
+  officialCoinMidWindowLines,
+  officialCoinPrizeLine,
   OFFICIAL_COIN_ABOUT,
+  OFFICIAL_COIN_ONE_LIVE_LINE,
   OFFICIAL_COIN_WINDOWS,
+  type OfficialCoinChallenge,
   type OfficialCoinMembership,
 } from '@/lib/officialCoin';
 import { THEME } from '@/lib/theme';
@@ -19,26 +22,28 @@ export function ChallengeDetailsCard({
   challenge,
   missesUsed = 0,
   membership,
+  coinWeekly,
+  coinMonthly,
+  nowMs,
 }: {
   challenge: Challenge;
   missesUsed?: number;
   /** Official Coin only: used to say how many days this person still has. */
   membership?: OfficialCoinMembership | null;
+  /** Official Coin only: both windows, so one page explains both. */
+  coinWeekly?: { challenge: OfficialCoinChallenge; membership?: OfficialCoinMembership | null } | null;
+  coinMonthly?: { challenge: OfficialCoinChallenge; membership?: OfficialCoinMembership | null } | null;
+  nowMs?: number;
 }) {
   const line = { color: THEME.textPrimary };
 
   if (isOfficialCoinChallenge(challenge)) {
-    const midWindow = officialCoinMidWindowLine(challenge, membership);
+    const now = new Date(nowMs ?? Date.now());
+    const weeklyRoom = coinWeekly ?? { challenge: challenge as OfficialCoinChallenge, membership };
+    const midLines = officialCoinMidWindowLines(weeklyRoom, coinMonthly, now);
+    const prizeLine = officialCoinPrizeLine(weeklyRoom.challenge, coinMonthly?.challenge);
     return (
       <Card className="mt-4 gap-3" style={{ overflow: 'visible' }}>
-        <View>
-          <AppText className="text-[15px] font-extrabold leading-6" style={line}>
-            {OFFICIAL_COIN_ABOUT.title}
-          </AppText>
-          <AppText className="mt-1 text-[14px] leading-6" style={line}>
-            {OFFICIAL_COIN_ABOUT.body}
-          </AppText>
-        </View>
         <View>
           <AppText className="text-[15px] font-extrabold leading-6" style={line}>
             {OFFICIAL_COIN_WINDOWS.title}
@@ -49,7 +54,15 @@ export function ChallengeDetailsCard({
           <AppText className="mt-2 text-[14px] leading-6" style={line}>
             {OFFICIAL_COIN_WINDOWS.monthly}
           </AppText>
+          <AppText className="mt-2 text-[14px] leading-6" style={line}>
+            {OFFICIAL_COIN_ONE_LIVE_LINE}
+          </AppText>
         </View>
+        {prizeLine ? (
+          <AppText className="text-[15px] font-extrabold leading-6" style={line}>
+            {prizeLine}
+          </AppText>
+        ) : null}
         <View>
           <AppText className="text-[15px] font-extrabold leading-6" style={line}>
             {OFFICIAL_COIN_ABOUT.proofTitle}
@@ -67,11 +80,11 @@ export function ChallengeDetailsCard({
             ))}
           </View>
         </View>
-        {midWindow ? (
-          <AppText className="text-[13px] leading-5" style={{ color: THEME.textMuted }}>
+        {midLines.map((midWindow) => (
+          <AppText key={midWindow} className="text-[13px] leading-5" style={{ color: THEME.textMuted }}>
             {midWindow}
           </AppText>
-        ) : null}
+        ))}
       </Card>
     );
   }
