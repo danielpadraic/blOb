@@ -427,7 +427,7 @@ export const LiveBubble = memo(function LiveBubble({
                     marginTop: 6,
                     borderRadius: 18,
                     overflow: 'hidden',
-                    backgroundColor: THEME.line,
+                    backgroundColor: THEME.border,
                   }}>
                   <PostMediaCarousel
                     postId={post.id}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { BackHandler, PanResponder, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,10 +12,7 @@ import { AppText } from '@/components/ui/AppText';
 import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useWallet } from '@/hooks/useWallet';
-import { useGeoCashOptional } from '@/components/geo/GeoCashHost';
 import { copy } from '@/lib/copy';
-import { cashOutBlockReason } from '@/lib/cashOut';
-import { hasPayoutAddress } from '@/lib/payoutAddress';
 import { tabBarLift, THEME } from '@/lib/theme';
 
 const EARN_WAYS = [
@@ -31,10 +28,8 @@ export function WalletSheet() {
   const insets = useSafeAreaInsets();
   const { profile } = useMyProfile();
   const { sheetOpen, scrollToLatest, closeWallet, openSend, openTopUp } = useWallet();
-  const geo = useGeoCashOptional();
   const scrollRef = useRef<ScrollView>(null);
   const receiptsY = useRef(0);
-  const [cashOutNote, setCashOutNote] = useState<string | null>(null);
   const tabLift = tabBarLift(insets.bottom, 'overlay');
 
   useEffect(() => {
@@ -156,38 +151,26 @@ export function WalletSheet() {
                   openTopUp({ amount: 1 });
                 }}
               />
-              <Button
-                title="Cash out"
-                variant="outline"
-                loading={geo?.busy}
-                onPress={() => {
-                  setCashOutNote(null);
-                  const blocked = cashOutBlockReason({
-                    bucks: profile.bucks,
-                    credits: profile.credits,
-                  });
-                  if (blocked) {
-                    setCashOutNote(blocked);
-                    return;
-                  }
-                  void (async () => {
-                    const allowed = geo ? await geo.ensure({ action: 'cashout' }) : false;
-                    if (!allowed) {
-                      return;
-                    }
-                    setCashOutNote(copy('geo.cashOutSoon'));
-                  })();
-                }}
-              />
-              <AppText className="text-[13px] leading-5 text-muted">{copy('wallet.cashOutTerms')}</AppText>
-              {!hasPayoutAddress(profile) ? (
-                <AppText className="text-[13px] leading-5 text-muted">
-                  {copy('wallet.addAddressToCashOut')}
+              <View
+                accessible
+                accessibilityRole="text"
+                accessibilityState={{ disabled: true }}
+                accessibilityLabel={`${copy('wallet.cashOutTitle')}. ${copy('wallet.cashOutSoon')}`}
+                className="flex-row items-center justify-between"
+                style={{
+                  gap: 12,
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  borderRadius: THEME.radius,
+                  borderWidth: 1,
+                  borderColor: THEME.border,
+                  backgroundColor: THEME.background,
+                }}>
+                <AppText className="text-[15px] font-bold text-muted">{copy('wallet.cashOutTitle')}</AppText>
+                <AppText className="flex-1 text-right text-[13px] leading-5 text-muted">
+                  {copy('wallet.cashOutSoon')}
                 </AppText>
-              ) : null}
-              {cashOutNote ? (
-                <AppText className="text-[13px] leading-5 text-muted">{cashOutNote}</AppText>
-              ) : null}
+              </View>
               <Button title="Browse challenges" onPress={() => go('/challenges')} />
               <SendWalletButton
                 onPress={() => {

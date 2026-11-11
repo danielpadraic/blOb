@@ -279,7 +279,7 @@ export function JoinConfirmModal({
                     className="rounded-blob border px-4 py-3"
                     style={{
                       backgroundColor: on ? THEME.accentSoft : THEME.surface,
-                      borderColor: on ? THEME.accent : THEME.line,
+                      borderColor: on ? THEME.accent : THEME.border,
                       borderWidth: 1.5,
                       borderRadius: THEME.radius,
                     }}>
@@ -308,7 +308,7 @@ export function JoinConfirmModal({
                         className="rounded-blob border px-4 py-3"
                         style={{
                           backgroundColor: on ? THEME.accentSoft : THEME.surface,
-                          borderColor: on ? THEME.accent : THEME.line,
+                          borderColor: on ? THEME.accent : THEME.border,
                           borderWidth: 1.5,
                           borderRadius: THEME.radius,
                         }}>
@@ -328,7 +328,7 @@ export function JoinConfirmModal({
                 className="mt-5 flex-row items-start gap-3 rounded-blob border px-4 py-3"
                 style={{
                   backgroundColor: THEME.surface,
-                  borderColor: picks.selfModerator ? THEME.primary : THEME.line,
+                  borderColor: picks.selfModerator ? THEME.primary : THEME.border,
                   borderWidth: 1.5,
                   borderRadius: THEME.radius,
                 }}>
@@ -336,7 +336,7 @@ export function JoinConfirmModal({
                   className="mt-0.5 h-5 w-5 items-center justify-center rounded-md border"
                   style={{
                     backgroundColor: picks.selfModerator ? THEME.primary : THEME.background,
-                    borderColor: picks.selfModerator ? THEME.primary : THEME.line,
+                    borderColor: picks.selfModerator ? THEME.primary : THEME.border,
                   }}>
                   {picks.selfModerator ? (
                     <AppText className="text-[11px] font-bold" style={{ color: THEME.primaryForeground }}>
@@ -421,7 +421,7 @@ export function JoinConfirmModal({
                   amount={buyInAmount}
                   loading={loading}
                   disabled={cashBlocked}
-                  onPress={cashBlocked ? () => {} : onConfirm}
+                  onPress={cashBlocked ? () => {} : () => onConfirm()}
                 />
               ) : (
                 <Button
@@ -429,7 +429,7 @@ export function JoinConfirmModal({
                   size="lg"
                   loading={loading}
                   disabled={cashBlocked}
-                  onPress={cashBlocked ? () => {} : onConfirm}
+                  onPress={cashBlocked ? () => {} : () => onConfirm()}
                 />
               )}
               <Button title="Not now." variant="ghost" onPress={close} disabled={loading} />
@@ -518,7 +518,7 @@ export function JoinConfirmModal({
                 amount={buyInAmount}
                 loading={loading}
                 disabled={!allChecked}
-                onPress={onConfirm}
+                onPress={() => onConfirm()}
               />
             ) : (
               <Button
@@ -526,7 +526,7 @@ export function JoinConfirmModal({
                 size="lg"
                 loading={loading}
                 disabled={!allChecked}
-                onPress={onConfirm}
+                onPress={() => onConfirm()}
               />
             )}
             <Button title="Not now" variant="ghost" onPress={close} disabled={loading} />
