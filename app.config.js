@@ -21,9 +21,16 @@ const iosUrlScheme =
   iosUrlSchemeFromClientId(process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID) ??
   'com.googleusercontent.apps.49251028054-54pin15flhs2uhhtqhnjkblmdte62bka';
 
+const buildCommit = String(
+  process.env.EAS_BUILD_GIT_COMMIT_HASH ?? process.env.VERCEL_GIT_COMMIT_SHA ?? '',
+)
+  .trim()
+  .slice(0, 7);
+
 module.exports = {
   expo: {
     ...appJson.expo,
+    extra: { ...(appJson.expo.extra ?? {}), buildCommit: buildCommit || null },
     plugins: [
       ...withoutGoogleSignInPlugin(appJson.expo.plugins),
       ['@react-native-google-signin/google-signin', { iosUrlScheme }],

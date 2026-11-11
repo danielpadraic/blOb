@@ -39,7 +39,9 @@ export type BugReportAttachment = {
 };
 
 function appVersion(): string {
-  return Constants.expoConfig?.version ?? '1.0.0';
+  const version = Constants.expoConfig?.version ?? '1.0.0';
+  const commit = (Constants.expoConfig?.extra as { buildCommit?: string | null } | undefined)?.buildCommit;
+  return commit ? `${version}+${commit}` : version;
 }
 
 function userAgent(): string {
