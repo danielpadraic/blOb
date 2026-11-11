@@ -442,6 +442,39 @@ export const OFFICIAL_COIN_ABOUT = {
 } as const;
 
 /**
+ * Two plain paragraphs for the Overview card on the weekly host. One check-in fills both windows,
+ * and each window pays from its own prize pool. The amounts live in the Board header, not here.
+ */
+export const OFFICIAL_COIN_WINDOWS = {
+  title: 'Two windows, one check-in:',
+  weekly:
+    'Weekly is a 7-day consistency challenge that runs Sunday through Saturday in America/Chicago time. ' +
+    'It has its own prize pool.',
+  monthly:
+    'Monthly is the full calendar month in America/Chicago time. It has its own prize pool. ' +
+    'Your daily check-ins count in both.',
+} as const;
+
+/**
+ * The weekly host id to open instead, when the route id is the monthly sibling. Works from the
+ * room ids alone, so the redirect does not wait for the monthly row to load.
+ */
+export function officialHostIdFor(
+  routeId: string | null | undefined,
+  challenge: (OfficialCoinChallenge & { id?: string | null }) | null | undefined,
+  rooms: { weeklyId?: string | null; monthlyId?: string | null },
+): string | null {
+  const id = String(routeId ?? '').trim();
+  const weeklyId = String(rooms.weeklyId ?? '').trim();
+  if (!id || !weeklyId || id === weeklyId) {
+    return null;
+  }
+  const monthlyById = String(rooms.monthlyId ?? '').trim() === id;
+  const monthlyByRow = isOfficialCoinMonthly(challenge) && String(challenge?.id ?? '').trim() === id;
+  return monthlyById || monthlyByRow ? weeklyId : null;
+}
+
+/**
  * MECHANICS card. One list for both rooms — only the day count moves.
  * Order matches the proofs on the challenge row: pre, post, heart rate.
  */

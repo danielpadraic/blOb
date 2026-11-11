@@ -9,6 +9,7 @@ import {
   isOfficialCoinChallenge,
   officialCoinMidWindowLine,
   OFFICIAL_COIN_ABOUT,
+  OFFICIAL_COIN_WINDOWS,
   type OfficialCoinMembership,
 } from '@/lib/officialCoin';
 import { THEME } from '@/lib/theme';
@@ -36,6 +37,17 @@ export function ChallengeDetailsCard({
           </AppText>
           <AppText className="mt-1 text-[14px] leading-6" style={line}>
             {OFFICIAL_COIN_ABOUT.body}
+          </AppText>
+        </View>
+        <View>
+          <AppText className="text-[15px] font-extrabold leading-6" style={line}>
+            {OFFICIAL_COIN_WINDOWS.title}
+          </AppText>
+          <AppText className="mt-1 text-[14px] leading-6" style={line}>
+            {OFFICIAL_COIN_WINDOWS.weekly}
+          </AppText>
+          <AppText className="mt-2 text-[14px] leading-6" style={line}>
+            {OFFICIAL_COIN_WINDOWS.monthly}
           </AppText>
         </View>
         <View>

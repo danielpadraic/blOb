@@ -6,6 +6,7 @@ import { useFollowing, useFriends } from '@/hooks/useSocial';
 import { searchMentionCircles } from '@/lib/circles';
 import { isCreatorAccount } from '@/lib/creator';
 import { asIdSet } from '@/lib/ids';
+import { withoutOfficialCoinMonthly } from '@/lib/officialCoin';
 import { mentionSearchMatches, type MentionKind } from '@/lib/mentions';
 import { asPostAudience, type PostAudience } from '@/lib/postAudience';
 import { fetchPublicProfilesByIds, searchPeople } from '@/lib/social';
@@ -87,13 +88,13 @@ export function useMentionCandidates(input: {
       }
       const { data, error } = await supabase
         .from('challenges')
-        .select('id, title, task')
+        .select('id, title, task, official_kind')
         .or(`title.ilike.%${safe}%,task.ilike.%${safe}%`)
-        .limit(8);
+        .limit(12);
       if (error) {
         return [];
       }
-      return data ?? [];
+      return withoutOfficialCoinMonthly(data ?? []).slice(0, 8);
     },
   });
 

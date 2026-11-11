@@ -11,6 +11,8 @@ import {
   OFFICIAL_BOARD_TABS,
   OFFICIAL_FITNESS_TITLE,
   officialCoinRoomSize,
+  officialHostIdFor,
+  OFFICIAL_COIN_WINDOWS,
   officialHostRedirectHref,
   withoutOfficialCoinMonthly,
   canRejoinOfficialCoin,
@@ -597,5 +599,45 @@ describe('Official Coin room size ignores QA accounts', () => {
     expect(officialCoinRoomSize({ official_kind: 'coin_weekly', participant_count: 2 }, 5)).toBe(0);
     expect(officialCoinRoomSize({ official_kind: null, participant_count: 12 }, 3)).toBe(12);
     expect(officialCoinRoomSize({ official_kind: 'coin_weekly' }, 0)).toBe(0);
+  });
+});
+
+describe('Official Fitness windows copy', () => {
+  it('explains Weekly and Monthly in plain paragraphs', () => {
+    expect(OFFICIAL_COIN_WINDOWS.weekly).toContain('7-day');
+    expect(OFFICIAL_COIN_WINDOWS.weekly).toContain('Sunday through Saturday');
+    expect(OFFICIAL_COIN_WINDOWS.weekly).toContain('America/Chicago');
+    expect(OFFICIAL_COIN_WINDOWS.weekly).toContain('own prize pool');
+    expect(OFFICIAL_COIN_WINDOWS.monthly).toContain('full calendar month');
+    expect(OFFICIAL_COIN_WINDOWS.monthly).toContain('own prize pool');
+  });
+
+  it('keeps the banned words off the new strings', () => {
+    const shown = Object.values(OFFICIAL_COIN_WINDOWS).join(' ');
+    expect(shown).not.toContain('CST');
+    expect(shown).not.toContain('Bucks');
+    expect(shown).not.toContain('I believe');
+  });
+});
+
+describe('officialHostIdFor', () => {
+  const rooms = { weeklyId: 'week', monthlyId: 'month' };
+
+  it('sends the monthly id to the weekly host before the row loads', () => {
+    expect(officialHostIdFor('month', undefined, rooms)).toBe('week');
+  });
+
+  it('sends a loaded monthly row to the weekly host', () => {
+    expect(officialHostIdFor('m2', { id: 'm2', official_kind: 'coin_monthly' }, rooms)).toBe('week');
+  });
+
+  it('leaves the weekly host and every other room alone', () => {
+    expect(officialHostIdFor('week', { id: 'week', official_kind: 'coin_weekly' }, rooms)).toBeNull();
+    expect(officialHostIdFor('peer', { id: 'peer', official_kind: null }, rooms)).toBeNull();
+    expect(officialHostIdFor('', undefined, rooms)).toBeNull();
+  });
+
+  it('does nothing until the weekly host is known', () => {
+    expect(officialHostIdFor('month', undefined, { monthlyId: 'month' })).toBeNull();
   });
 });

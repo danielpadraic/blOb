@@ -221,7 +221,7 @@ import {
   countOfficialCoinGhosts,
   isOfficialCoinBoardGhost,
   isOfficialCoinChallenge,
-  isOfficialCoinMonthly,
+  officialHostIdFor,
   isOfficialCoinWeekly,
   officialCoinToFinishLabel,
   officialHostRedirectHref,
@@ -408,10 +408,10 @@ export default function ChallengeDetailScreen() {
   const periodCheckin = usePeriodCheckin(id, challengeQuery.data);
   const coinRooms = useOfficialCoinStatus();
   // One Official Fitness room: the monthly id opens the weekly host with the same shell.
-  const officialHostId =
-    isOfficialCoinMonthly(challengeQuery.data) && challengeQuery.data?.id === id
-      ? coinRooms.data?.weekly?.challenge.id ?? null
-      : null;
+  const officialHostId = officialHostIdFor(id, challengeQuery.data, {
+    weeklyId: coinRooms.data?.weekly?.challenge.id,
+    monthlyId: coinRooms.data?.monthly?.challenge.id,
+  });
   useEffect(() => {
     if (!officialHostId || officialHostId === id) {
       return;
