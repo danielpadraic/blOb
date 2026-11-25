@@ -1,12 +1,17 @@
+import { useRouter } from 'expo-router';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { JoinConfirmModal } from '@/components/challenge/JoinConfirmModal';
+import { JoinConfirmSheet } from '@/components/challenge/JoinConfirmSheet';
+import { BlobMascot } from '@/components/mascot/BlobMascot';
+import { ChromeOverlay } from '@/components/ui/ChromeOverlay';
+import { AppText } from '@/components/ui/AppText';
 import { useGeoCashOptional } from '@/components/geo/GeoCashHost';
 import { useOfficialDobOptional } from '@/components/interests/OfficialDobHost';
 import { useJoinChallenge } from '@/hooks/useChallenge';
 import { useMyProfile } from '@/hooks/useProfile';
 import { useWalletOptional } from '@/hooks/useWallet';
+import { challengeDetailHref } from '@/lib/routes';
 import { walletBalance } from '@/lib/currency';
 import {
   joinActionForShape,
@@ -17,7 +22,8 @@ import {
 import { bucksJoinCta } from '@/lib/joinCta';
 import { officialCashJoinBlock } from '@/lib/officialCash';
 import { officialDobStatus } from '@/lib/officialDob';
-import type { JoinRolePicks } from '@/lib/joinRole';
+import { emptyJoinRolePicks, type JoinRolePicks } from '@/lib/joinRole';
+import { THEME } from '@/lib/theme';
 import type { Challenge } from '@/lib/types';
 import { getJoinChallengeMessage } from '@/utils/errors';
 
@@ -25,9 +31,12 @@ type JoinConfirmContextValue = {
   open: (challenge: Challenge) => void;
   close: () => void;
   confirm: (picks?: JoinRolePicks) => void;
+  setPicks: (next: JoinRolePicks) => void;
+  picks: JoinRolePicks;
   loading: boolean;
   challenge: Challenge | null;
   error: string | null;
+  welcome: boolean;
   /** Why a house cash Official cannot be joined right now, or '' when it can. */
   cashBlockedCopy: (challenge?: Challenge | null) => string;
 };
@@ -36,11 +45,14 @@ const JoinConfirmContext = createContext<JoinConfirmContextValue | null>(null);
 
 export function JoinConfirmProvider({ children }: { children: ReactNode }) {
   const join = useJoinChallenge();
+  const router = useRouter();
   const { profile } = useMyProfile();
   const wallet = useWalletOptional();
   const officialDob = useOfficialDobOptional();
   const geo = useGeoCashOptional();
   const [challenge, setChallenge] = useState<Challenge | null>(null);
+  const [picks, setPicks] = useState<JoinRolePicks>(emptyJoinRolePicks);
+  const [welcome, setWelcome] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pendingRef = useRef<Challenge | null>(null);
   const topUpOpen = Boolean(wallet?.topUp);
@@ -51,6 +63,7 @@ export function JoinConfirmProvider({ children }: { children: ReactNode }) {
     }
     pendingRef.current = null;
     setError(null);
+    setPicks(emptyJoinRolePicks());
     setChallenge(null);
   }, [join.isPending]);
 
@@ -124,8 +137,13 @@ export function JoinConfirmProvider({ children }: { children: ReactNode }) {
             }
           : challenge.id,
       );
+      const joinedId = challenge.id;
       pendingRef.current = null;
       setChallenge(null);
+      setPicks(emptyJoinRolePicks());
+      setWelcome(true);
+      router.push(challengeDetailHref(joinedId, 'lobby', null, { tab: 'overview' }));
+      setTimeout(() => setWelcome(false), 1600);
     } catch (caught) {
       if (isGeoGateDeny(caught)) {
         geo?.showUnavailable();
@@ -144,7 +162,7 @@ export function JoinConfirmProvider({ children }: { children: ReactNode }) {
       }
       setError(message);
     }
-  }, [cashBlock, challenge, geo, join, officialDob, profile, wallet]);
+  }, [cashBlock, challenge, geo, join, officialDob, picks, profile, router, wallet]);
 
   useEffect(() => {
     if (topUpOpen || !pendingRef.current) {
@@ -159,18 +177,21 @@ export function JoinConfirmProvider({ children }: { children: ReactNode }) {
     () => ({
       open,
       close,
-      confirm: (picks?: JoinRolePicks) => {
-        void confirm(picks);
+      confirm: (next?: JoinRolePicks) => {
+        void confirm(next);
       },
+      setPicks,
+      picks,
       loading: join.isPending || Boolean(geo?.busy),
       challenge,
       error,
+      welcome,
       cashBlockedCopy: (next?: Challenge | null) => {
         const block = cashBlock(next);
         return block.blocked ? block.copy : '';
       },
     }),
-    [cashBlock, challenge, close, confirm, error, geo?.busy, join.isPending, open],
+    [cashBlock, challenge, close, confirm, error, geo?.busy, join.isPending, open, picks, welcome],
   );
 
   return <JoinConfirmContext.Provider value={value}>{children}</JoinConfirmContext.Provider>;
@@ -178,19 +199,28 @@ export function JoinConfirmProvider({ children }: { children: ReactNode }) {
 
 export function JoinConfirmLayer() {
   const join = useJoinConfirm();
-  if (!join.challenge) {
-    return null;
-  }
   return (
-    <View pointerEvents="auto" style={styles.layer}>
-      <JoinConfirmModal
-        visible
-        challenge={join.challenge}
-        loading={join.loading}
-        error={join.error}
-        onClose={join.close}
-        onConfirm={join.confirm}
-      />
+    <View pointerEvents="box-none" style={styles.layer}>
+      {join.challenge ? (
+        <JoinConfirmSheet
+          visible
+          challenge={join.challenge}
+          loading={join.loading}
+          error={join.error}
+          picks={join.picks}
+          onPicks={join.setPicks}
+          onClose={join.close}
+          onConfirm={() => join.confirm(join.picks)}
+        />
+      ) : null}
+      <ChromeOverlay visible={join.welcome} align="center" dim="heavy" zIndex={220}>
+        <View style={{ alignItems: 'center', padding: 24 }}>
+          <BlobMascot size={120} motion="float" />
+          <AppText className="mt-3 text-[22px] font-extrabold" style={{ color: THEME.primaryForeground }}>
+            You’re in
+          </AppText>
+        </View>
+      </ChromeOverlay>
     </View>
   );
 }
