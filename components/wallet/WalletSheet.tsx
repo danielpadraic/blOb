@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SendWalletButton, WalletBalances } from '@/components/currency/WalletBalances';
-import { WalletHistory } from '@/components/wallet/WalletHistory';
+import { WalletHome } from '@/components/wallet/WalletHome';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Glyph, GLYPH } from '@/components/ui/Glyph';
@@ -29,7 +29,7 @@ export function WalletSheet() {
   const { profile } = useMyProfile();
   const { sheetOpen, scrollToLatest, closeWallet, openSend, openTopUp } = useWallet();
   const scrollRef = useRef<ScrollView>(null);
-  const receiptsY = useRef(0);
+  const settlementsY = useRef(0);
   const tabLift = tabBarLift(insets.bottom, 'overlay');
 
   useEffect(() => {
@@ -37,7 +37,7 @@ export function WalletSheet() {
       return;
     }
     const timer = setTimeout(() => {
-      scrollRef.current?.scrollTo({ y: Math.max(receiptsY.current - 8, 0), animated: true });
+      scrollRef.current?.scrollTo({ y: Math.max(settlementsY.current - 8, 0), animated: true });
     }, 80);
     return () => clearTimeout(timer);
   }, [scrollToLatest, sheetOpen]);
@@ -114,10 +114,11 @@ export function WalletSheet() {
           <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false}>
             <WalletBalances profile={profile} />
             <View
+              className="mt-4"
               onLayout={(event) => {
-                receiptsY.current = event.nativeEvent.layout.y;
+                settlementsY.current = event.nativeEvent.layout.y;
               }}>
-              <WalletHistory />
+              <WalletHome limit={4} onBeforeNavigate={closeWallet} />
             </View>
 
             <AppText className="mt-5 text-[13px] leading-5 text-muted">

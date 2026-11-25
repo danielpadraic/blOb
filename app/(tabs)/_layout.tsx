@@ -552,6 +552,7 @@ function TabLayoutInner() {
           <Tabs.Screen name="notifications" options={{ href: null, title: 'Alerts' }} />
           <Tabs.Screen name="messages" options={{ title: 'Messages' }} />
           <Tabs.Screen name="capture" options={{ href: null, title: 'Capture' }} />
+          <Tabs.Screen name="wallet" options={{ href: null, title: 'Wallet' }} />
           <Tabs.Screen name="checkin" options={{ href: null, title: 'Multi Check-In' }} />
           <Tabs.Screen name="lift" options={{ href: null, title: 'Lift' }} />
           <Tabs.Screen name="counter" options={{ href: null, title: 'Counter' }} />
