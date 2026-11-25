@@ -22,6 +22,8 @@ export type CheckinStripSlot = {
   uri: string | null;
   open: boolean;
   upload: 'up' | 'fail' | null;
+  /** empty = not started, current = the slot to fill, done = already saved. */
+  tone?: 'empty' | 'current' | 'done';
 };
 
 type CheckinCameraChromeProps = {
@@ -69,19 +71,22 @@ export function CheckinCameraChrome({
       showsHorizontalScrollIndicator={false}
       style={{ flexGrow: 0 }}
       contentContainerStyle={{ gap: 10, alignItems: 'center' }}>
-      {slots.map((slot) => (
+      {slots.map((slot) => {
+        const border =
+          slot.tone === 'done' ? THEME.accent : slot.tone === 'current' ? THEME.callout : THEME.danger;
+        return (
         <Pressable
           key={slot.id}
           accessibilityRole="button"
-          accessibilityLabel={slot.uri ? `Retake ${slot.label}` : slot.label}
+          accessibilityLabel={slot.tone === 'done' ? `${slot.label} saved` : slot.label}
           onPress={() => onSlot(slot.id)}
           style={{
             width: 72,
             height: 72,
             borderRadius: 14,
             overflow: 'hidden',
-            borderWidth: slot.open ? 2 : 1,
-            borderColor: slot.open ? THEME.accentBright : 'rgba(255,255,255,0.35)',
+            borderWidth: 2,
+            borderColor: border,
             backgroundColor: 'rgba(16,19,18,0.45)',
             alignItems: 'center',
             justifyContent: 'center',
@@ -100,7 +105,8 @@ export function CheckinCameraChrome({
             <View style={{ position: 'absolute', left: 6, right: 6, bottom: 6, height: 3, borderRadius: 2, backgroundColor: THEME.danger }} />
           ) : null}
         </Pressable>
-      ))}
+        );
+      })}
       {canSend && !reviewing ? (
         <Pressable
           accessibilityRole="button"

@@ -8,8 +8,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
-import { copy } from '@/lib/copy';
 import { healthHowToIosPath } from '@/lib/health/howTo';
+import { copy } from '@/lib/copy';
 import {
   healthAttachRulesFor,
   workoutAttachBlockReason,
@@ -331,7 +331,15 @@ export function HealthWorkoutPicker({
           <AppText className="mt-3 text-center text-[15px] font-semibold text-charcoal">
             No workouts in Health for this window.
           </AppText>
+          {Platform.OS === 'ios' ? (
+            <AppText className="mt-2 text-center text-[13px] leading-5" style={{ color: THEME.textMuted }}>
+              {healthHowToIosPath()}
+            </AppText>
+          ) : null}
           <View className="mt-5 w-full gap-3">
+            {Platform.OS === 'ios' ? (
+              <Button title={copy('health.allow')} size="lg" onPress={() => onAllowHealth?.()} />
+            ) : null}
             <Button
               title="Load earlier"
               size="lg"

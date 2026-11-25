@@ -10,6 +10,7 @@ import {
   nextEmptyCheckinId,
   OFFICIAL_PAIR_IDLE,
   OFFICIAL_PAIR_PROGRESS,
+  OFFICIAL_PAIR_READY,
   OFFICIAL_PAIR_STAMPED,
   officialPairChip,
   parseDoneIds,
@@ -218,11 +219,11 @@ describe('Multi Check-In hub rows', () => {
     expect(full).toEqual({ state: 'complete', line: OFFICIAL_PAIR_STAMPED });
     expect(officialPairChip({ remaining: [], filled: 3 }, { remaining: [], filled: 0 })).toEqual({
       state: 'complete',
-      line: OFFICIAL_PAIR_STAMPED,
+      line: OFFICIAL_PAIR_READY,
     });
     expect(officialPairChip({ remaining: [], filled: 3 }, null)).toEqual({
       state: 'complete',
-      line: OFFICIAL_PAIR_STAMPED,
+      line: OFFICIAL_PAIR_READY,
     });
   });
 

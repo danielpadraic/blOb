@@ -198,7 +198,8 @@ export function remainingProofLabelsOf(
 
 export const OFFICIAL_PAIR_PROGRESS =
   'Pre-workout in. Still need post-workout selfie and 30-min HR.';
-export const OFFICIAL_PAIR_STAMPED = 'You’re in for today.';
+export const OFFICIAL_PAIR_STAMPED = 'Weekly and Monthly are both stamped for today.';
+export const OFFICIAL_PAIR_READY = 'You’re in for today.';
 export const OFFICIAL_PAIR_IDLE = 'Counts for the week and the month.';
 
 export type OfficialRoomSlots = {
@@ -231,7 +232,8 @@ function preOnlyRemainder(labels: readonly string[]): boolean {
 
 /**
  * Official weekly + monthly share one Chicago day.
- * Complete when either room has every required slot. A pre selfie alone is In progress on both.
+ * Complete when either room has every required slot.
+ * The both-rooms line appears only when weekly and monthly are each finished.
  */
 export function officialPairChip(weekly: OfficialRoomSlots, monthly: OfficialRoomSlots): {
   state: MultiCheckinState;
@@ -243,8 +245,11 @@ export function officialPairChip(weekly: OfficialRoomSlots, monthly: OfficialRoo
   const filled = present.reduce((sum, side) => sum + Math.max(0, Number(side.filled) || 0), 0);
   const roomDone = (side: OfficialRoomSlots) =>
     side != null && side.filled > 0 && cleanLabels(side.remaining).length === 0;
-  if (roomDone(weekly) || roomDone(monthly)) {
+  if (roomDone(weekly) && roomDone(monthly)) {
     return { state: 'complete', line: OFFICIAL_PAIR_STAMPED };
+  }
+  if (roomDone(weekly) || roomDone(monthly)) {
+    return { state: 'complete', line: OFFICIAL_PAIR_READY };
   }
   if (filled < 1) {
     return { state: 'not_started', line: OFFICIAL_PAIR_IDLE };

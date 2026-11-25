@@ -1086,6 +1086,9 @@ function SubmitWorkoutInner() {
       });
     }
       setHydrateDone(true);
+      setCaptureId(null);
+      setReview(null);
+      setCameraPaused(false);
     } catch (caught) {
       setHydrateError(true);
       setHydrateDone(true);
@@ -3148,7 +3151,8 @@ function SubmitWorkoutInner() {
             id: proof.id,
             label: slotStripLabel(proof),
             uri: local || remote || (review?.proofId === proof.id ? review.uri : null) || null,
-            open: proof.id === (review?.proofId ?? nextEmpty?.id ?? activeProof?.id),
+            open: proof.id === (nextEmpty?.id ?? activeProof?.id),
+            tone: slotFilled(proof) ? 'done' : proof.id === nextEmpty?.id ? 'current' : 'empty',
             upload: slotUpload[proof.id] ?? null,
           };
         })}
@@ -3181,23 +3185,7 @@ function SubmitWorkoutInner() {
             hr_monitor_url: storedCheckin?.hr_monitor_url,
           });
           const uri = local || remote || null;
-          if (proof.method === 'hr' && !uri) {
-            stopAllLiveMedia();
-            setReview(null);
-            setSnapPreview(null);
-            setCameraPaused(false);
-            setPreferCamera(false);
-            setLibraryFirst(Platform.OS === 'web');
-            setCaptureId(proof.id);
-            return;
-          }
-          if (uri) {
-            stopAllLiveMedia();
-            setCameraPaused(true);
-            reviewPreviousRef.current = drafts[proof.id] ?? null;
-            setReview({ proofId: proof.id, uri });
-            setSnapPreview(uri);
-            setCaptureId(proof.id);
+          if (uri || slotFilled(proof)) {
             return;
           }
           setReview(null);
